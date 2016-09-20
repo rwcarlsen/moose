@@ -76,6 +76,8 @@ Steady::execute()
   _time_step = 1;
   _time = _time_step;                 // need to keep _time in sync with _time_step to get correct output
 
+// TODO (rwc): figure out how to add new execute_on mode of time interval for
+// output/checkpointing.
 #ifdef LIBMESH_ENABLE_AMR
 
   // Define the refinement loop
