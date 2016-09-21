@@ -72,3 +72,5 @@ ExampleConvection::ExampleConvection(const InputParameters & parameters) :
   set them directly as the current functions (i.e. pre-index with ``_i`` and
   ``_j``)?
 
+* Put all moose code under Moose namespace
+
