@@ -74,3 +74,9 @@ ExampleConvection::ExampleConvection(const InputParameters & parameters) :
 
 * Put all moose code under Moose namespace
 
+* Why are BC's, Kernels, Material's, etc. all in their own (sub) classes in
+  user apps? - seems like way too much taxonomy/bookkeeping.  Why can't they
+  be functions on a single UserApp class?  If we really wanted to keep current
+  API, we could provide the single, UserApp class as an abstractionlayer that
+  we internally convert to the current ecosystem of many classes.
+
