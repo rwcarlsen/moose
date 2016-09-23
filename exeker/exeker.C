@@ -8,18 +8,15 @@ class MyExeker: public Exeker {
   int foo_max;
   int bar_max;
 
-  MyExeker() : _n_foo(0), _n_bar(0){
-    EXEC_LEV_BEGIN(foo);
-    EXEC_LEV_END(foo);
-    EXEC_LEV_BEGIN(bar);
+  MyExeker() {
+    EXEC_LEV(foo);
+    EXEC_LEV(bar);
   }
 
  private:
   bool fooBegin() {
-    _n_bar = 0;
-    _n_foo++;
-    std::cout << "foo begin " << _n_foo << "\n";
-    return _n_foo >= foo_max;
+    std::cout << "foo "<< iter() << " begin\n";
+    return iter() >= foo_max;
   };
 
   bool fooEnd() {
@@ -28,18 +25,14 @@ class MyExeker: public Exeker {
   };
 
   bool barBegin() {
-    _n_bar++;
-    std::cout << "   bar begin " << _n_bar << "\n";
-    return _n_bar >= bar_max;
+    std::cout << "   bar " << iter() << " begin\n";
+    return iter() >= bar_max;
   };
 
   bool barEnd() {
     std::cout << "   bar end\n";
     return false;
   };
-
-  int _n_foo;
-  int _n_bar;
 };
 
 int main(int argc, char** argv) {
