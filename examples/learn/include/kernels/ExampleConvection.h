@@ -75,7 +75,7 @@ private:
    * A vector object for storing the velocity.  Convenient for
    * computing dot products.
    */
-  RealVectorValue _kappa;
+  Real _kappa;
 };
 
 #endif // EXAMPLECONVECTION_H

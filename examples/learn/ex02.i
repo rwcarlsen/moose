@@ -1,5 +1,5 @@
 [Mesh]
-  file = square.e
+  file = mug.e
 []
 
 [Variables]
@@ -10,15 +10,10 @@
 []
 
 [Kernels]
-  [./diff]
-    type = Diffusion
-    variable = convected
-  [../]
-
   [./conv]
     type = ExampleConvection
+    kappa = 1.0:
     variable = convected
-    velocity = '0.0 0.0 1.0'
   [../]
 []
 
