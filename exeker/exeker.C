@@ -15,6 +15,7 @@ class MyLoops {
 
   bool fooBegin(IterInfo info) {
     std::cout << "foo "<< info.curr_loop_iter << " begin\n";
+    a = info.curr_loop_iter;
     return info.curr_loop_iter >= foo_max;
   };
 
@@ -25,13 +26,16 @@ class MyLoops {
 
   bool barBegin(IterInfo info) {
     std::cout << "   bar " << info.curr_loop_iter << " begin\n";
-    return info.curr_loop_iter >= bar_max;
+    return info.curr_loop_iter >= a;
   };
 
   bool barEnd(IterInfo info) {
     std::cout << "   bar end\n";
     return false;
   };
+
+ private:
+  int a;
 };
 
 class Cycle : public ExecLoop {
