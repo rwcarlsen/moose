@@ -252,12 +252,13 @@ InputParameters::isParamRequired(const std::string & name) const
 bool
 InputParameters::isParamValid(const std::string & name) const
 {
-  if (have_parameter<MooseEnum>(name))
+  if (have_parameter<MooseEnum>(name)) {
     return get<MooseEnum>(name).isValid();
-  else if (have_parameter<MultiMooseEnum>(name))
+  } else if (have_parameter<MultiMooseEnum>(name)) {
     return get<MultiMooseEnum>(name).isValid();
-  else
+  } else {
     return _valid_params.find(name) != _valid_params.end();
+  }
 }
 
 bool

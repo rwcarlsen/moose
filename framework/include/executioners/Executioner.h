@@ -128,12 +128,6 @@ protected:
   /// Initial Residual Variables
   Real _initial_residual_norm;
   Real _old_initial_residual_norm;
-
-  // Restart
-  std::string _restart_file_base;
-
-  // Splitting
-  std::vector<std::string> _splitting;
 };
 
 #endif //EXECUTIONER_H
