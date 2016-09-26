@@ -3,78 +3,87 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <functional>
 
-#define EXEC_LEV(name) addLevelBegin(#name, [this]{return name##Begin();}); \
-                       addLevelEnd(#name, [this]{return name##End();});
+struct IterInfo {
+  int curr_loop_iter;
+  std::vector<int> all_iters;
+};
 
-class Exeker {
+class ExecLoop {
+ public:
+  virtual bool beginIter(IterInfo info) = 0;
+  virtual bool endIter(IterInfo info) = 0;
+};
+
+class Executioner final {
  public: 
-  Exeker() : _curr_level(0) {};
+  Executioner() : _curr_loop(0) {};
 
-  typedef std::function< bool() > LevelFunc;
-
-  void addLevelBegin(std::string name, LevelFunc begin) {
-    createLevel(name);
-    _begin_funcs[_level_index[name]] = begin;
+  void addLoop(std::string name, ExecLoop* loop) {
+    _loop_names.push_back(name);
+    _loop_counts.push_back(0);
+    _loops.push_back(loop);
   }
 
-  void addLevelEnd(std::string name, LevelFunc end) {
-    createLevel(name);
-    _end_funcs[_level_index[name]] = end;
-  }
-
-  void run() {
-    execLevel(0);
-  }
-
-  int iter(int level) {
-    return _level_counts[level];
-  }
-
-  int iter() {
-    return _level_counts[_curr_level];
-  }
+  void run() { runLoop(0); }
 
  private:
-  void createLevel(std::string name) {
-    if (_level_index.count(name) > 0) {
-      return;
-    }
-    int i = _level_names.size();
-    _level_names.push_back(name);
-    _level_counts.push_back(0);
-    _level_index[name] = i;
-    _begin_funcs.push_back([]{return false;});
-    _end_funcs.push_back([]{return false;});
+  void createLoop(std::string name) {
   }
 
-  void execLevel(int level) {
-    if (level >= _level_names.size()) {
+  void runLoop(int loop) {
+    if (loop >= _loop_names.size()) {
       return;
     }
-    _curr_level = level;
+    _curr_loop = loop;
 
     bool done = false;
     while (!done) {
-      _level_counts[level]++;
-      //std::cout << std::string(level * 4, ' ') << _level_names[level] << " begin\n";
-      done = _begin_funcs[level]() || done;
-      execLevel(level + 1);
-      _curr_level = level;
-      //std::cout << std::string(level * 4, ' ') << _level_names[level] << " end\n";
-      done = _end_funcs[level]() || done;
+      _loop_counts[loop]++;
+      IterInfo info = {_loop_counts[loop], _loop_counts};
+
+      //std::cout << std::string(loop * 4, ' ') << _loop_names[loop] << " " << info.curr_loop_iter << " begin\n";
+      done = _loops[loop]->beginIter(info) || done;
+      runLoop(loop + 1);
+      _curr_loop = loop;
+      //std::cout << std::string(loop * 4, ' ') << _loop_names[loop] << " end\n";
+      done = _loops[loop]->endIter(info) || done;
     }
 
-    // reset level counts
-    for (int i = level; i < _level_counts.size(); i++) {
-      _level_counts[i] = 0;
+    // reset loop counts
+    for (int i = loop; i < _loop_counts.size(); i++) {
+      _loop_counts[i] = 0;
     }
   }
 
-  int _curr_level;
-  std::vector<int> _level_counts;
-  std::map<std::string, int> _level_index;
-  std::vector<std::string> _level_names;
-  std::vector<LevelFunc> _begin_funcs;
-  std::vector<LevelFunc> _end_funcs;
+  int _curr_loop;
+  std::vector<int> _loop_counts;
+  std::vector<std::string> _loop_names;
+  std::vector<ExecLoop*> _loops;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// all code below here is bonus for using labmdas and custom-named methods for
+// loop funcs all together in a single object/class
+///////////////////////////////////////////////////////////////////////////////
+
+#define EXEC_LOOP_METHOD(ex,obj,name) ex.addLoop( \
+        #name, \
+        new ExecLoopFunc([&obj](IterInfo info){return obj.name##Begin(info);}, \
+            [&obj](IterInfo info){return obj.name##End(info);}) \
+    ); \
+
+typedef std::function< bool(IterInfo info) > LoopFunc;
+
+class ExecLoopFunc : public ExecLoop {
+ public:
+  ExecLoopFunc(LoopFunc begin, LoopFunc end) : _begin(begin), _end(end) {};
+  virtual bool beginIter(IterInfo info) override { return _begin(info);}
+  virtual bool endIter(IterInfo info) override { return _end(info);}
+
+ private:
+  LoopFunc _begin;
+  LoopFunc _end;
+};
+
