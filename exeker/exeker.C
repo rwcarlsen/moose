@@ -8,6 +8,11 @@ class MyLoops {
   int foo_max;
   int bar_max;
 
+  MyLoops(Executioner& ex) {
+    LOOP_FROM_METHODS(ex, foo);
+    LOOP_FROM_METHODS(ex, bar);
+  };
+
   bool fooBegin(IterInfo info) {
     std::cout << "foo "<< info.curr_loop_iter << " begin\n";
     return info.curr_loop_iter >= foo_max;
@@ -46,13 +51,10 @@ class Cycle : public ExecLoop {
 };
 
 int main(int argc, char** argv) {
-  MyLoops loops;
+  Executioner ex;
+  MyLoops loops(ex);
   loops.foo_max = 3;
   loops.bar_max = 2;
-
-  Executioner ex;
-  EXEC_LOOP_METHOD(ex, loops, foo);
-  EXEC_LOOP_METHOD(ex, loops, bar);
   ex.addLoop("baz", new Cycle(2));
   ex.run();
 

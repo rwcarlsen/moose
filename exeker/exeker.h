@@ -6,8 +6,9 @@
 #include <functional>
 
 struct IterInfo {
-  int curr_loop_iter;
-  std::vector<int> all_iters;
+  std::string& name;
+  const int& curr_loop_iter;
+  const std::vector<int>& all_iters;
 };
 
 class ExecLoop {
@@ -29,9 +30,6 @@ class Executioner final {
   void run() { runLoop(0); }
 
  private:
-  void createLoop(std::string name) {
-  }
-
   void runLoop(int loop) {
     if (loop >= _loop_names.size()) {
       return;
@@ -41,7 +39,7 @@ class Executioner final {
     bool done = false;
     while (!done) {
       _loop_counts[loop]++;
-      IterInfo info = {_loop_counts[loop], _loop_counts};
+      IterInfo info = {_loop_names[loop], _loop_counts[loop], _loop_counts};
 
       //std::cout << std::string(loop * 4, ' ') << _loop_names[loop] << " " << info.curr_loop_iter << " begin\n";
       done = _loops[loop]->beginIter(info) || done;
@@ -68,10 +66,9 @@ class Executioner final {
 // loop funcs all together in a single object/class
 ///////////////////////////////////////////////////////////////////////////////
 
-#define EXEC_LOOP_METHOD(ex,obj,name) ex.addLoop( \
-        #name, \
-        new ExecLoopFunc([&obj](IterInfo info){return obj.name##Begin(info);}, \
-            [&obj](IterInfo info){return obj.name##End(info);}) \
+#define LOOP_FROM_METHODS(ex,name) ex.addLoop( #name, \
+        new ExecLoopFunc([this](IterInfo info){return name##Begin(info);}, \
+                         [this](IterInfo info){return name##End(info);}) \
     ); \
 
 typedef std::function< bool(IterInfo info) > LoopFunc;
