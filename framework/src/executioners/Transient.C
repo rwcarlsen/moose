@@ -149,7 +149,6 @@ Transient::Transient(const InputParameters & parameters) :
     _prev_dt(declareRestartableData<Real>("prev_dt", 0)),
     _si()
 {
-  _problem.getNonlinearSystem().setDecomposition(_splitting);
   _t_step = 0;
   _nl_its = _fe_problem.getNonlinearSystem().nNonlinearIterations();
   _l_its = _fe_problem.getNonlinearSystem().nLinearIterations();
@@ -164,9 +163,6 @@ Transient::Transient(const InputParameters & parameters) :
 
   _time = _time_old = _start_time;
   _problem.transient(true);
-
-  if (!_restart_file_base.empty())
-    _problem.setRestartFile(_restart_file_base);
 
   setupTimeIntegrator();
 
