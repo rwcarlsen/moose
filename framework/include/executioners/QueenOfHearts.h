@@ -19,7 +19,7 @@
 #include <string>
 #include <functional>
 
-class FEProblem
+class FEProblem;
 
 struct IterInfo {
   std::string& name;

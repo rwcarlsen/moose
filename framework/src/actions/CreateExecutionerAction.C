@@ -17,6 +17,7 @@
 #include "PetscSupport.h"
 #include "MooseApp.h"
 #include "Executioner.h"
+#include "Loops.h"
 
 template<>
 InputParameters validParams<CreateExecutionerAction>()
@@ -36,10 +37,14 @@ void
 CreateExecutionerAction::act()
 {
   _moose_object_pars.set<FEProblem *>("_fe_problem") = _problem.get();
-  if (_type == "queen_of_hearts"){
-    _factory.create<Loops>(_type, "ExecutionerLoops", _moose_object_pars);
+  if (_type == "queen_of_hearts")
+  {
+    _app._loops = _factory.create<Loops>(_type, "ExecutionerLoops", _moose_object_pars);
+    _app._loops->initialize(_app._queen_executioner);
     _app._use_queen = true;
-  } else {
+  }
+  else
+  {
     MooseSharedPointer<Executioner> executioner = _factory.create<Executioner>(_type, "Executioner", _moose_object_pars);
     _app.executioner() = executioner;
   }

@@ -20,25 +20,29 @@ Loops::Loops(const InputParameters & parameters) :
 
 void Loops::initialize(QueenOfHearts& queen) {
 #ifdef LIBMESH_ENABLE_AMR
-  LOOP_FROM_METHODS(queen, MeshAdaptivity);
+  LOOP_FROM_METHODS(queen, meshAdaptivity);
 #endif
-  LOOP_FROM_METHODS(queen, Step);
+  LOOP_FROM_METHODS(queen, step);
 }
 
-bool Loops::beginMeshAdaptivity(IterInfo info)
+bool Loops::meshAdaptivityBegin(IterInfo info)
 {
+  return false;
 }
 
-bool Loops::endMeshAdaptivity(IterInfo info)
+bool Loops::meshAdaptivityEnd(IterInfo info)
 {
+  return false;
 }
 
 
-bool Loops::beginStep(IterInfo info)
+bool Loops::stepBegin(IterInfo info)
 {
+  return false;
 }
 
-bool Loops::endStep(IterInfo info)
+bool Loops::stepEnd(IterInfo info)
 {
+  return true;
 }
 

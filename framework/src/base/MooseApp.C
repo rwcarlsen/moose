@@ -135,6 +135,7 @@ MooseApp::MooseApp(InputParameters parameters) :
     _action_factory(*this),
     _action_warehouse(*this, _syntax, _action_factory),
     _parser(*this, _action_warehouse),
+    _use_queen(false),
     _use_nonlinear(true),
     _enable_unused_check(WARN_UNUSED),
     _factory(*this),
@@ -149,8 +150,7 @@ MooseApp::MooseApp(InputParameters parameters) :
     _legacy_uo_initialization_default(getParam<bool>("use_legacy_uo_initialization")),
     _check_input(getParam<bool>("check_input")),
     _restartable_data(libMesh::n_threads()),
-    _multiapp_level(0),
-    _use_queen(false)
+    _multiapp_level(0)
 {
   if (isParamValid("_argc") && isParamValid("_argv"))
   {

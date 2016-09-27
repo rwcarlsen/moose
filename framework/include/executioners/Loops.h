@@ -1,13 +1,17 @@
 #ifndef LOOPS_H
 #define LOOPS_H
 
+#include "MooseObject.h"
+#include "UserObjectInterface.h"
+#include "PostprocessorInterface.h"
+#include "Restartable.h"
 #include "InputParameters.h"
 #include "QueenOfHearts.h"
 
 // System includes
 #include <string>
 
-class Loops
+class Loops;
 
 template<>
 InputParameters validParams<Loops>();
@@ -23,11 +27,11 @@ public:
 
   void initialize(QueenOfHearts& queen);
 
-  bool beginMeshAdaptivity(IterInfo info);
-  bool endMeshAdaptivity(IterInfo info);
+  bool meshAdaptivityBegin(IterInfo info);
+  bool meshAdaptivityEnd(IterInfo info);
 
-  bool beginStep(IterInfo info);
-  bool endStep(IterInfo info);
+  bool stepBegin(IterInfo info);
+  bool stepEnd(IterInfo info);
 
 private:
   FEProblem* _problem;

@@ -24,6 +24,7 @@
 #include "OutputWarehouse.h"
 #include "RestartableData.h"
 #include "ConsoleStreamInterface.h"
+#include "QueenOfHearts.h"
 
 // libMesh includes
 #include "libmesh/parallel_object.h"
@@ -42,6 +43,7 @@ class MeshModifier;
 class InputParameterWarehouse;
 class SystemInfo;
 class CommandLine;
+class Loops;
 
 template<>
 InputParameters validParams<MooseApp>();
@@ -562,6 +564,7 @@ public:
   MooseSharedPointer<Executioner> _executioner;
 
   QueenOfHearts _queen_executioner;
+  std::shared_ptr<Loops> _loops;
   bool _use_queen;
 
   /// Boolean to indicate whether to use a Nonlinear or EigenSystem (inspected by actions)
