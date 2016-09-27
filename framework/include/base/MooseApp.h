@@ -561,6 +561,9 @@ public:
   /// Pointer to the executioner of this run (typically build by actions)
   MooseSharedPointer<Executioner> _executioner;
 
+  QueenOfHearts _queen_executioner;
+  bool _use_queen;
+
   /// Boolean to indicate whether to use a Nonlinear or EigenSystem (inspected by actions)
   bool _use_nonlinear;
 

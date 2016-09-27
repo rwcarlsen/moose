@@ -36,7 +36,11 @@ void
 CreateExecutionerAction::act()
 {
   _moose_object_pars.set<FEProblem *>("_fe_problem") = _problem.get();
-  MooseSharedPointer<Executioner> executioner = _factory.create<Executioner>(_type, "Executioner", _moose_object_pars);
-
-  _app.executioner() = executioner;
+  if (_type == "queen_of_hearts"){
+    _factory.create<Loops>(_type, "ExecutionerLoops", _moose_object_pars);
+    _app._use_queen = true;
+  } else {
+    MooseSharedPointer<Executioner> executioner = _factory.create<Executioner>(_type, "Executioner", _moose_object_pars);
+    _app.executioner() = executioner;
+  }
 }

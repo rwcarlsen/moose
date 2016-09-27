@@ -149,7 +149,8 @@ MooseApp::MooseApp(InputParameters parameters) :
     _legacy_uo_initialization_default(getParam<bool>("use_legacy_uo_initialization")),
     _check_input(getParam<bool>("check_input")),
     _restartable_data(libMesh::n_threads()),
-    _multiapp_level(0)
+    _multiapp_level(0),
+    _use_queen(false)
 {
   if (isParamValid("_argc") && isParamValid("_argv"))
   {
@@ -413,7 +414,14 @@ MooseApp::executeExecutioner()
     return;
 
   // run the simulation
-  if (_executioner)
+  if (_use_queen)
+  {
+#ifdef LIBMESH_HAVE_PETSC
+    Moose::PetscSupport::petscSetupOutput(_command_line.get());
+#endif
+    _queen_executioner.run();
+  }
+  else if (_executioner)
   {
 #ifdef LIBMESH_HAVE_PETSC
     Moose::PetscSupport::petscSetupOutput(_command_line.get());
