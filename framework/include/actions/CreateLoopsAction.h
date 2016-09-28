@@ -12,30 +12,23 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-#include "CreateExecutionerAction.h"
-#include "Factory.h"
-#include "PetscSupport.h"
-#include "MooseApp.h"
-#include "Executioner.h"
-#include "Loops.h"
+#ifndef CREATELOOPSACTION_H
+#define CREATELOOPSACTION_H
+
+#include "MooseObjectAction.h"
+
+class CreateLoopsAction;
 
 template<>
-InputParameters validParams<CreateExecutionerAction>()
-{
-  InputParameters params = validParams<MooseObjectAction>();
-  return params;
-}
+InputParameters validParams<CreateLoopsAction>();
 
 
-CreateExecutionerAction::CreateExecutionerAction(InputParameters params) :
-    MooseObjectAction(params)
+class CreateLoopsAction : public MooseObjectAction
 {
-}
+public:
+  CreateLoopsAction(InputParameters params);
 
-void
-CreateExecutionerAction::act()
-{
-  _moose_object_pars.set<FEProblem *>("_fe_problem") = _problem.get();
-  MooseSharedPointer<Executioner> executioner = _factory.create<Executioner>(_type, "Executioner", _moose_object_pars);
-  _app.executioner() = executioner;
-}
+  virtual void act() override;
+};
+
+#endif // CREATELOOPSACTION_H

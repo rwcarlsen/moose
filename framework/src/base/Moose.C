@@ -136,6 +136,7 @@
 #include "FunctionScalarIC.h"
 
 // executioners
+#include "Loops.h"
 #include "Steady.h"
 #include "Transient.h"
 #include "InversePowerMethod.h"
@@ -368,6 +369,7 @@
 #include "AddDamperAction.h"
 #include "AddFunctionAction.h"
 #include "CreateExecutionerAction.h"
+#include "CreateLoopsAction.h"
 #include "SetupExecutionerProblemParamsAction.h"
 #include "DetermineSystemType.h"
 #include "EmptyAction.h"
@@ -564,6 +566,7 @@ registerObjects(Factory & factory)
   registerInitialCondition(FunctionScalarIC);
 
   // executioners
+  registerObject(Loops);
   registerExecutioner(Steady);
   registerExecutioner(Transient);
   registerExecutioner(InversePowerMethod);
@@ -844,6 +847,7 @@ addActionTypes(Syntax & syntax)
   /**************************/
   registerMooseObjectTask("create_problem",               Problem,                 true);
   registerMooseObjectTask("setup_executioner",            Executioner,             true);
+  registerMooseObjectTask("setup_loops",                  Loops,                  false);
 
   // This task does not construct an object, but it needs all of the parameters that
   // would normally be used to construct an object.
@@ -980,6 +984,7 @@ addActionTypes(Syntax & syntax)
 "(setup_time_integrator)"
 "(setup_executioner)"
 "(setup_executioner_problem_params)"
+"(setup_loops)"
 "(setup_time_stepper)"
 "(setup_predictor)"
 "(setup_postprocessor_data)"
@@ -1064,6 +1069,7 @@ registerActions(Syntax & syntax, ActionFactory & action_factory)
 
   registerAction(AddFunctionAction, "add_function");
   registerAction(CreateExecutionerAction, "setup_executioner");
+  registerAction(CreateLoopsAction, "setup_loops");
   registerAction(SetupExecutionerProblemParamsAction, "setup_executioner_problem_params");
   registerAction(SetupTimeStepperAction, "setup_time_stepper");
   registerAction(SetupTimeIntegratorAction, "setup_time_integrator");

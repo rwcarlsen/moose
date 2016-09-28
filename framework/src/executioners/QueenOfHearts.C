@@ -3,6 +3,8 @@
 
 QueenOfHearts::QueenOfHearts() { };
 
+QueenOfHearts::~QueenOfHearts() { };
+
 void
 QueenOfHearts::addLoop(std::string name, ExecLoop* loop)
 {

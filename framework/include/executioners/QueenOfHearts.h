@@ -25,17 +25,16 @@ struct IterInfo {
   std::string& name;
   const int& curr_loop_iter;
   const std::vector<int>& all_iters;
-  FEProblem* problem;
 };
 
 class ExecLoop {
- public:
+public:
   virtual bool beginIter(IterInfo info) = 0;
   virtual bool endIter(IterInfo info) = 0;
 };
 
 class QueenOfHearts {
- public:
+public:
   QueenOfHearts();
   virtual ~QueenOfHearts();
 
@@ -57,20 +56,20 @@ private:
 // loop funcs all together in a single object/class                            //
 /////////////////////////////////////////////////////////////////////////////////
 
-#define LOOP_FROM_METHODS(ex,name) ex.addLoop( #name, \
-        new ExecLoopFunc([this](IterInfo info){return name##Begin(info);}, \
-                         [this](IterInfo info){return name##End(info);}) \
+#define LOOP_FROM_METHODS(ex,pre,post) ex.addLoop( #pre#post, \
+        new ExecLoopFunc([this](IterInfo info){return pre(info);}, \
+                         [this](IterInfo info){return post(info);}) \
     ); \
 
 typedef std::function< bool(IterInfo info) > LoopFunc;
 
 class ExecLoopFunc : public ExecLoop {
- public:
+public:
   ExecLoopFunc(LoopFunc begin, LoopFunc end) : _begin(begin), _end(end) {};
   virtual bool beginIter(IterInfo info) override { return _begin(info);}
   virtual bool endIter(IterInfo info) override { return _end(info);}
 
- private:
+private:
   LoopFunc _begin;
   LoopFunc _end;
 };

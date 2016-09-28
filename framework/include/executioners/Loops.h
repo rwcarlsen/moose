@@ -25,17 +25,24 @@ class Loops :
 public:
   Loops(const InputParameters & parameters);
 
-  void initialize(QueenOfHearts& queen);
+  virtual void initialize(QueenOfHearts& queen, FEProblem* problem);
 
-  bool meshAdaptivityBegin(IterInfo info);
-  bool meshAdaptivityEnd(IterInfo info);
+  bool setup(IterInfo info);
+  bool teardown(IterInfo info);
 
-  bool stepBegin(IterInfo info);
-  bool stepEnd(IterInfo info);
+  bool meshRefinementBegin(IterInfo info);
+  bool meshRefinementEnd(IterInfo info);
+
+  bool timeStepBegin(IterInfo info);
+  bool timeStepEnd(IterInfo info);
+
+  bool solveBegin(IterInfo info);
+  bool solveEnd(IterInfo info);
 
 private:
   FEProblem* _problem;
-
+  std::string _flavor;
+  unsigned int _max_time_steps;
 };
 
 #endif //LOOPS_H
