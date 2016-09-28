@@ -51,12 +51,14 @@ bool Loops::setup(IterInfo info)
   _problem->outputStep(EXEC_INITIAL);
 
   if (!_app.isRecovering())
-    _problem.advanceState();
+    _problem->advanceState();
 
-  // first step in any steady state solve is always 1 (preserving backwards compatibility)
-  _problem.timeStep() = 1;
-  // need to keep _time in sync with _time_step to get correct output
-  _problem.time() = 1;
+  if (_flavor == "steady") {
+    // first step in any steady state solve is always 1 (preserving backwards compatibility)
+    _problem->timeStep() = 1;
+    // need to keep _time in sync with _time_step to get correct output
+    _problem->time() = 1;
+  }
 
   return false;
 }

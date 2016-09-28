@@ -1,7 +1,7 @@
 
 #include "QueenOfHearts.h"
 
-QueenOfHearts::QueenOfHearts() { };
+QueenOfHearts::QueenOfHearts() : _curr_loop(0) { };
 
 QueenOfHearts::~QueenOfHearts() { };
 
@@ -19,10 +19,37 @@ QueenOfHearts::run()
   runLoop(0);
 }
 
+int
+QueenOfHearts::iter()
+{
+  return iter(_curr_loop);
+}
+
+int
+QueenOfHearts::iter(int loop)
+{
+  if (loop >= _loop_counts.size())
+    return 0;
+  return _loop_counts[loop];
+}
+
+int
+QueenOfHearts::iter(std::string loop)
+{
+  for (int i = 0; i < _loop_names.size(); i++)
+  {
+    if (_loop_names[i] == loop)
+      return _loop_counts[i];
+  }
+  return 0; // TODO: throw here?
+}
+
+
 void
 QueenOfHearts::runLoop(int loop)
 {
   if (loop >= _loop_names.size()) return;
+  _curr_loop = loop;
 
   bool done = false;
   while (!done)
@@ -34,6 +61,7 @@ QueenOfHearts::runLoop(int loop)
     if (done) break;
 
     runLoop(loop + 1);
+    _curr_loop = loop;
 
     done = _loops[loop]->endIter(info) || done;
   }

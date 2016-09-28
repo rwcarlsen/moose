@@ -41,6 +41,10 @@ public:
   void addLoop(std::string name, ExecLoop* loop);
   void run();
 
+  int iter();
+  int iter(int loop);
+  int iter(std::string loop);
+
   void reset();
 
 private:
@@ -49,6 +53,7 @@ private:
   std::vector<int> _loop_counts;
   std::vector<std::string> _loop_names;
   std::vector<ExecLoop*> _loops;
+  int _curr_loop;
 };
 
 /////////////////////////////////////////////////////////////////////////////////
