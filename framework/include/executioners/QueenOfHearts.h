@@ -12,71 +12,42 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-#ifndef QUEENOFHEARTS_H
-#define QUEENOFHEARTS_H
+#ifndef EXECLOOP_H
+#define EXECLOOP_H
 
 #include <vector>
 #include <string>
-#include <functional>
 
 class FEProblem;
+class MooseApp;
+class Console;
 
-struct IterInfo {
-  std::string& name;
-  const int& curr_loop_iter;
-  const std::vector<int>& all_iters;
+struct LoopContext {
+  MooseApp* app;
+  FEProblem* problem;
 };
 
 class ExecLoop {
 public:
-  virtual bool beginIter(IterInfo info) = 0;
-  virtual bool endIter(IterInfo info) = 0;
-};
+  virtual ~ExecLoop();
 
-class QueenOfHearts {
-public:
-  QueenOfHearts();
-  virtual ~QueenOfHearts();
-
-  void addLoop(std::string name, ExecLoop* loop);
-  void run();
+  void run(LoopContext& ctx);
+  void addChild(ExecLoop* loop);
 
   int iter();
   int iter(int loop);
   int iter(std::string loop);
 
-  void reset();
+  virtual std::string name() = 0;
+  virtual bool beginIter(LoopContext& ctx) = 0;
+  virtual bool endIter(LoopContext& ctx) = 0;
 
 private:
-  void runLoop(int loop);
+  void runLoop(LoopContext& ctx, int loop);
 
-  std::vector<int> _loop_counts;
-  std::vector<std::string> _loop_names;
-  std::vector<ExecLoop*> _loops;
-  int _curr_loop;
+  std::vector<int> _iters;
+  std::vector<std::string> _names;
+  std::vector<ExecLoop*> _children;
 };
 
-/////////////////////////////////////////////////////////////////////////////////
-// all code below here is bonus for using labmdas and custom-named methods for //
-// loop funcs all together in a single object/class                            //
-/////////////////////////////////////////////////////////////////////////////////
-
-#define LOOP_FROM_METHODS(ex,pre,post) ex.addLoop( #pre#post, \
-        new ExecLoopFunc([this](IterInfo info){return pre(info);}, \
-                         [this](IterInfo info){return post(info);}) \
-    ); \
-
-typedef std::function< bool(IterInfo info) > LoopFunc;
-
-class ExecLoopFunc : public ExecLoop {
-public:
-  ExecLoopFunc(LoopFunc begin, LoopFunc end) : _begin(begin), _end(end) {};
-  virtual bool beginIter(IterInfo info) override { return _begin(info);}
-  virtual bool endIter(IterInfo info) override { return _end(info);}
-
-private:
-  LoopFunc _begin;
-  LoopFunc _end;
-};
-
-#endif //QUEENOFHEARTS_H
+#endif //EXECLOOP_H

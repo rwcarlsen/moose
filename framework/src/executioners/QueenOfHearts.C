@@ -1,72 +1,64 @@
 
 #include "QueenOfHearts.h"
 
-QueenOfHearts::QueenOfHearts() : _curr_loop(0) { };
-
-QueenOfHearts::~QueenOfHearts() { };
+ExecLoop::~ExecLoop() { };
 
 void
-QueenOfHearts::addLoop(std::string name, ExecLoop* loop)
+ExecLoop::addChild(ExecLoop* loop)
 {
-  _loop_names.push_back(name);
-  _loop_counts.push_back(0);
-  _loops.push_back(loop);
+  _children.push_back(loop);
 }
 
 void
-QueenOfHearts::run()
+ExecLoop::run(LoopContext& ctx)
 {
-  runLoop(0);
+  runLoop(ctx, 0);
 }
 
 int
-QueenOfHearts::iter()
+ExecLoop::iter()
 {
-  return iter(_curr_loop);
+  return iter(_iters.size() - 1);
 }
 
 int
-QueenOfHearts::iter(int loop)
+ExecLoop::iter(int loop)
 {
-  if (loop >= _loop_counts.size())
+  if (loop >= _iters.size())
     return 0;
-  return _loop_counts[loop];
+  return _iters[loop];
 }
 
 int
-QueenOfHearts::iter(std::string loop)
+ExecLoop::iter(std::string loop)
 {
-  for (int i = 0; i < _loop_names.size(); i++)
+  for (int i = 0; i < _iters.size(); i++)
   {
-    if (_loop_names[i] == loop)
-      return _loop_counts[i];
+    if (_names[i] == loop)
+      return _iters[i];
   }
   return 0; // TODO: throw here?
 }
 
-
 void
-QueenOfHearts::runLoop(int loop)
+ExecLoop::runLoop(LoopContext& ctx, int loop)
 {
-  if (loop >= _loop_names.size()) return;
-  _curr_loop = loop;
-
-  bool done = false;
-  while (!done)
+  _iters.push_back(0);
+  _names.push_back(name());
+  while (true)
   {
-    _loop_counts[loop]++;
-    IterInfo info = {_loop_names[loop], _loop_counts[loop], _loop_counts};
-
-    done = _loops[loop]->beginIter(info) || done;
-    if (done) break;
-
-    runLoop(loop + 1);
-    _curr_loop = loop;
-
-    done = _loops[loop]->endIter(info) || done;
+    _iters[loop]++;
+    if (beginIter(ctx)) break;
+    for (auto child : _children)
+    {
+      child->runLoop(ctx, loop + 1);
+    }
+    if (endIter(ctx)) break;
   }
+  _iters.pop_back();
+  _names.pop_back();
 
-  // reset loop counts
-  for (int i = loop; i < _loop_counts.size(); i++) _loop_counts[i] = 0;
+  // reset iter counts
+  for (int i = loop; i < _iters.size(); i++) _iters[i] = 0;
 }
 

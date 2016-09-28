@@ -25,24 +25,49 @@ class Loops :
 public:
   Loops(const InputParameters & parameters);
 
-  virtual void initialize(QueenOfHearts& queen, FEProblem* problem);
-
-  bool setup(IterInfo info);
-  bool teardown(IterInfo info);
-
-  bool meshRefinementBegin(IterInfo info);
-  bool meshRefinementEnd(IterInfo info);
-
-  bool timeStepBegin(IterInfo info);
-  bool timeStepEnd(IterInfo info);
-
-  bool solveBegin(IterInfo info);
-  bool solveEnd(IterInfo info);
+  void initialize(FEProblem* problem);
+  void run();
 
 private:
   FEProblem* _problem;
+  ExecLoop* _root;
   std::string _flavor;
-  unsigned int _max_time_steps;
+};
+
+class SetupLoop : public ExecLoop
+{
+public:
+  SetupLoop();
+  virtual std::string name();
+  virtual bool beginIter(LoopContext& ctx);
+  virtual bool endIter(LoopContext& ctx);
+  bool _steady;
+};
+
+class MeshRefinementLoop : public ExecLoop
+{
+public:
+  virtual std::string name();
+  virtual bool beginIter(LoopContext& ctx);
+  virtual bool endIter(LoopContext& ctx);
+};
+
+class TimeLoop : public ExecLoop
+{
+public:
+  TimeLoop();
+  virtual std::string name();
+  virtual bool beginIter(LoopContext& ctx);
+  virtual bool endIter(LoopContext& ctx);
+  bool _steady;
+};
+
+class SolveLoop : public ExecLoop
+{
+public:
+  virtual std::string name();
+  virtual bool beginIter(LoopContext& ctx);
+  virtual bool endIter(LoopContext& ctx);
 };
 
 #endif //LOOPS_H

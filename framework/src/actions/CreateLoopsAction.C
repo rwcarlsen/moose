@@ -36,5 +36,5 @@ CreateLoopsAction::act()
   _moose_object_pars.set<FEProblem *>("_fe_problem") = _problem.get();
   _app._use_queen = true;
   _app._loops = _factory.create<Loops>(_type, "Loops", _moose_object_pars);
-  _app._loops->initialize(_app._queen_executioner, _problem.get());
+  _app._loops->initialize(_problem.get());
 }

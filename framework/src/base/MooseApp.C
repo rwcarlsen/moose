@@ -18,6 +18,7 @@
 #include "MooseSyntax.h"
 #include "MooseInit.h"
 #include "Executioner.h"
+#include "Loops.h"
 #include "InputFileFormatter.h"
 #include "YAMLFormatter.h"
 #include "PetscSupport.h"
@@ -419,7 +420,7 @@ MooseApp::executeExecutioner()
 #ifdef LIBMESH_HAVE_PETSC
     Moose::PetscSupport::petscSetupOutput(_command_line.get());
 #endif
-    _queen_executioner.run();
+    _loops->run();
   }
   else if (_executioner)
   {

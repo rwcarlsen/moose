@@ -563,7 +563,6 @@ public:
   /// Pointer to the executioner of this run (typically build by actions)
   MooseSharedPointer<Executioner> _executioner;
 
-  QueenOfHearts _queen_executioner;
   std::shared_ptr<Loops> _loops;
   bool _use_queen;
 

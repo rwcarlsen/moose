@@ -18,100 +18,158 @@ Loops::Loops(const InputParameters & parameters) :
     PostprocessorInterface(this),
     Restartable(parameters, "Executioners"),
     _problem(nullptr),
-    _flavor(parameters.get<std::string>("flavor")),
-    _max_time_steps(1)
+    _root(nullptr),
+    _flavor(parameters.get<std::string>("flavor"))
 {
-  if (_flavor == "steady") _max_time_steps = 1;
 }
 
 void
-Loops::initialize(QueenOfHearts& queen, FEProblem* problem)
+Loops::initialize(FEProblem* problem)
 {
   _problem = problem;
+  ExecLoop* curr = nullptr;
 
-  LOOP_FROM_METHODS(queen, setup, teardown);
+  {
+    SetupLoop* loop = new SetupLoop();
+    loop->_steady = _flavor == "steady";
+    curr = loop;
+    _root = loop;
+  }
+
 #ifdef LIBMESH_ENABLE_AMR
-  LOOP_FROM_METHODS(queen, meshRefinementBegin, meshRefinementEnd);
+  {
+    MeshRefinementLoop* loop = new MeshRefinementLoop();
+    curr->addChild(loop);
+    curr = loop;
+  }
 #endif
-  LOOP_FROM_METHODS(queen, timeStepBegin, timeStepEnd);
-  LOOP_FROM_METHODS(queen, solveBegin, solveEnd);
+
+  {
+    TimeLoop* loop = new TimeLoop();
+    loop->_steady = _flavor == "steady";
+    curr->addChild(loop);
+    curr = loop;
+  }
+
+  {
+    SolveLoop* loop = new SolveLoop();
+    curr->addChild(loop);
+    curr = loop;
+  }
 }
 
-bool Loops::setup(IterInfo info)
+void
+Loops::run() {
+  LoopContext ctx = {&_app, _problem};
+  _root->run(ctx);
+}
+
+////////////////// SetupLoop ////////////////////
+SetupLoop::SetupLoop() : _steady(true) { }
+
+std::string SetupLoop::name()
 {
-  if (_flavor == "steady" && _app.isRecovering())
+  return "setup";
+}
+
+bool SetupLoop::beginIter(LoopContext& ctx)
+{
+  if (_steady && ctx.app->isRecovering())
   {
-    _console << "\nCannot recover steady solves!\nExiting...\n" << std::endl;
+    //ctx.console << "\nCannot recover steady solves!\nExiting...\n" << std::endl;
     return true;
   }
-  if (_flavor == "steady" && _problem->getNonlinearSystem().containsTimeKernel())
+  if (_steady && ctx.problem->getNonlinearSystem().containsTimeKernel())
     mooseError("time kernels are not allowed in steady state simulations");
 
-  _problem->initialSetup();
-  _problem->outputStep(EXEC_INITIAL);
+  ctx.problem->initialSetup();
+  ctx.problem->outputStep(EXEC_INITIAL);
 
-  if (!_app.isRecovering())
-    _problem->advanceState();
+  if (!ctx.app->isRecovering())
+    ctx.problem->advanceState();
 
-  if (_flavor == "steady") {
+  if (_steady) {
     // first step in any steady state solve is always 1 (preserving backwards compatibility)
-    _problem->timeStep() = 1;
+    ctx.problem->timeStep() = 1;
     // need to keep _time in sync with _time_step to get correct output
-    _problem->time() = 1;
+    ctx.problem->time() = 1;
   }
 
   return false;
 }
 
-bool Loops::teardown(IterInfo info) { return true;}
+bool SetupLoop::endIter(LoopContext& ctx)
+{
+  return true;
+}
 
-bool Loops::meshRefinementBegin(IterInfo info)
+////////////////// MeshRefinementLoop ////////////////////
+std::string MeshRefinementLoop::name()
+{
+  return "mesh-refinement-loop";
+}
+
+bool MeshRefinementLoop::beginIter(LoopContext& ctx)
 {
   return false;
 }
 
-bool Loops::meshRefinementEnd(IterInfo info)
+bool MeshRefinementLoop::endIter(LoopContext& ctx)
 {
-  unsigned int max_steps = _problem->adaptivity().getSteps();
-  if (info.curr_loop_iter < max_steps) _problem->adaptMesh();
-  return info.curr_loop_iter >= max_steps;
+  unsigned int max_steps = ctx.problem->adaptivity().getSteps();
+  if (iter() < max_steps) ctx.problem->adaptMesh();
+  return iter() >= max_steps;
 }
 
-bool Loops::timeStepBegin(IterInfo info)
+////////////////// TimeLoop ////////////////////
+std::string TimeLoop::name()
 {
-  _problem->timestepSetup();
-  _problem->execute(EXEC_TIMESTEP_BEGIN);
-  _problem->outputStep(EXEC_TIMESTEP_BEGIN);
+  return "time-loop";
+}
+
+TimeLoop::TimeLoop() : _steady(true) { }
+
+bool TimeLoop::beginIter(LoopContext& ctx)
+{
+  ctx.problem->timestepSetup();
+  ctx.problem->execute(EXEC_TIMESTEP_BEGIN);
+  ctx.problem->outputStep(EXEC_TIMESTEP_BEGIN);
 
   // Update warehouse active objects
-  _problem->updateActiveObjects();
+  ctx.problem->updateActiveObjects();
   return false;
 }
 
-bool Loops::timeStepEnd(IterInfo info)
+bool TimeLoop::endIter(LoopContext& ctx)
 {
-  if (_flavor == "steady" && !_problem->converged()) {
-    _console << "aborting early: solve did not converge\n";
+  if (_steady && !ctx.problem->converged()) {
+    //ctx.console << "aborting early: solve did not converge\n";
     return true;
   }
 
-  _problem->onTimestepEnd();
-  _problem->execute(EXEC_TIMESTEP_END);
+  ctx.problem->onTimestepEnd();
+  ctx.problem->execute(EXEC_TIMESTEP_END);
 
-  _problem->computeIndicators();
-  _problem->computeMarkers();
+  ctx.problem->computeIndicators();
+  ctx.problem->computeMarkers();
 
-  _problem->outputStep(EXEC_TIMESTEP_END);
-  return info.curr_loop_iter >= _max_time_steps;
+  ctx.problem->outputStep(EXEC_TIMESTEP_END);
+  return _steady;
 }
 
-bool Loops::solveBegin(IterInfo info)
+////////////////// SolveLoop ////////////////////
+std::string SolveLoop::name()
 {
-    _problem->solve();
+  return "solve";
+}
+
+bool SolveLoop::beginIter(LoopContext& ctx)
+{
+    ctx.problem->solve();
     return false;
 }
 
-bool Loops::solveEnd(IterInfo info)
+bool SolveLoop::endIter(LoopContext& ctx)
 {
   return true;
 }
