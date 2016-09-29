@@ -31,7 +31,7 @@ class ExecLoop {
 public:
   virtual ~ExecLoop();
 
-  void run(LoopContext& ctx);
+  void run(LoopContext* ctx);
   void addChild(ExecLoop* loop);
 
   int iter();
@@ -39,11 +39,11 @@ public:
   int iter(std::string loop);
 
   virtual std::string name() = 0;
-  virtual bool beginIter(LoopContext& ctx) = 0;
-  virtual bool endIter(LoopContext& ctx) = 0;
+  virtual bool beginIter(LoopContext* ctx) = 0;
+  virtual bool endIter(LoopContext* ctx) = 0;
 
 private:
-  void runLoop(LoopContext& ctx, int loop);
+  void runLoop(LoopContext* ctx, int loop);
 
   std::vector<int> _iters;
   std::vector<std::string> _names;

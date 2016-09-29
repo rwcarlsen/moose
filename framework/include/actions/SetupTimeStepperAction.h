@@ -31,6 +31,8 @@ public:
   SetupTimeStepperAction(InputParameters parameters);
 
   virtual void act() override;
+private:
+  int _already_ran;
 };
 
 

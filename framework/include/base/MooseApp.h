@@ -44,6 +44,7 @@ class InputParameterWarehouse;
 class SystemInfo;
 class CommandLine;
 class Loops;
+class TimeStepper;
 
 template<>
 InputParameters validParams<MooseApp>();
@@ -562,9 +563,9 @@ public:
 
   /// Pointer to the executioner of this run (typically build by actions)
   MooseSharedPointer<Executioner> _executioner;
-
+  MooseSharedPointer<TimeStepper> _time_stepper;
   std::shared_ptr<Loops> _loops;
-  bool _use_queen;
+  bool _use_loops;
 
   /// Boolean to indicate whether to use a Nonlinear or EigenSystem (inspected by actions)
   bool _use_nonlinear;

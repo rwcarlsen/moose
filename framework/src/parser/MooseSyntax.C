@@ -97,7 +97,9 @@ void associateSyntax(Syntax & syntax, ActionFactory & action_factory)
   syntax.registerActionSyntax("CreateExecutionerAction", "Executioner");
   syntax.registerActionSyntax("CreateLoopsAction", "Loops");
   syntax.registerActionSyntax("SetupExecutionerProblemParamsAction", "Executioner");
+  syntax.registerActionSyntax("SetupExecutionerProblemParamsAction", "Loops");
   syntax.registerActionSyntax("SetupTimeStepperAction", "Executioner/TimeStepper");
+  syntax.registerActionSyntax("SetupTimeStepperAction", "Loops/TimeStepper");
   syntax.registerActionSyntax("SetupTimeIntegratorAction", "Executioner/TimeIntegrator");
 
   syntax.registerActionSyntax("SetupQuadratureAction", "Executioner/Quadrature");

@@ -10,7 +10,7 @@ ExecLoop::addChild(ExecLoop* loop)
 }
 
 void
-ExecLoop::run(LoopContext& ctx)
+ExecLoop::run(LoopContext* ctx)
 {
   runLoop(ctx, 0);
 }
@@ -41,7 +41,7 @@ ExecLoop::iter(std::string loop)
 }
 
 void
-ExecLoop::runLoop(LoopContext& ctx, int loop)
+ExecLoop::runLoop(LoopContext* ctx, int loop)
 {
   _iters.push_back(0);
   _names.push_back(name());

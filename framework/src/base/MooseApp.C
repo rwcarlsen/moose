@@ -136,7 +136,7 @@ MooseApp::MooseApp(InputParameters parameters) :
     _action_factory(*this),
     _action_warehouse(*this, _syntax, _action_factory),
     _parser(*this, _action_warehouse),
-    _use_queen(false),
+    _use_loops(false),
     _use_nonlinear(true),
     _enable_unused_check(WARN_UNUSED),
     _factory(*this),
@@ -415,7 +415,7 @@ MooseApp::executeExecutioner()
     return;
 
   // run the simulation
-  if (_use_queen)
+  if (_use_loops)
   {
 #ifdef LIBMESH_HAVE_PETSC
     Moose::PetscSupport::petscSetupOutput(_command_line.get());

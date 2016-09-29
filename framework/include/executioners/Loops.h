@@ -31,43 +31,58 @@ public:
 private:
   FEProblem* _problem;
   ExecLoop* _root;
-  std::string _flavor;
 };
 
 class SetupLoop : public ExecLoop
 {
 public:
-  SetupLoop();
+  SetupLoop(const InputParameters& params, LoopContext* ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext& ctx);
-  virtual bool endIter(LoopContext& ctx);
+  virtual bool beginIter(LoopContext* ctx);
+  virtual bool endIter(LoopContext* ctx);
+private:
   bool _steady;
 };
 
 class MeshRefinementLoop : public ExecLoop
 {
 public:
+  MeshRefinementLoop(const InputParameters& params, LoopContext* ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext& ctx);
-  virtual bool endIter(LoopContext& ctx);
+  virtual bool beginIter(LoopContext* ctx);
+  virtual bool endIter(LoopContext* ctx);
 };
 
 class TimeLoop : public ExecLoop
 {
 public:
-  TimeLoop();
+  TimeLoop(const InputParameters& params, LoopContext* ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext& ctx);
-  virtual bool endIter(LoopContext& ctx);
-  bool _steady;
+  virtual bool beginIter(LoopContext* ctx);
+  virtual bool endIter(LoopContext* ctx);
+
+private:
+  unsigned int _num_steps;
+  unsigned int _steps_taken;
+
+  int & _t_step;
+  /// Current time
+  Real & _time;
+  /// Previous time
+  Real & _time_old;
+  /// Current delta t... or timestep size.
+  Real & _dt;
+  Real & _dt_old;
+  std::set<Real> & _sync_times;
 };
 
 class SolveLoop : public ExecLoop
 {
 public:
+  SolveLoop(const InputParameters& params, LoopContext* ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext& ctx);
-  virtual bool endIter(LoopContext& ctx);
+  virtual bool beginIter(LoopContext* ctx);
+  virtual bool endIter(LoopContext* ctx);
 };
 
 #endif //LOOPS_H
