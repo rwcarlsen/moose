@@ -51,6 +51,7 @@ ExecLoop::runLoop(LoopContext* ctx, int loop)
     if (beginIter(ctx)) break;
     for (auto child : _children)
     {
+      child->_iters = _iters;
       child->runLoop(ctx, loop + 1);
     }
     if (endIter(ctx)) break;
