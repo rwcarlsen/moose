@@ -68,7 +68,7 @@ SetupLoop::SetupLoop(const InputParameters& params, LoopContext* ctx) : _steady(
 
 std::string SetupLoop::name()
 {
-  return "setup";
+  return "setup-loop";
 }
 
 bool SetupLoop::beginIter(LoopContext* ctx)
@@ -100,6 +100,8 @@ bool SetupLoop::beginIter(LoopContext* ctx)
 
 bool SetupLoop::endIter(LoopContext* ctx)
 {
+  if (!_app.halfTransient())
+    _problem.outputStep(EXEC_FINAL);
   return true;
 }
 
@@ -123,13 +125,13 @@ bool MeshRefinementLoop::endIter(LoopContext* ctx)
   return iter() >= max_steps;
 }
 
+////////////////// TimeLoop ////////////////////
 void
 validParamsTimeLoop(InputParameters& params)
 {
   params.addParam<unsigned int>("num_steps",       std::numeric_limits<unsigned int>::max(),     "The number of timesteps in a transient run");
 }
 
-////////////////// TimeLoop ////////////////////
 TimeLoop::TimeLoop(const InputParameters& params, LoopContext* ctx) :
     _num_steps(params.get<unsigned int>("num_steps")),
     _steps_taken(0),
