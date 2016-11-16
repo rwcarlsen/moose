@@ -37,7 +37,6 @@ public:
   bool failed();
   std::string failedReason();
   Real solveTime();
-  Real solnDiffNorm();
 
 private:
   MooseApp& _app;
@@ -45,7 +44,6 @@ private:
   Real _solve_time;
   bool _failed;
   std::string _failed_reason;
-  Real _soln_diff_norm;
 };
 
 class ExecLoop {
@@ -53,7 +51,7 @@ public:
   virtual ~ExecLoop();
 
   void run(LoopContext& ctx);
-  void addChild(ExecLoop* loop);
+  ExecLoop* addChild(ExecLoop* loop);
   void done();
 
   int iter();

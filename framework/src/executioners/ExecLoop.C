@@ -7,8 +7,7 @@ LoopContext::LoopContext(MooseApp& app, FEProblem& prob)
     _prob(prob),
     _solve_time(0),
     _failed(false),
-    _failed_reason(""),
-    _soln_diff_norm(0)
+    _failed_reason("")
 {
   
 }
@@ -45,12 +44,6 @@ LoopContext::failed()
   return _failed;
 }
 
-Real
-LoopContext::solnDiffNorm()
-{
-  return _soln_diff_norm;
-}
-
 void
 LoopContext::solve()
 {
@@ -66,17 +59,15 @@ LoopContext::solve()
   gettimeofday(&solve_end, nullptr);
   Real _solve_time = (static_cast<Real>(solve_end.tv_sec  - solve_start.tv_sec) +
                                              static_cast<Real>(solve_end.tv_usec - solve_start.tv_usec)*1.e-6);
-  if (!_prob.converged())
-    fail("solve failed to converge");
-  _soln_diff_norm = _prob.relativeSolutionDifferenceNorm();
 }
 
 ExecLoop::~ExecLoop() { };
 
-void
+ExecLoop*
 ExecLoop::addChild(ExecLoop* loop)
 {
   _children.push_back(loop);
+  return loop;
 }
 
 void

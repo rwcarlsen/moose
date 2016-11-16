@@ -33,15 +33,6 @@ Loops::Loops(const InputParameters & parameters) :
 {
 }
 
-template <typename T>
-T* nestLoopUnder(ExecLoop* parent, const InputParameters& params, LoopContext& ctx)
-{
-  T* loop = new T(params, ctx);
-  if (parent != NULL)
-    parent->addChild(loop);
-  return loop;
-}
-
 void
 Loops::initialize(FEProblem* problem)
 {
@@ -52,14 +43,14 @@ Loops::initialize(FEProblem* problem)
   std::string flavor = _pars.get<std::string>("flavor");
   if (flavor == "steady-state")
   {
-    curr = nestLoopUnder<SetupLoop>(NULL, _pars, ctx);
-    _root = curr;
+    _root = new SetupLoop(_pars, ctx);
+    curr = _root;
 
 #ifdef LIBMESH_ENABLE_AMR
-    curr = nestLoopUnder<MeshRefinementLoop>(curr, _pars, ctx);
+    curr = curr->addChild(new MeshRefinementLoop(_pars, ctx));
 #endif
-    curr = nestLoopUnder<TimeLoop>(curr, _pars, ctx);
-    curr = nestLoopUnder<SolveLoop>(curr, _pars, ctx);
+    curr = curr->addChild(new TimeLoop(_pars, ctx));
+    curr = curr->addChild(new SolveLoop(_pars, ctx));
   }
 }
 
@@ -88,11 +79,9 @@ std::string SetupLoop::name()
 void
 SetupLoop::beginIter(LoopContext& ctx)
 {
+  std::cout << "setup begin\n";
   if (_steady && ctx.app().isRecovering())
-  {
-    //ctx.console << "\nCannot recover steady solves!\nExiting...\n" << std::endl;
-    done();
-  }
+    mooseError("cannot recover steady solves");
   if (_steady && ctx.problem().getNonlinearSystem().containsTimeKernel())
     mooseError("time kernels are not allowed in steady state simulations");
 
@@ -114,6 +103,7 @@ SetupLoop::beginIter(LoopContext& ctx)
 void
 SetupLoop::endIter(LoopContext& ctx)
 {
+  std::cout << "setup end\n";
   if (!ctx.app().halfTransient())
     ctx.problem().outputStep(EXEC_FINAL);
   done();
@@ -192,6 +182,7 @@ std::string TimeLoop::name()
 void
 TimeLoop::beginIter(LoopContext& ctx)
 {
+  std::cout << "time begin\n";
   ctx.problem().backupMultiApps(EXEC_TIMESTEP_BEGIN);
   ctx.problem().backupMultiApps(EXEC_TIMESTEP_END);
 
@@ -202,17 +193,21 @@ TimeLoop::beginIter(LoopContext& ctx)
 void
 TimeLoop::endIter(LoopContext& ctx)
 {
-  if (_num_steps == 1 && !ctx.failed()) {
+  std::cout << "time end\n";
+  if (_num_steps == 1 && ctx.failed()) {
     //ctx.console << "aborting early: solve did not converge\n";
     done();
     return;
   }
+  std::cout << "spot1\n";
 
   ctx.problem().onTimestepEnd();
   ctx.problem().execute(EXEC_TIMESTEP_END);
+  std::cout << "time end\n";
 
   ctx.problem().computeIndicators();
   ctx.problem().computeMarkers();
+  std::cout << "spot2\n";
 
   ctx.problem().outputStep(EXEC_TIMESTEP_END);
   if (_num_steps >= iter())
@@ -237,12 +232,17 @@ std::string SolveLoop::name()
 void
 SolveLoop::beginIter(LoopContext& ctx)
 {
-    ctx.solve();
+  std::cout << "solve begin\n";
+  ctx.unfail();
+  ctx.solve();
+  if (!ctx.problem().converged())
+    ctx.fail("solve failed to converge");
 }
 
 void
 SolveLoop::endIter(LoopContext& ctx)
 {
+  std::cout << "solve end\n";
   done();
 }
 
