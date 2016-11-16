@@ -36,10 +36,10 @@ private:
 class SetupLoop : public ExecLoop
 {
 public:
-  SetupLoop(const InputParameters& params, LoopContext* ctx);
+  SetupLoop(const InputParameters& params, LoopContext& ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext* ctx);
-  virtual bool endIter(LoopContext* ctx);
+  virtual void beginIter(LoopContext& ctx);
+  virtual void endIter(LoopContext& ctx);
 private:
   bool _steady;
 };
@@ -47,19 +47,18 @@ private:
 class MeshRefinementLoop : public ExecLoop
 {
 public:
-  MeshRefinementLoop(const InputParameters& params, LoopContext* ctx);
+  MeshRefinementLoop(const InputParameters& params, LoopContext& ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext* ctx);
-  virtual bool endIter(LoopContext* ctx);
+  virtual void endIter(LoopContext& ctx);
 };
 
 class TimeLoop : public ExecLoop
 {
 public:
-  TimeLoop(const InputParameters& params, LoopContext* ctx);
+  TimeLoop(const InputParameters& params, LoopContext& ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext* ctx);
-  virtual bool endIter(LoopContext* ctx);
+  virtual void beginIter(LoopContext& ctx);
+  virtual void endIter(LoopContext& ctx);
 
 private:
   unsigned int _num_steps;
@@ -79,10 +78,37 @@ private:
 class SolveLoop : public ExecLoop
 {
 public:
-  SolveLoop(const InputParameters& params, LoopContext* ctx);
+  SolveLoop(const InputParameters& params, LoopContext& ctx);
   virtual std::string name();
-  virtual bool beginIter(LoopContext* ctx);
-  virtual bool endIter(LoopContext* ctx);
+  virtual void beginIter(LoopContext& ctx);
+  virtual void endIter(LoopContext& ctx);
+};
+
+class XfemLoop : public ExecLoop
+{
+public:
+  XfemLoop(const InputParameters& params, LoopContext& ctx);
+  virtual std::string name();
+  virtual void beginIter(LoopContext& ctx);
+  virtual void endIter(LoopContext& ctx);
+  
+private:
+  int _max_update;
+};
+
+class PicardLoop : public ExecLoop
+{
+public:
+  PicardLoop(const InputParameters& params, LoopContext& ctx);
+  virtual std::string name();
+  virtual void beginIter(LoopContext& ctx);
+  virtual void endIter(LoopContext& ctx);
+  
+private:
+  int _max_its;
+  Real _begin_norm;
+  Real _abs_tol;
+  Real _rel_tol;
 };
 
 #endif //LOOPS_H

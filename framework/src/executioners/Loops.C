@@ -26,7 +26,7 @@ Loops::Loops(const InputParameters & parameters) :
 }
 
 template <class T>
-T* nestLoopUnder(ExecLoop* parent, const InputParameters& params, LoopContext* ctx) {
+T* nestLoopUnder(ExecLoop* parent, const InputParameters& params, LoopContext& ctx) {
   T* loop = new T(params, ctx);
   if (parent != NULL)
     parent->addChild(loop);
@@ -61,7 +61,7 @@ Loops::run() {
 }
 
 ////////////////// SetupLoop ////////////////////
-SetupLoop::SetupLoop(const InputParameters& params, LoopContext* ctx) : _steady(true)
+SetupLoop::SetupLoop(const InputParameters& params, LoopContext& ctx) : _steady(true)
 {
   _steady = params.get<std::string>("flavor") == "steady-state";
 }
@@ -71,12 +71,13 @@ std::string SetupLoop::name()
   return "setup-loop";
 }
 
-bool SetupLoop::beginIter(LoopContext* ctx)
+void
+SetupLoop::beginIter(LoopContext& ctx)
 {
   if (_steady && ctx->app->isRecovering())
   {
     //ctx->console << "\nCannot recover steady solves!\nExiting...\n" << std::endl;
-    return true;
+    done();
   }
   if (_steady && ctx->problem->getNonlinearSystem().containsTimeKernel())
     mooseError("time kernels are not allowed in steady state simulations");
@@ -94,35 +95,32 @@ bool SetupLoop::beginIter(LoopContext* ctx)
     // need to keep _time in sync with _time_step to get correct output
     ctx->problem->time() = 1;
   }
-
-  return false;
 }
 
-bool SetupLoop::endIter(LoopContext* ctx)
+void
+SetupLoop::endIter(LoopContext& ctx)
 {
   if (!_app.halfTransient())
     _problem.outputStep(EXEC_FINAL);
-  return true;
+  done();
 }
 
 ////////////////// MeshRefinementLoop ////////////////////
-MeshRefinementLoop::MeshRefinementLoop(const InputParameters& params, LoopContext* ctx) { }
+MeshRefinementLoop::MeshRefinementLoop(const InputParameters& params, LoopContext& ctx) { }
 
 std::string MeshRefinementLoop::name()
 {
   return "mesh-refinement-loop";
 }
 
-bool MeshRefinementLoop::beginIter(LoopContext* ctx)
-{
-  return false;
-}
-
-bool MeshRefinementLoop::endIter(LoopContext* ctx)
+void
+MeshRefinementLoop::endIter(LoopContext& ctx)
 {
   unsigned int max_steps = ctx->problem->adaptivity().getSteps();
-  if (iter() < max_steps) ctx->problem->adaptMesh();
-  return iter() >= max_steps;
+  if (iter() < max_steps)
+    ctx->problem->adaptMesh();
+  else
+    done();
 }
 
 ////////////////// TimeLoop ////////////////////
@@ -132,7 +130,7 @@ validParamsTimeLoop(InputParameters& params)
   params.addParam<unsigned int>("num_steps",       std::numeric_limits<unsigned int>::max(),     "The number of timesteps in a transient run");
 }
 
-TimeLoop::TimeLoop(const InputParameters& params, LoopContext* ctx) :
+TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx) :
     _num_steps(params.get<unsigned int>("num_steps")),
     _steps_taken(0),
 
@@ -177,22 +175,26 @@ std::string TimeLoop::name()
   return "time-loop";
 }
 
-bool TimeLoop::beginIter(LoopContext* ctx)
+void
+TimeLoop::beginIter(LoopContext& ctx)
 {
+  _problem.backupMultiApps(EXEC_TIMESTEP_BEGIN);
+  _problem.backupMultiApps(EXEC_TIMESTEP_END);
+
   ctx->problem->timestepSetup();
   ctx->problem->execute(EXEC_TIMESTEP_BEGIN);
   ctx->problem->outputStep(EXEC_TIMESTEP_BEGIN);
 
   // Update warehouse active objects
   ctx->problem->updateActiveObjects();
-  return false;
 }
 
-bool TimeLoop::endIter(LoopContext* ctx)
+void
+TimeLoop::endIter(LoopContext& ctx)
 {
   if (_num_steps == 1 && !ctx->problem->converged()) {
     //ctx->console << "aborting early: solve did not converge\n";
-    return true;
+    return done;
   }
 
   ctx->problem->onTimestepEnd();
@@ -202,23 +204,93 @@ bool TimeLoop::endIter(LoopContext* ctx)
   ctx->problem->computeMarkers();
 
   ctx->problem->outputStep(EXEC_TIMESTEP_END);
-  return _num_steps >= iter();
+  if (_num_steps >= iter())
+    done();
 }
 
 ////////////////// SolveLoop ////////////////////
 std::string SolveLoop::name()
 {
-  return "solve";
+  return "solve-loop";
 }
 
-bool SolveLoop::beginIter(LoopContext* ctx)
+void
+SolveLoop::beginIter(LoopContext& ctx)
 {
     ctx->solve();
-    return false;
 }
 
-bool SolveLoop::endIter(LoopContext* ctx)
+void
+SolveLoop::endIter(LoopContext& ctx)
 {
-  return true;
+  done();
+}
+
+////////////////// Xfemloop ////////////////////
+std::string XfemLoop::name()
+{
+  return "xfem-loop";
+}
+
+void
+XfemLoop::beginIter(LoopContext& ctx)
+{
+  // TODO: does this need to call FEProblem::timestepSetup?
+}
+
+void
+XfemLoop::endIter(LoopContext& ctx)
+{
+  if (ctx.failed() || !ctx.problem().updateMeshXFEM() || (iter() >= _max_update))
+    done();
+  else
+    //_console << "XFEM modifying mesh, repeating step"<<std::endl;
+}
+
+////////////////// PicardLoop ////////////////////
+std::string PicardLoop::name()
+{
+  return "picard-loop";
+}
+
+void
+PicardLoop::beginIter(LoopContext& ctx)
+{
+    //_console << "\nBeginning Picard Iteration " << iter() << "\n" << std::endl;
+    if (iter() == 0) // First Picard iteration - need to save off the initial nonlinear residual
+    {
+      _initial_norm = ctx.problem().computeResidualL2Norm();
+      //_console << "Initial Picard Norm: " << _initial_norm << '\n';
+    }
+    else
+    {
+      ctx.problem().restoreMultiApps(EXEC_TIMESTEP_BEGIN);
+      ctx.problem().restoreMultiApps(EXEC_TIMESTEP_END);
+    }
+
+    _begin_norm = ctx.problem().computeResidualL2Norm();
+    //_console << "Picard Norm after TIMESTEP_BEGIN MultiApps: " << _begin_norm << '\n';
+}
+
+void
+PicardLoop::endIter(LoopContext& ctx)
+{
+  if (ctx.failed())
+  {
+    done();
+    return;
+  }
+  if (iter() >= _max_its)
+    done();
+
+  bool end_norm = ctx.problem().computeResidualL2Norm();
+  //_console << "Picard Norm after TIMESTEP_END MultiApps: " << end_norm << '\n';
+  Real max_norm = std::max(_begin_norm, end_norm);
+  Real max_relative_drop = max_norm / _initial_norm;
+  if (max_norm < _abs_tol || max_relative_drop < _rel_tol)
+  {
+    //_console << "Picard converged!" << std::endl;
+    done();
+  }
 }
 

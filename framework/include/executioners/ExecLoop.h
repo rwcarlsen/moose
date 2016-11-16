@@ -29,38 +29,46 @@ public:
   FEProblem& problem();
 
   /// Returns true if the problem solve converged.
-  bool solve();
-  void fail();
+  solve();
+  void fail(std::string reason = "none");
+  void unfail();
   bool failed();
+  std::string failedReason();
   Real solveTime();
+  Real solnDiffNorm();
+
 private:
   MooseApp& _app;
   FEProblem& _prob;
   Real _solve_time;
-  bool _fail;
+  bool _failed;
+  std::string _failed_reason;
+  Real _soln_diff_norm;
 };
 
 class ExecLoop {
 public:
   virtual ~ExecLoop();
 
-  void run(LoopContext* ctx);
+  void run(LoopContext& ctx);
   void addChild(ExecLoop* loop);
+  void done();
 
   int iter();
   int iter(int loop);
   int iter(std::string loop);
 
   virtual std::string name() = 0;
-  virtual bool beginIter(LoopContext* ctx) = 0;
-  virtual bool endIter(LoopContext* ctx) = 0;
+  virtual beginIter(LoopContext& ctx) {};
+  virtual endIter(LoopContext& ctx) {};
 
 private:
-  void runLoop(LoopContext* ctx, int loop);
+  void runLoop(LoopContext& ctx, int loop);
 
   std::vector<int> _iters;
   std::vector<std::string> _names;
   std::vector<ExecLoop*> _children;
+  bool _done;
 };
 
 #endif //EXECLOOP_H
