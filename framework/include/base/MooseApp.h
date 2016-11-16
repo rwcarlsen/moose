@@ -24,7 +24,7 @@
 #include "OutputWarehouse.h"
 #include "RestartableData.h"
 #include "ConsoleStreamInterface.h"
-#include "QueenOfHearts.h"
+#include "ExecLoop.h"
 
 // libMesh includes
 #include "libmesh/parallel_object.h"

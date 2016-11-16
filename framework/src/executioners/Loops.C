@@ -213,7 +213,7 @@ std::string SolveLoop::name()
 
 bool SolveLoop::beginIter(LoopContext* ctx)
 {
-    ctx->problem->solve();
+    ctx->solve();
     return false;
 }
 

@@ -1,5 +1,28 @@
 
-#include "QueenOfHearts.h"
+#include "ExecLoop.h"
+
+LoopContext::LoopContext(MooseApp& app, FEProblem& prob)
+{
+  
+}
+
+MooseApp&
+LoopContext::app()
+{
+  return _app;
+}
+
+FEProblem&
+LoopContext::problem()
+{
+  return _prob;
+}
+
+bool
+LoopContext::solve()
+{
+  _prob.solve();
+}
 
 ExecLoop::~ExecLoop() { };
 
@@ -37,7 +60,7 @@ ExecLoop::iter(std::string loop)
     if (_names[i] == loop)
       return _iters[i];
   }
-  return 0; // TODO: throw here?
+  mooseError("iteration number requested for invalid loop name '" + loop + "'");
 }
 
 void

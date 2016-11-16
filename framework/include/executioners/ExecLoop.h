@@ -22,9 +22,22 @@ class FEProblem;
 class MooseApp;
 class Console;
 
-struct LoopContext {
-  MooseApp* app;
-  FEProblem* problem;
+class LoopContext {
+public:
+  LoopContext(MooseApp& app, FEProblem& prob);
+  MooseApp& app();
+  FEProblem& problem();
+
+  /// Returns true if the problem solve converged.
+  bool solve();
+  void fail();
+  bool failed();
+  Real solveTime();
+private:
+  MooseApp& _app;
+  FEProblem& _prob;
+  Real _solve_time;
+  bool _fail;
 };
 
 class ExecLoop {

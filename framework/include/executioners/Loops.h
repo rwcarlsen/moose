@@ -6,7 +6,7 @@
 #include "PostprocessorInterface.h"
 #include "Restartable.h"
 #include "InputParameters.h"
-#include "QueenOfHearts.h"
+#include "ExecLoop.h"
 
 // System includes
 #include <string>
