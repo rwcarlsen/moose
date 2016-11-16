@@ -32,8 +32,12 @@
   [../]
 []
 
+[Loops]
+  type = 'Loops'
+[]
+
 [Executioner]
-  type = Steady
+  type = 'Steady'
 
   # Preconditioned JFNK (default)
   solve_type = 'PJFNK'

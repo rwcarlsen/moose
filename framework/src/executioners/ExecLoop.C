@@ -1,7 +1,14 @@
 
 #include "ExecLoop.h"
+#include "FEProblem.h"
 
 LoopContext::LoopContext(MooseApp& app, FEProblem& prob)
+  : _app(app),
+    _prob(prob),
+    _solve_time(0),
+    _failed(false),
+    _failed_reason(""),
+    _soln_diff_norm(0)
 {
   
 }
@@ -44,10 +51,11 @@ LoopContext::solnDiffNorm()
   return _soln_diff_norm;
 }
 
+void
 LoopContext::solve()
 {
-  _problem.timestepSetup();
-  _problem.updateActiveObjects();
+  _prob.timestepSetup();
+  _prob.updateActiveObjects();
 
   timeval solve_start;
   timeval solve_end;
@@ -60,7 +68,7 @@ LoopContext::solve()
                                              static_cast<Real>(solve_end.tv_usec - solve_start.tv_usec)*1.e-6);
   if (!_prob.converged())
     fail("solve failed to converge");
-  _soln_diff_norm = _problem.relativeSolutionDifferenceNorm();
+  _soln_diff_norm = _prob.relativeSolutionDifferenceNorm();
 }
 
 ExecLoop::~ExecLoop() { };
@@ -72,7 +80,7 @@ ExecLoop::addChild(ExecLoop* loop)
 }
 
 void
-ExecLoop::run(LoopContext* ctx)
+ExecLoop::run(LoopContext& ctx)
 {
   runLoop(ctx, 0);
 }
@@ -103,7 +111,7 @@ ExecLoop::iter(std::string loop)
 }
 
 void
-ExecLoop::runLoop(LoopContext* ctx, int loop)
+ExecLoop::runLoop(LoopContext& ctx, int loop)
 {
   _iters.push_back(0);
   _names.push_back(name());
@@ -135,7 +143,7 @@ ExecLoop::runLoop(LoopContext* ctx, int loop)
 }
 
 void
-LoopContext::done()
+ExecLoop::done()
 {
   _done = true;
 }

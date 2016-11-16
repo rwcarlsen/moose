@@ -129,6 +129,8 @@ protected:
   virtual Real computeFailedDT();
 
   FEProblem & _fe_problem;
+  /// Reference to transient executioner
+  Transient & _executioner;
 
   /// Values from executioner
   Real & _time;

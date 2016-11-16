@@ -106,6 +106,7 @@ public:
   
 private:
   int _max_its;
+  Real _initial_norm;
   Real _begin_norm;
   Real _abs_tol;
   Real _rel_tol;

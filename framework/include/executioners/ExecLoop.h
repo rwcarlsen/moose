@@ -18,6 +18,8 @@
 #include <vector>
 #include <string>
 
+#include "Moose.h"
+
 class FEProblem;
 class MooseApp;
 class Console;
@@ -29,7 +31,7 @@ public:
   FEProblem& problem();
 
   /// Returns true if the problem solve converged.
-  solve();
+  void solve();
   void fail(std::string reason = "none");
   void unfail();
   bool failed();
@@ -59,8 +61,8 @@ public:
   int iter(std::string loop);
 
   virtual std::string name() = 0;
-  virtual beginIter(LoopContext& ctx) {};
-  virtual endIter(LoopContext& ctx) {};
+  virtual void beginIter(LoopContext& ctx) {};
+  virtual void endIter(LoopContext& ctx) {};
 
 private:
   void runLoop(LoopContext& ctx, int loop);
