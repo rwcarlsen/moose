@@ -32,7 +32,7 @@ public:
 
 private:
   FEProblem* _problem;
-  ExecLoop* _root;
+  std::unique_ptr<ExecLoop> _root;
 };
 
 class SetupLoop : public ExecLoop

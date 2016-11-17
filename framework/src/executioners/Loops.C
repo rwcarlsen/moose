@@ -42,8 +42,8 @@ Loops::initialize(FEProblem* problem)
   _problem = problem;
   LoopContext ctx(_app, *_problem);
   
-  _root = new SetupLoop(_pars, ctx);
-  ExecLoop* curr = _root;
+  _root.reset(new SetupLoop(_pars, ctx));
+  ExecLoop* curr = _root.get();
 
   std::string flavor = _pars.get<std::string>("flavor");
   if (flavor == "steady-state")
@@ -104,7 +104,6 @@ SetupLoop::beginIter(LoopContext& ctx)
 
   if (_steady)
   {
-    // need to keep _time in sync with _time_step to get correct output
     ctx.problem().time() = 1;
   }
 }
@@ -209,15 +208,17 @@ void
 TimeLoop::beginIter(LoopContext& ctx)
 {
   std::cout << "time begin\n";
-  if (_last_converged)
+  if (!ctx.failed())
+  {
     _t_step++;
+#ifdef LIBMESH_ENABLE_AMR
+    if (ctx.problem().adaptivity().isOn())
+      ctx.problem().adaptMesh();
+#endif
+  }
+  ctx.unfail();
   ctx.problem().timeStep() = _t_step;
 
-#ifdef LIBMESH_ENABLE_AMR
-  if (_last_converged && ctx.problem().adaptivity().isOn())
-    ctx.problem().adaptMesh();
-#endif
-  
   ctx.problem().backupMultiApps(EXEC_TIMESTEP_BEGIN);
   ctx.problem().backupMultiApps(EXEC_TIMESTEP_END);
 

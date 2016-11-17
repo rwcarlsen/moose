@@ -37,6 +37,12 @@
   [../]
 []
 
+[Loops]
+  type = Loops
+  flavor = 'transient'
+  num_steps = 20
+  dt = 0.1
+
 [Executioner]
   # Preconditioned JFNK (default)
   type = Transient

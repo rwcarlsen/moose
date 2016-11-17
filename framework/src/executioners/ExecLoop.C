@@ -73,7 +73,11 @@ LoopContext::solve()
                                              static_cast<Real>(solve_end.tv_usec - solve_start.tv_usec)*1.e-6);
 }
 
-ExecLoop::~ExecLoop() { };
+ExecLoop::~ExecLoop()
+{
+  for (auto loop : _children)
+    delete loop;
+}
 
 ExecLoop*
 ExecLoop::addChild(ExecLoop* loop)
