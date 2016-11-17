@@ -1,5 +1,7 @@
 
 #include "Loops.h"
+#include "Stepper.h"
+#include "TimeStepper.h"
 
 #include "NonlinearSystem.h"
 
@@ -132,47 +134,82 @@ void
 validParamsTimeLoop(InputParameters& params)
 {
   params.addParam<unsigned int>("num_steps",       std::numeric_limits<unsigned int>::max(),     "The number of timesteps in a transient run");
+  MooseEnum schemes("implicit-euler explicit-euler crank-nicolson bdf2 rk-2 dirk explicit-tvd-rk-2", "implicit-euler");
+  params.addParam<MooseEnum>("scheme", schemes, "Time integration scheme used.");
+  params.addParam<Real>("start_time",      0.0,    "The start time of the simulation");
+  params.addParam<Real>("end_time",        1.0e30, "The end time of the simulation");
 }
 
-TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx) :
+TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx)
+  : _stepper(nullptr),
     _num_steps(params.get<unsigned int>("num_steps")),
-    _steps_taken(0),
-
-    _t_step(ctx.problem().timeStep()),
-    _time(ctx.problem().time()),
-    _time_old(ctx.problem().timeOld()),
-    _dt(ctx.problem().dt()),
-    _dt_old(ctx.problem().dtOld()),
-    _sync_times(ctx.app().getOutputWarehouse().getSyncTimes())
+    _time_scheme(params.get<MooseEnum>("scheme")),
+    _time(params.get<Real>("start_time")),
+    _start_time(params.get<Real>("start_time")),
+    _end_time(params.get<Real>("end_time"))
 {
-  if (params.get<std::string>("flavor") == "steady-state")
+  std::string flavor = params.get<std::string>("flavor");
+  if (flavor == "steady-state")
+  {
     _num_steps = 1;
+    return;
+  }
+  
+  setupTimeIntegrator(params, ctx);
+  ctx.problem().transient(true);
+  // Either a start_time has been forced on us, or we want to tell the App about what our start time is (in case anyone else is interested.
+  if (ctx.app().hasStartTime())
+  {
+    _start_time = ctx.app().getStartTime();
+    _time = _start_time;
+  }
+  else if (params.isParamSetByUser("start_time"))
+    ctx.app().setStartTime(_start_time);
 
-  //////// from transient solver: ////////////
-  //_t_step = 0;
-  //_dt = 0;
-  //_next_interval_output_time = 0.0;
+  if (ctx.app()._time_stepper)
+    _stepper.reset(ctx.app()._time_stepper->buildStepper());
+  else
+  {
+    if (!params.isParamSetByAddParam("end_time") && 
+        !params.isParamSetByAddParam("num_steps") && params.isParamSetByAddParam("dt"))
+      _stepper.reset(BaseStepper::constant((_end_time - _time) / _num_steps));
+    else
+      _stepper.reset(BaseStepper::constant(params.get<Real>("dt")));
+  }
 
-  //// Either a start_time has been forced on us, or we want to tell the App about what our start time is (in case anyone else is interested.
-  //if (_app.hasStartTime())
-  //  _start_time = _app.getStartTime();
-  //else if (parameters.isParamSetByUser("start_time"))
-  //  _app.setStartTime(_start_time);
-
-  //_time = _time_old = _start_time;
-  //_problem.transient(true);
-
-  //setupTimeIntegrator();
-
-  //if (_app.halfTransient()) // Cut timesteps and end_time in half...
-  //{
-  //  _end_time /= 2.0;
-  //  _num_steps /= 2.0;
-
-  //  if (_num_steps == 0) // Always do one step in the first half
-  //    _num_steps = 1;
-  //}
+  if (ctx.app().halfTransient()) // Cut timesteps and end_time in half...
+  {
+    _end_time /= 2.0;
+    _num_steps /= 2.0;
+    if (_num_steps == 0) // Always do one step in the first half
+      _num_steps = 1;
+  }
 }
+
+void
+TimeLoop::setupTimeIntegrator(const InputParameters& params, LoopContext& ctx)
+{
+  if (ctx.problem().hasTimeIntegrator() && params.isParamSetByUser("scheme"))
+    mooseError("You cannot specify time_scheme in the Executioner and independently add a TimeIntegrator to the system at the same time");
+  if (!_time_scheme.isValid())
+    mooseError("Unknown scheme");
+
+  std::string ti_str;
+  switch (_time_scheme)
+  {
+  case 0: ti_str = "ImplicitEuler"; break;
+  case 1: ti_str = "ExplicitEuler"; break;
+  case 2: ti_str = "CrankNicolson"; break;
+  case 3: ti_str = "BDF2"; break;
+  case 4: ti_str = "ExplicitMidpoint"; break;
+  case 5: ti_str = "LStableDirk2"; break;
+  case 6: ti_str = "ExplicitTVDRK2"; break;
+  }
+
+  InputParameters pars = ctx.app().getFactory().getValidParams(ti_str);
+  ctx.problem().addTimeIntegrator(ti_str, ti_str, pars);
+}
+
 
 std::string TimeLoop::name()
 {
@@ -290,7 +327,9 @@ validParamsPicardLoop(InputParameters& params)
 PicardLoop::PicardLoop(const InputParameters& params, LoopContext& ctx)
   : _max_its(params.get<unsigned int>("picard_max_iter")),
     _abs_tol(params.get<Real>("picard_abs_tol")),
-    _rel_tol(params.get<Real>("picard_rel_tol"))
+    _rel_tol(params.get<Real>("picard_rel_tol")),
+    _initial_norm(0),
+    _begin_norm(0)
 {
 }
 

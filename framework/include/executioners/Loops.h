@@ -12,6 +12,7 @@
 #include <string>
 
 class Loops;
+class StepperBlock;
 
 template<>
 InputParameters validParams<Loops>();
@@ -61,18 +62,14 @@ public:
   virtual void endIter(LoopContext& ctx);
 
 private:
-  unsigned int _num_steps;
-  unsigned int _steps_taken;
+  void setupTimeIntegrator(const InputParameters& params, LoopContext& ctx);
 
-  int & _t_step;
-  /// Current time
-  Real & _time;
-  /// Previous time
-  Real & _time_old;
-  /// Current delta t... or timestep size.
-  Real & _dt;
-  Real & _dt_old;
-  std::set<Real> & _sync_times;
+  std::unique_ptr<StepperBlock> _stepper;
+  unsigned int _num_steps;
+  MooseEnum _time_scheme;
+  Real _time;
+  Real _start_time;
+  Real _end_time;
 };
 
 class SolveLoop : public ExecLoop
@@ -106,10 +103,10 @@ public:
   
 private:
   int _max_its;
-  Real _initial_norm;
-  Real _begin_norm;
   Real _abs_tol;
   Real _rel_tol;
+  Real _initial_norm;
+  Real _begin_norm;
 };
 
 #endif //LOOPS_H
