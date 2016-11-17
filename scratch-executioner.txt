@@ -1,0 +1,75 @@
+
+find . | grep '/TimeIntegrator\.[hC]$'
+ag '\->takeStep' framework
+ag 'libmesh/.*\.h"' framework
+ag 'TimeStepperAction'
+ag 'virtual void onTimestepBegin\(\)' framework
+ag 'getTimeIntegrator' framework
+ag '_time_integrator' framework
+ag 'computeTransientImplicitResidual' ../yak
+ag 'execute_on' framework
+ag 'problem\.time\(\)' framework
+ag 'TransientInterface' framework/include
+ag 'getUserObject' framework/include
+
+Notes:
+
+* Move _time, _t_step (both in FEProblem), and _time_integrator (in *System vars of FEProblem) into the
+  TimeLoop.  Possibly add time/step helper functions to MooseApp for retrieval of time info.  But even better
+  would be to pass time info into all funcs that need it as func args.  This would be super awesome - and be
+  a big enabler of testing parts of moose that depend on time.  Not sure if this is feasible because some
+  funcs that need it might not be in call paths rooted at TimeLoop.  And this would also be problematic if we
+  are keeping old executioners around - they also need to modify time - of which would only be modifyable by
+  the new TimeLoop ("friending"?).  Possibly things like TransientInterface could register to receive time info
+  updates - in order to avoid crazy breakage everywhere.
+
+* Output system - we might now record output several times for a single time/timestep (e.g. picard iterations,
+  mesh adaptivity, etc.).  How do we represent this in the output file?  How do we control output dumping and
+  enable users to custom trigger it?
+
+* Revamping execute_on. Do we want this to be like a hard-coded enum
+  (e.g. FEProblem::runExecuteOn(EXEC_MESH_ADAPT_BEGIN))? - or dynamically look up the current loop
+  type (e.g. inside MeshRefineLoop::beginIter call FEProblem::runExecuteOn(this->name()))?
+  Hard-coded way requires new loop writers to add enum items for their new loop to some global
+  registry.
+
+* Need the following (composable) loops:
+    - Solve loop: breaks after single iteration of a problem solve - every time
+    - Time loop:
+    - picard iteration loop:
+    - Mesh adaptivity loop: configurable number of iterations
+    - Output loop maybe?
+    - Multi-app loop?
+
+* Transient::_time is redundantly and confusingly set/updated for the next time step in several places.
+
+* Transient::execute() control flow tree
+    - preExecute: does nothing
+    - Loop
+        - incrementStepOrReject     /Users/calsrw/moose/framework/src/executioners/Transient.C:369
+          If the solve converged and _xfem_repeat_step is false, then adapt mesh if enabled and then
+          advance time and problem state.  Also optionally advance  multi apps if doing picard iterations.
+          If the solve did not converge, restore multi-apps and simulation time to last step state.
+          
+        - preStep: does nothing
+        - computeDT: uses StepperBlock to calculate next dt.
+        - takeStep
+            - backup mutiapps.
+            - Loop while not done with picard iterations
+                - restore multiapps if not first loop iteration
+                - solveStep
+                    - fetch new dt and update simulation time with it.
+                    - trigger onTimestepBegin
+                    - run execTransfers and execute multiapps. abort solve if multiapps did not converge
+                    - preSolve: does nothing
+                    - run problem timestepSetup and execute(EXEC_TIMESTEP_BEGIN)
+                    - outputStep(EXEC_TIMESTEP_BEGIN) and updateActiveObjects()
+                    - run a solve
+                    - If converged, do xfem stuff.  If xfem doesn't request repeat of step, run onTimestepEnd, etc.
+                    - postSolve does nothing
+                    - check for picard convergence and other picard stuff
+                    - reset simulation time back to before this time step? - why?
+                - abort loop if solve didn't converge
+        - endStep: update simulation time, compute error indicators, do data output for the time step
+        - postStep: does nothing
+    - postExecute: does nothing
