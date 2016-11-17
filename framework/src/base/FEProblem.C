@@ -3570,6 +3570,7 @@ FEProblem::computeResidual(NonlinearImplicitSystem &/*sys*/, const NumericVector
   }
 }
 
+// TODO: delete this - it is unused
 void
 FEProblem::computeTransientImplicitResidual(Real time, const NumericVector<Number> & u, const NumericVector<Number> & udot, NumericVector<Number> & residual)
 {
@@ -3701,6 +3702,7 @@ FEProblem::computeJacobian(NonlinearImplicitSystem & sys, const NumericVector<Nu
   }
 }
 
+// TODO: delete this - unused
 void
 FEProblem::computeTransientImplicitJacobian(Real time, const NumericVector<Number> & u, const NumericVector<Number> & udot, Real shift, SparseMatrix<Number> & jacobian)
 {
