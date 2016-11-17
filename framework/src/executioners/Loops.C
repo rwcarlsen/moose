@@ -2,6 +2,7 @@
 #include "Loops.h"
 #include "Stepper.h"
 #include "TimeStepper.h"
+#include "Predictor.h"
 
 #include "NonlinearSystem.h"
 
@@ -112,7 +113,10 @@ SetupLoop::endIter(LoopContext& ctx)
 }
 
 ////////////////// MeshRefinementLoop ////////////////////
-MeshRefinementLoop::MeshRefinementLoop(const InputParameters& params, LoopContext& ctx) { }
+MeshRefinementLoop::MeshRefinementLoop(const InputParameters& params, LoopContext& ctx)
+{
+  _max_steps = ctx.problem().adaptivity().getSteps();
+}
 
 std::string MeshRefinementLoop::name()
 {
@@ -122,10 +126,9 @@ std::string MeshRefinementLoop::name()
 void
 MeshRefinementLoop::endIter(LoopContext& ctx)
 {
-  unsigned int max_steps = ctx.problem().adaptivity().getSteps();
-  if (iter() < max_steps)
+  if (ctx.problem().adaptivity().isOn())
     ctx.problem().adaptMesh();
-  else
+  if (iter() >= _max_steps)
     done();
 }
 
@@ -138,15 +141,27 @@ validParamsTimeLoop(InputParameters& params)
   params.addParam<MooseEnum>("scheme", schemes, "Time integration scheme used.");
   params.addParam<Real>("start_time",      0.0,    "The start time of the simulation");
   params.addParam<Real>("end_time",        1.0e30, "The end time of the simulation");
+  params.addParam<bool>("abort_on_solve_fail", false, "abort if solve not converged rather than cut timestep");
+  params.addParam<Real>("timestep_tolerance", 2.0e-14, "the tolerance setting for final timestep size and sync times");
+  params.addParam<Real>("dtmin",           2.0e-14,    "The minimum timestep size in an adaptive run");
+  params.addParam<Real>("dtmax",           1.0e30, "The maximum timestep size in an adaptive run");
 }
 
 TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx)
   : _stepper(nullptr),
+    _si(),
     _num_steps(params.get<unsigned int>("num_steps")),
     _time_scheme(params.get<MooseEnum>("scheme")),
+    _tol(params.get<Real>("timestep_tolerance")),
     _time(params.get<Real>("start_time")),
     _start_time(params.get<Real>("start_time")),
-    _end_time(params.get<Real>("end_time"))
+    _end_time(params.get<Real>("end_time")),
+    _dtmin(params.get<Real>("dtmin")),
+    _dtmax(params.get<Real>("dtmax")),
+    _prev_dt(0),
+    _abort(params.get<bool>("abort_on_solve_fail")),
+    _last_converged(true),
+    _snapshots()
 {
   std::string flavor = params.get<std::string>("flavor");
   if (flavor == "steady-state")
@@ -155,7 +170,9 @@ TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx)
     return;
   }
   
+  setupTimeStepper(params, ctx);
   setupTimeIntegrator(params, ctx);
+
   ctx.problem().transient(true);
   // Either a start_time has been forced on us, or we want to tell the App about what our start time is (in case anyone else is interested.
   if (ctx.app().hasStartTime())
@@ -166,17 +183,6 @@ TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx)
   else if (params.isParamSetByUser("start_time"))
     ctx.app().setStartTime(_start_time);
 
-  if (ctx.app()._time_stepper)
-    _stepper.reset(ctx.app()._time_stepper->buildStepper());
-  else
-  {
-    if (!params.isParamSetByAddParam("end_time") && 
-        !params.isParamSetByAddParam("num_steps") && params.isParamSetByAddParam("dt"))
-      _stepper.reset(BaseStepper::constant((_end_time - _time) / _num_steps));
-    else
-      _stepper.reset(BaseStepper::constant(params.get<Real>("dt")));
-  }
-
   if (ctx.app().halfTransient()) // Cut timesteps and end_time in half...
   {
     _end_time /= 2.0;
@@ -184,6 +190,105 @@ TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx)
     if (_num_steps == 0) // Always do one step in the first half
       _num_steps = 1;
   }
+}
+
+std::string TimeLoop::name()
+{
+  return "time-loop";
+}
+
+void
+TimeLoop::beginIter(LoopContext& ctx)
+{
+  std::cout << "time begin\n";
+  
+  ctx.problem().backupMultiApps(EXEC_TIMESTEP_BEGIN);
+  ctx.problem().backupMultiApps(EXEC_TIMESTEP_END);
+
+  ctx.problem().onTimestepBegin();
+
+  ctx.problem().dt() = calcDT(ctx);
+  ctx.problem().time() = _time + ctx.problem().dt();
+  
+  bool auto_advance = false; // always done in endIter
+  ctx.problem().execTransfers(EXEC_TIMESTEP_BEGIN);
+  bool multi_converged = ctx.problem().execMultiApps(EXEC_TIMESTEP_BEGIN, auto_advance);
+  if (!multi_converged)
+  {
+    ctx.fail("multi apps failed to converge");
+    return;
+  }
+
+  ctx.problem().execute(EXEC_TIMESTEP_BEGIN);
+  ctx.problem().outputStep(EXEC_TIMESTEP_BEGIN);
+}
+
+void
+TimeLoop::endIter(LoopContext& ctx)
+{
+  std::cout << "time end\n";
+  if (_num_steps == 1 && ctx.failed()) {
+    //ctx.console << "aborting early: solve did not converge\n";
+    done();
+    return;
+  }
+  else if (iter() >= _num_steps || (std::abs(_time - _end_time) <= _tol))
+    done();
+  else if (ctx.failed() && _abort)
+    done();
+  
+  std::cout << "spot1\n";
+
+  retrieveSolveState(ctx);
+  if (ctx.failed())
+  {
+    ctx.problem().restoreMultiApps(EXEC_TIMESTEP_BEGIN, true);
+    ctx.problem().restoreMultiApps(EXEC_TIMESTEP_END, true);
+  }
+  else
+  {
+    ctx.problem().advanceMultiApps(EXEC_TIMESTEP_BEGIN);
+    ctx.problem().advanceMultiApps(EXEC_TIMESTEP_END);
+    _time += ctx.problem().dt();
+  }
+
+  ctx.problem().onTimestepEnd();
+  ctx.problem().execute(EXEC_TIMESTEP_END);
+  std::cout << "time end\n";
+
+  ctx.problem().computeIndicators();
+  ctx.problem().computeMarkers();
+  std::cout << "spot2\n";
+
+  ctx.problem().outputStep(EXEC_TIMESTEP_END);
+}
+
+void
+TimeLoop::setupTimeStepper(const InputParameters& params, LoopContext& ctx)
+{
+  StepperBlock * inner = nullptr;
+  if (ctx.app()._time_stepper)
+   inner = ctx.app()._time_stepper->buildStepper();
+  else
+  {
+    if (!params.isParamSetByAddParam("end_time") && 
+        !params.isParamSetByAddParam("num_steps") && params.isParamSetByAddParam("dt"))
+      inner = BaseStepper::constant((_end_time - _time) / _num_steps);
+    else
+      inner = BaseStepper::constant(params.get<Real>("dt"));
+  }
+  
+  std::vector<Real> sync_times;
+  for (auto val : ctx.app().getOutputWarehouse().getSyncTimes())
+    sync_times.push_back(val);
+
+  // these are global/sim constraints for *every* time stepper:
+  inner = BaseStepper::dtLimit(inner, _dtmin, _dtmax);
+  if (sync_times.size() > 0)
+    inner = BaseStepper::min(BaseStepper::fixedTimes(sync_times, _tol), inner, _tol);
+  if (!ctx.app().halfTransient())
+    inner = BaseStepper::bounds(inner, _start_time, _end_time);
+  _stepper.reset(inner);
 }
 
 void
@@ -210,46 +315,61 @@ TimeLoop::setupTimeIntegrator(const InputParameters& params, LoopContext& ctx)
   ctx.problem().addTimeIntegrator(ti_str, ti_str, pars);
 }
 
-
-std::string TimeLoop::name()
+Real
+TimeLoop::calcDT(LoopContext& ctx)
 {
-  return "time-loop";
-}
-
-void
-TimeLoop::beginIter(LoopContext& ctx)
-{
-  std::cout << "time begin\n";
-  ctx.problem().backupMultiApps(EXEC_TIMESTEP_BEGIN);
-  ctx.problem().backupMultiApps(EXEC_TIMESTEP_END);
-
-  ctx.problem().execute(EXEC_TIMESTEP_BEGIN);
-  ctx.problem().outputStep(EXEC_TIMESTEP_BEGIN);
-}
-
-void
-TimeLoop::endIter(LoopContext& ctx)
-{
-  std::cout << "time end\n";
-  if (_num_steps == 1 && ctx.failed()) {
-    //ctx.console << "aborting early: solve did not converge\n";
-    done();
-    return;
+  updateStepperInfo(ctx);
+  Real dt = _stepper->next(_si);
+  if (_si.wantSnapshot())
+    // the time used in this key must be *exactly* that on the stepper just saw in StepperInfo
+    _snapshots[_si.time()] = ctx.app().backup();
+  if (_si.rewindTime() != -1)
+  {
+    if (_snapshots.count(_si.rewindTime()) == 0)
+      mooseError("no snapshot available for requested rewind time");
+    ctx.app().restore(_snapshots[_si.rewindTime()]);
+    // second calls necessary because rewind modifies state _si depends on
+    updateStepperInfo(ctx);
+    dt = _stepper->next(_si);
   }
-  std::cout << "spot1\n";
-
-  ctx.problem().onTimestepEnd();
-  ctx.problem().execute(EXEC_TIMESTEP_END);
-  std::cout << "time end\n";
-
-  ctx.problem().computeIndicators();
-  ctx.problem().computeMarkers();
-  std::cout << "spot2\n";
-
-  ctx.problem().outputStep(EXEC_TIMESTEP_END);
-  if (_num_steps >= iter())
-    done();
+  return dt;
 }
+
+void
+TimeLoop::retrieveSolveState(LoopContext& ctx)
+{
+  _soln_nonlin.resize(ctx.problem().getNonlinearSystem().currentSolution()->size());
+  _soln_aux.resize(ctx.problem().getAuxiliarySystem().currentSolution()->size());
+  _soln_predicted.resize(ctx.problem().getNonlinearSystem().currentSolution()->size());
+  ctx.problem().getNonlinearSystem().currentSolution()->localize(_soln_nonlin);
+  ctx.problem().getAuxiliarySystem().currentSolution()->localize(_soln_aux);
+  Predictor* p = ctx.problem().getNonlinearSystem().getPredictor();
+  if (p)
+  {
+    _soln_predicted.resize(p->solutionPredictor().size());
+    p->solutionPredictor().localize(_soln_predicted);
+  }
+
+  _nl_its = ctx.problem().getNonlinearSystem().nNonlinearIterations();
+  _l_its = ctx.problem().getNonlinearSystem().nLinearIterations();
+  _last_converged = ctx.problem().converged();
+}
+
+void
+TimeLoop::updateStepperInfo(LoopContext& ctx)
+{
+  _soln_nonlin.resize(ctx.problem().getNonlinearSystem().currentSolution()->size());
+  _soln_aux.resize(ctx.problem().getAuxiliarySystem().currentSolution()->size());
+  _soln_predicted.resize(ctx.problem().getNonlinearSystem().currentSolution()->size());
+
+  if (_si.dt() != _prev_dt || iter() == 0)
+    _si.pushHistory(_prev_dt, true, 0);
+
+  _si.update(iter(), _time, ctx.problem().dt(), _nl_its, _l_its, _last_converged,
+             ctx.solveTime(), _soln_nonlin, _soln_aux, _soln_predicted);
+
+  _prev_dt = _si.dt(); // for restart
+};
 
 ////////////////// SolveLoop ////////////////////
 void
