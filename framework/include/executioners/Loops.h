@@ -77,6 +77,7 @@ private:
   MooseEnum _time_scheme;
   Real _tol;
   Real _time;
+  unsigned int _t_step;
   Real _start_time;
   Real _end_time;
   Real _dtmin;

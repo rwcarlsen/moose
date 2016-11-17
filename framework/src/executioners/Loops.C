@@ -41,19 +41,27 @@ Loops::initialize(FEProblem* problem)
 {
   _problem = problem;
   LoopContext ctx(_app, *_problem);
-  ExecLoop* curr = nullptr;
+  
+  _root = new SetupLoop(_pars, ctx);
+  ExecLoop* curr = _root;
 
   std::string flavor = _pars.get<std::string>("flavor");
   if (flavor == "steady-state")
   {
-    _root = new SetupLoop(_pars, ctx);
-    curr = _root;
-
 #ifdef LIBMESH_ENABLE_AMR
     curr = curr->addChild(new MeshRefinementLoop(_pars, ctx));
 #endif
     curr = curr->addChild(new TimeLoop(_pars, ctx));
     curr = curr->addChild(new SolveLoop(_pars, ctx));
+  }
+  else if (flavor == "transient")
+  {
+    curr = curr->addChild(new TimeLoop(_pars, ctx));
+    curr = curr->addChild(new SolveLoop(_pars, ctx));
+  }
+  else
+  {
+    mooseError("unrecognized Loops flavor '" + flavor + "'");
   }
 }
 
@@ -96,8 +104,6 @@ SetupLoop::beginIter(LoopContext& ctx)
 
   if (_steady)
   {
-    // first step in any steady state solve is always 1 (preserving backwards compatibility)
-    ctx.problem().timeStep() = 1;
     // need to keep _time in sync with _time_step to get correct output
     ctx.problem().time() = 1;
   }
@@ -143,6 +149,7 @@ validParamsTimeLoop(InputParameters& params)
   params.addParam<Real>("end_time",        1.0e30, "The end time of the simulation");
   params.addParam<bool>("abort_on_solve_fail", false, "abort if solve not converged rather than cut timestep");
   params.addParam<Real>("timestep_tolerance", 2.0e-14, "the tolerance setting for final timestep size and sync times");
+  params.addParam<Real>("dt",              1.,     "The timestep size between solves");
   params.addParam<Real>("dtmin",           2.0e-14,    "The minimum timestep size in an adaptive run");
   params.addParam<Real>("dtmax",           1.0e30, "The maximum timestep size in an adaptive run");
 }
@@ -154,6 +161,7 @@ TimeLoop::TimeLoop(const InputParameters& params, LoopContext& ctx)
     _time_scheme(params.get<MooseEnum>("scheme")),
     _tol(params.get<Real>("timestep_tolerance")),
     _time(params.get<Real>("start_time")),
+    _t_step(0),
     _start_time(params.get<Real>("start_time")),
     _end_time(params.get<Real>("end_time")),
     _dtmin(params.get<Real>("dtmin")),
@@ -201,6 +209,14 @@ void
 TimeLoop::beginIter(LoopContext& ctx)
 {
   std::cout << "time begin\n";
+  if (_last_converged)
+    _t_step++;
+  ctx.problem().timeStep() = _t_step;
+
+#ifdef LIBMESH_ENABLE_AMR
+  if (_last_converged && ctx.problem().adaptivity().isOn())
+    ctx.problem().adaptMesh();
+#endif
   
   ctx.problem().backupMultiApps(EXEC_TIMESTEP_BEGIN);
   ctx.problem().backupMultiApps(EXEC_TIMESTEP_END);
@@ -240,6 +256,7 @@ TimeLoop::endIter(LoopContext& ctx)
   std::cout << "spot1\n";
 
   retrieveSolveState(ctx);
+  std::cout << "converged = " << _last_converged << "\n";
   if (ctx.failed())
   {
     ctx.problem().restoreMultiApps(EXEC_TIMESTEP_BEGIN, true);
@@ -251,16 +268,19 @@ TimeLoop::endIter(LoopContext& ctx)
     ctx.problem().advanceMultiApps(EXEC_TIMESTEP_END);
     _time += ctx.problem().dt();
   }
-
+  
   ctx.problem().onTimestepEnd();
   ctx.problem().execute(EXEC_TIMESTEP_END);
-  std::cout << "time end\n";
+  std::cout << "spot2\n";
 
   ctx.problem().computeIndicators();
   ctx.problem().computeMarkers();
-  std::cout << "spot2\n";
+  std::cout << "spot3\n";
 
   ctx.problem().outputStep(EXEC_TIMESTEP_END);
+
+  if (!ctx.failed())
+    ctx.problem().advanceState();
 }
 
 void

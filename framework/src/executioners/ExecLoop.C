@@ -44,6 +44,18 @@ LoopContext::failed()
   return _failed;
 }
 
+std::string
+LoopContext::failedReason()
+{
+  return _failed_reason;
+}
+
+Real
+LoopContext::solveTime()
+{
+  return _solve_time;
+}
+
 void
 LoopContext::solve()
 {
