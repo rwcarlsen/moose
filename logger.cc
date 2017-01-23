@@ -102,9 +102,20 @@ private:
   std::set<std::string> _show;
 };
 
-void logmsg(Logger * l, std::string level, std::string msg)
+template <typename T>
+std::string
+s(T val)
 {
-  l->log({{"lev", level}, {"msg", msg}});
+  std::stringstream ss;
+  ss << val;
+  return ss.str();
+}
+
+void logmsg(Logger * l, std::string level, std::string msg, std::map<std::string, std::string> keyvals = {})
+{
+  keyvals.insert({"lev", level});
+  keyvals.insert({"msg", msg});
+  l->log(keyvals);
 }
 
 class StreamLogger : public Logger
@@ -126,7 +137,7 @@ int main(int argc, char** argv)
 {
   StreamLogger* l = new StreamLogger(std::cout, new AppLevelFormatter(new SimpleFormatter({"lev"}, {"msg"})));
   ContextLogger* l2 = new ContextLogger(l, {{"time", "never"},{"key1", "val1"}, {"appnum", "1.4.3"}});
-  FilterLogger log(l2, "lev", {"4"});
+  FilterLogger log(l2, "lev", {s(4)});
 
   logmsg(&log, "4", "hello from logging");
 
