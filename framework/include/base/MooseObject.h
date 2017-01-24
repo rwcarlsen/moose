@@ -77,6 +77,7 @@ public:
    */
   virtual bool enabled() { return _enabled; }
 
+  void log(const std::string & level, const std::string & msg, std::map<std::string, std::string> keyvals = {});
 
 protected:
 

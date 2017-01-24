@@ -49,6 +49,7 @@ protected:
 
   /// Current norm returned from PETSc
   Real _norm;
+  Real _old_nonlin_norm;
 
   /// Current non-linear iteration returned from PETSc
   PetscInt _nonlinear_iter;

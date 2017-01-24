@@ -24,6 +24,7 @@
 #include "OutputWarehouse.h"
 #include "RestartableData.h"
 #include "ConsoleStreamInterface.h"
+#include "Logger.h"
 
 // libMesh includes
 #include "libmesh/parallel_object.h"
@@ -468,6 +469,8 @@ public:
   /// Returns whether the Application is running in check input mode
   bool checkInput() const { return _check_input; }
 
+  Logger& logger() { return *_logger.get();}
+
 protected:
   /**
    * Whether or not this MooseApp has cached a Backup to use for restart / recovery
@@ -659,6 +662,8 @@ private:
 
   /// Cache for a Backup to use for restart / recovery
   MooseSharedPointer<Backup> _cached_backup;
+
+  std::unique_ptr<Logger> _logger;
 
   // Allow FEProblemBase to set the recover/restart state, so make it a friend
   friend class FEProblemBase;

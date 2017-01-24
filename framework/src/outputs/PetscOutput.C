@@ -159,6 +159,19 @@ PetscOutput::petscNonlinearOutput(SNES, PetscInt its, PetscReal norm, void * voi
   // Set the flag indicating that output is occurring on the non-linear residual
   ptr->_on_nonlinear_residual = true;
 
+  std::string color = COLOR_GREEN;
+  if (its == 0)
+    color = COLOR_GREEN;
+  else if (norm != norm || norm > ptr->_old_nonlin_norm) // residual increased
+    color = COLOR_RED;
+  else if ((ptr->_old_nonlin_norm - norm) / ptr->_old_nonlin_norm <= 0.05) // change is less than 5%
+    color = COLOR_YELLOW;
+  ptr->_old_nonlin_norm = ptr->_norm;
+
+  std::stringstream oss;
+  oss << std::scientific << norm;
+  ptr->log("info", " @nonlin_iter@ Nonlinear |R| = " + color + "@residual@", {{"nonlin_iter", std::to_string(its)}, {"residual", oss.str()}});
+
   // Perform the output
   ptr->outputStep(EXEC_NONLINEAR);
 
@@ -186,16 +199,28 @@ PetscOutput::petscLinearOutput(KSP, PetscInt its, PetscReal norm, void * void_pt
 {
   // Get the Outputter object
   PetscOutput * ptr = static_cast<PetscOutput *>(void_ptr);
-
   // Update the pseudo time
   ptr->_linear_time += ptr->_linear_dt;
 
   // Set the current norm and iteration number
+  Real old_norm = ptr->_norm;
   ptr->_norm = norm;
   ptr->_linear_iter = its;
 
   // Set the flag indicating that output is occurring on the non-linear residual
   ptr->_on_linear_residual = true;
+
+  std::string color = COLOR_GREEN;
+  if (its == 0)
+    color = COLOR_GREEN;
+  else if (norm != norm || norm > old_norm) // residual increased
+    color = COLOR_RED;
+  else if ((old_norm - norm) / old_norm <= 0.05) // change is less than 5%
+    color = COLOR_YELLOW;
+
+  std::stringstream oss;
+  oss << std::scientific << norm;
+  ptr->log("info", "      @lin_iter@ Linear |R| = " + color + "@residual@", {{"lin_iter", std::to_string(its)}, {"residual", oss.str()}});
 
   // Perform the output
   ptr->outputStep(EXEC_LINEAR);

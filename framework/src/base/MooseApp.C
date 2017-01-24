@@ -148,8 +148,17 @@ MooseApp::MooseApp(InputParameters parameters) :
     _legacy_uo_initialization_default(getParam<bool>("use_legacy_uo_initialization")),
     _check_input(getParam<bool>("check_input")),
     _restartable_data(libMesh::n_threads()),
-    _multiapp_level(0)
+    _multiapp_level(0),
+    _logger(nullptr)
 {
+  Logger* l = nullptr;
+  l = new StreamLogger(std::cout, new PrefixFormatter(new SimpleFormatter({}, {"msg"}, false), "appname", COLOR_CYAN));
+  //l = new TimeLogger(l, "timestamp");
+  l = new ContextLogger(l, {{"appname", _name}});
+  _logger.reset(new FilterLogger(l, "lev", {"info", "debug"}));
+
+  _logger->log({{"lev", "debug"}, {"msg", "created new app\nwith a multi-line message"}});
+
   if (isParamValid("_argc") && isParamValid("_argv"))
   {
     int argc = getParam<int>("_argc");

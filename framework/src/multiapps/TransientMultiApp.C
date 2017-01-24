@@ -140,6 +140,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
   _auto_advance = auto_advance;
 
   _console << "Solving MultiApp " << name() << std::endl;
+  log("info", "Solving MultiApp");
 
 // "target_time" must always be in global time
   target_time += _app.getGlobalTimeOffset();

@@ -38,3 +38,12 @@ MooseObject::MooseObject(const InputParameters & parameters) :
     _enabled(getParam<bool>("enable"))
 {
 }
+
+void
+MooseObject::log(const std::string & level, const std::string & msg, std::map<std::string, std::string> keyvals)
+{
+  keyvals.insert({"objname", _name});
+  keyvals.insert({"lev", level});
+  keyvals.insert({"msg", msg});
+  _app.logger().log(keyvals);
+}

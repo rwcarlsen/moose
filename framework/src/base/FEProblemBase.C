@@ -3451,7 +3451,39 @@ FEProblemBase::outputStep(ExecFlagType type)
   _aux->update();
   if (_displaced_problem != NULL)
     _displaced_problem->syncSolutions();
+
   _app.getOutputWarehouse().outputStep(type);
+
+  // Get the length of the time step string
+  std::string tstr = std::to_string(_t_step);
+  unsigned int n = tstr.size();
+  if (n < 2)
+    n = 2;
+
+
+  std::stringstream ss;
+  unsigned int precision = 0;
+  bool scientific_time = false;
+  if (precision > 0)
+    ss << std::setw(precision) << std::setprecision(precision) << std::setfill('0') << std::showpoint;
+  if (scientific_time)
+    ss << std::scientific;
+
+  std::map<std::string, std::string> keyvals;
+  keyvals.insert({"tstep", std::to_string(_t_step)});
+  ss << _time;
+  keyvals.insert({"t", ss.str()});
+  ss.str("");
+  ss << _time_old;
+  keyvals.insert({"t_old", ss.str()});
+  ss.str("");
+  ss << _dt;
+  keyvals.insert({"dt", ss.str()});
+  ss.str("");
+  ss << _dt_old;
+  keyvals.insert({"dt_old", ss.str()});
+
+  log("info", "Time Step @tstep@, time=@t@, dt=@dt@", keyvals);
 }
 
 void
