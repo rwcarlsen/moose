@@ -4,6 +4,7 @@
 moose_SRC_DIRS := $(FRAMEWORK_DIR)/src
 moose_SRC_DIRS += $(FRAMEWORK_DIR)/contrib/mtwist
 moose_SRC_DIRS += $(FRAMEWORK_DIR)/contrib/jsoncpp
+moose_SRC_DIRS += $(FRAMEWORK_DIR)/contrib/fmt
 
 #
 # pcre
@@ -41,6 +42,7 @@ moose_INC_DIRS := $(shell find $(FRAMEWORK_DIR)/include -type d -not -path "*/.s
 moose_INC_DIRS += $(shell find $(FRAMEWORK_DIR)/contrib/*/include -type d -not -path "*/.svn*")
 moose_INC_DIRS += "$(gtest_DIR)"
 moose_INC_DIRS += "$(hit_DIR)"
+moose_INC_DIRS += "$(FRAMEWORK_DIR)/contrib/fmt"
 moose_INCLUDE  := $(foreach i, $(moose_INC_DIRS), -I$(i))
 
 #libmesh_INCLUDE := $(moose_INCLUDE) $(libmesh_INCLUDE)
@@ -127,6 +129,7 @@ sa:: $(moose_analyzer)
 -include $(wildcard $(FRAMEWORK_DIR)/contrib/pcre/src/*.d)
 -include $(wildcard $(FRAMEWORK_DIR)/contrib/gtest/*.d)
 -include $(wildcard $(FRAMEWORK_DIR)/contrib/hit/*.d)
+-include $(wildcard $(FRAMEWORK_DIR)/contrib/fmt/*.d)
 
 #
 # exodiff
