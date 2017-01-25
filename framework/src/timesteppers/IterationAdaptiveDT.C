@@ -181,20 +181,14 @@ IterationAdaptiveDT::computeDT()
     _sync_last_step = false;
     dt = _time_ipol.sample(_time_old);
 
-    if (_verbose)
-    {
-      _console << "Setting dt to value specified by dt function: " << std::setw(9) << dt << '\n';
-    }
+    logTags({"lev-info", "verbose"}, "Setting dt to value specified by dt function: {:9}\n", dt);
   }
   else if (_sync_last_step)
   {
     _sync_last_step = false;
     dt = _dt_old;
 
-    if (_verbose)
-    {
-      _console << "Setting dt to value used before sync: " << std::setw(9) << dt << '\n';
-    }
+    logTags({"lev-info", "verbose"}, "Setting dt to value used before sync: {:9}\n", dt);
   }
   else if (_adaptive_timestepping)
     computeAdaptiveDT(dt);
@@ -227,11 +221,10 @@ IterationAdaptiveDT::constrainStep(Real & dt)
   {
     dt = *_tfunc_times.begin() - _time;
 
-    if (_verbose)
-    {
-      _console << "Limiting dt to sync with dt function time: " << std::setw(9)
-               << *_tfunc_times.begin() << " dt: " << std::setw(9) << dt << '\n';
-    }
+    logTags({"lev-info", "verbose"},
+            "Limiting dt to sync with dt function time: {:9} dt: {:9}\n",
+            *_tfunc_times.begin(),
+            dt);
   }
 
   return at_sync_point;
@@ -246,13 +239,8 @@ IterationAdaptiveDT::computeFailedDT()
   if (_dt <= _dt_min)
     mooseError("Solve failed and timestep already at dtmin, cannot continue!");
 
-  if (_verbose)
-  {
-    _console << "\nSolve failed with dt: " << std::setw(9) << _dt
-             << "\nRetrying with reduced dt: " << std::setw(9) << _dt * _cutback_factor << '\n';
-  }
-  else
-    _console << "\nSolve failed, cutting timestep.\n";
+  logMsg("\nSolve failed with dt {:9}, cutting timestep.", _dt);
+  logTags({"lev-info", "verbose"}, "\nRetrying with reduced dt {:9}\n", _dt * _cutback_factor);
 
   return _dt * _cutback_factor;
 }
@@ -265,9 +253,7 @@ IterationAdaptiveDT::limitDTToPostprocessorValue(Real & limitedDT)
     if (*_pps_value > _dt_min && limitedDT > *_pps_value)
     {
       limitedDT = *_pps_value;
-
-      if (_verbose)
-        _console << "Limiting dt to postprocessor value. dt = " << limitedDT << '\n';
+      logTags({"lev-info", "verbose"}, "Limiting dt to postprocessor value. dt = {}\n", limitedDT);
     }
   }
 }
@@ -312,14 +298,13 @@ IterationAdaptiveDT::limitDTByFunction(Real & limitedDT)
     }
   }
 
-  if (_verbose && limitedDT != orig_dt)
+  if (limitedDT != orig_dt)
   {
     if (_at_function_point)
-      _console << "Limiting dt to match function point. dt = ";
+      logTags({"lev-info", "verbose"}, "Limiting dt to match function point. dt = {}\n", limitedDT);
     else
-      _console << "Limiting dt to limit change in function. dt = ";
-
-    _console << limitedDT << '\n';
+      logTags(
+          {"lev-info", "verbose"}, "Limiting dt to limit change in function. dt = {}\n", limitedDT);
   }
 }
 
@@ -341,24 +326,28 @@ IterationAdaptiveDT::computeAdaptiveDT(Real & dt, bool allowToGrow, bool allowTo
     // Grow the timestep
     dt *= _growth_factor;
 
-    if (_verbose)
-    {
-      _console << "Growing dt: nl its = " << _nl_its << " < " << growth_nl_its
-               << " && lin its = " << _l_its << " < " << growth_l_its << " old dt: " << std::setw(9)
-               << _dt_old << " new dt: " << std::setw(9) << dt << '\n';
-    }
+    logTags({"lev-info", "verbose"},
+            "Growing dt: nl its = {} < {} && lin its = {} < {} old dt: {:9} new dt: {:9}\n",
+            _nl_its,
+            growth_nl_its,
+            _l_its,
+            growth_l_its,
+            _dt_old,
+            dt);
   }
   else if (allowToShrink && (_nl_its > shrink_nl_its || _l_its > shrink_l_its))
   {
     // Shrink the timestep
     dt *= _cutback_factor;
 
-    if (_verbose)
-    {
-      _console << "Shrinking dt: nl its = " << _nl_its << " > " << shrink_nl_its
-               << " || lin its = " << _l_its << " > " << shrink_l_its << " old dt: " << std::setw(9)
-               << _dt_old << " new dt: " << std::setw(9) << dt << '\n';
-    }
+    logTags({"lev-info", "verbose"},
+            "Shrinking dt: nl its = {} > {} || lin its = {} > {} old dt: {:9} new dt: {:9}\n",
+            _nl_its,
+            shrink_nl_its,
+            _l_its,
+            shrink_l_its,
+            _dt_old,
+            dt);
   }
 }
 
@@ -371,12 +360,10 @@ IterationAdaptiveDT::computeInterpolationDT()
   {
     dt = _dt_old * _growth_factor;
 
-    if (_verbose)
-    {
-      _console << "Growing dt to recover from cutback. "
-               << " old dt: " << std::setw(9) << _dt_old << " new dt: " << std::setw(9) << dt
-               << '\n';
-    }
+    logTags({"lev-info", "verbose"},
+            "Growing dt to recover from cutback. old dt: {:9} new dt: {:9}\n",
+            _dt_old,
+            dt);
   }
 
   return dt;
@@ -410,11 +397,9 @@ IterationAdaptiveDT::acceptStep()
     _dt_old = _fe_problem.dtOld();
     _sync_last_step = true;
 
-    if (_verbose)
-    {
-      _console << "Sync point hit in current step, using previous dt for old dt: " << std::setw(9)
-               << _dt_old << '\n';
-    }
+    logTags({"lev-info", "verbose"},
+            "Sync point hit in current step, using previous dt for old dt: {:9}\n",
+            _dt_old);
   }
   else
     _dt_old = _dt;

@@ -64,5 +64,6 @@ MooseObject::writeMsg(std::string msg)
     return;
   if (!_app.isUltimateMaster())
     MooseUtils::indentMessage(_app.name(), msg);
+  // TODO: Split/tee into file stream like Console::writeStreamToFile did
   Moose::out << msg << COLOR_DEFAULT;
 }
