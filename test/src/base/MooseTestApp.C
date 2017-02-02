@@ -127,6 +127,7 @@
 #include "DataStructIC.h"
 
 // Materials
+#include "ErrorMaterial.h"
 #include "MTMaterial.h"
 #include "TypesMaterial.h"
 #include "StatefulMaterial.h"
@@ -424,6 +425,7 @@ MooseTestApp::registerObjects(Factory & factory)
 
   // Materials
   registerMaterial(MTMaterial);
+  registerMaterial(ErrorMaterial);
   registerMaterial(TypesMaterial);
   registerMaterial(StatefulMaterial);
   registerMaterial(SpatialStatefulMaterial);
