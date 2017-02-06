@@ -174,6 +174,9 @@ Transient::Transient(const InputParameters & parameters)
     _verbose(getParam<bool>("verbose")),
     _sln_diff(_problem.getNonlinearSystemBase().addVector("sln_diff", false, PARALLEL))
 {
+  if (!_verbose)
+    _app.logHideTag("verbose");
+
   _problem.getNonlinearSystemBase().setDecomposition(_splitting);
   _t_step = 0;
   _dt = 0;
