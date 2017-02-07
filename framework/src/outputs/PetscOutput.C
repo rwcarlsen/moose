@@ -112,6 +112,8 @@ PetscOutput::solveSetup()
   // Extract the non-linear and linear solvers from PETSc
   NonlinearSystemBase & nl = _problem_ptr->getNonlinearSystemBase();
   PetscNonlinearSolver<Number> * petsc_solver = dynamic_cast<PetscNonlinearSolver<Number> *>(nl.nonlinearSolver());
+  if (petsc_solver == NULL)
+    return;
   SNES snes = petsc_solver->snes();
   KSP ksp;
   SNESGetKSP(snes, &ksp);
