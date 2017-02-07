@@ -25,6 +25,8 @@
 #include "AEFVUpwindInternalSideFlux.h"
 #include "AEFVFreeOutflowBoundaryFlux.h"
 
+#include "RDGProblem.h"
+
 template<>
 InputParameters validParams<RdgApp>()
 {
@@ -78,6 +80,8 @@ RdgApp::registerObjects(Factory & factory)
   registerUserObject(AEFVSlopeLimitingOneD);
   registerUserObject(AEFVUpwindInternalSideFlux);
   registerUserObject(AEFVFreeOutflowBoundaryFlux);
+
+  registerProblem(RDGProblem);
 }
 
 // External entry point for dynamic syntax association
