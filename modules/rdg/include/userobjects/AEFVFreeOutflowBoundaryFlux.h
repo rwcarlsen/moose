@@ -28,20 +28,29 @@ public:
   AEFVFreeOutflowBoundaryFlux(const InputParameters & parameters);
   virtual ~AEFVFreeOutflowBoundaryFlux();
 
+  virtual void computeFlux() override;
+  virtual void computeJacobian() override;
+
   virtual void calcFlux(unsigned int iside,
                         dof_id_type ielem,
                         const std::vector<Real> & uvec1,
                         const RealVectorValue & dwave,
-                        std::vector<Real> & flux) const override;
+                        std::vector<Real> & flux) override;
 
   virtual void calcJacobian(unsigned int iside,
                             dof_id_type ielem,
                             const std::vector<Real> & uvec1,
                             const RealVectorValue & dwave,
-                            DenseMatrix<Real> & jac1) const override;
+                            DenseMatrix<Real> & jac1) override;
 
 protected:
+  // "1" denotes variable value from the host element
 
+  /// piecewise constant variable values in host element
+  const VariableValue &  _uc1;
+
+  /// extrapolated variable values at side center
+  const MaterialProperty<Real> &  _u1;
 };
 
 #endif

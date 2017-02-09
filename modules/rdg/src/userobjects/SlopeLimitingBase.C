@@ -6,6 +6,7 @@
 /****************************************************************/
 
 #include "SlopeLimitingBase.h"
+#include "Assembly.h"
 #include <unistd.h>
 #include "libmesh/parallel.h"
 #include "libmesh/parallel_algebra.h"
@@ -16,20 +17,15 @@ Threads::spin_mutex SlopeLimitingBase::_mutex;
 template<>
 InputParameters validParams<SlopeLimitingBase>()
 {
-  InputParameters params = validParams<ElementLoopUserObject>();
+  InputParameters params = validParams<ElementUserObject>();
   params.addClassDescription("Base class for slope limiting to limit the slopes of cell average variables.");
-
-  params.addParam<bool>("include_bc", true,
-  "Indicate whether to include bc, default = true");
-
-  params.addRequiredParam<UserObjectName>("slope_reconstruction",
-  "Name for slope reconstruction user object");
-
+  params.addParam<bool>("include_bc", true, "Indicate whether to include bc, default = true");
+  params.addRequiredParam<UserObjectName>("slope_reconstruction", "Name for slope reconstruction user object");
   return params;
 }
 
 SlopeLimitingBase::SlopeLimitingBase(const InputParameters & parameters) :
-    ElementLoopUserObject(parameters),
+    ElementUserObject(parameters),
     _include_bc(getParam<bool>("include_bc")),
     _rslope(getUserObject<SlopeReconstructionBase>("slope_reconstruction")),
     _q_point_face(_assembly.qPointsFace()),
@@ -46,16 +42,30 @@ SlopeLimitingBase::SlopeLimitingBase(const InputParameters & parameters) :
 void
 SlopeLimitingBase::initialize()
 {
-  ElementLoopUserObject::initialize();
+  // ElementLoopUserObject::initialize();
 
   _lslope.clear();
 }
 
 void
+SlopeLimitingBase::execute()
+{
+}
+
+void
+SlopeLimitingBase::computeSlopeLimiter()
+{
+  dof_id_type elementID = _current_elem->id();
+
+  std::cerr << "SlopeLimitingBase::computeSlopeLimiter(): elem = " << elementID << std::endl;
+
+  _lslope[elementID] = limitElementSlope();
+}
+
+void
 SlopeLimitingBase::threadJoin(const UserObject & y)
 {
-  const SlopeLimitingBase & pps =
-    static_cast<const SlopeLimitingBase &>(y);
+  const SlopeLimitingBase & pps = static_cast<const SlopeLimitingBase &>(y);
 
   _lslope.insert(pps._lslope.begin(), pps._lslope.end());
 }
@@ -64,27 +74,18 @@ const std::vector<RealGradient> &
 SlopeLimitingBase::getElementSlope(dof_id_type elementid) const
 {
   Threads::spin_mutex::scoped_lock lock(_mutex);
-  std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos =
-    _lslope.find(elementid);
+  std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos = _lslope.find(elementid);
 
   if (pos == _lslope.end())
-    mooseError2("Limited slope is not cached for element id '",
-       elementid, "' in ", __FUNCTION__);
+    mooseError2("Limited slope is not cached for element id '", elementid, "' in ", __FUNCTION__);
 
   return pos->second;
 }
 
 void
-SlopeLimitingBase::computeElement()
-{
-  dof_id_type _elementID = _current_elem->id();
-
-  _lslope[_elementID] = limitElementSlope();
-}
-
-void
 SlopeLimitingBase::serialize(std::string & serialized_buffer)
 {
+#if 0
   std::ostringstream oss;
 
   // First store the number of elements to send
@@ -99,11 +100,13 @@ SlopeLimitingBase::serialize(std::string & serialized_buffer)
 
   // Populate the passed in string pointer with the string stream's buffer contents
   serialized_buffer.assign(oss.str());
+#endif
 }
 
 void
 SlopeLimitingBase::deserialize(std::vector<std::string> & serialized_buffers)
 {
+#if 0
   // The input string stream used for deserialization
   std::istringstream iss;
 
@@ -134,13 +137,15 @@ SlopeLimitingBase::deserialize(std::vector<std::string> & serialized_buffers)
       _lslope.insert(std::pair<dof_id_type, std::vector<RealGradient> >(key, value));
     }
   }
+#endif
 }
 
 void
 SlopeLimitingBase::finalize()
 {
-  ElementLoopUserObject::finalize();
+  // ElementLoopUserObject::finalize();
 
+#if 0
   if (_app.n_processors() > 1)
   {
     std::vector<std::string> send_buffers(1);
@@ -151,4 +156,5 @@ SlopeLimitingBase::finalize()
     comm().allgather_packed_range((void *)(nullptr), send_buffers.begin(), send_buffers.end(), std::back_inserter(recv_buffers));
     deserialize(recv_buffers);
   }
+#endif
 }

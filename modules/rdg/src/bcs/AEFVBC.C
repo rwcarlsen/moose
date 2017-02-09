@@ -31,28 +31,32 @@ AEFVBC::AEFVBC(const InputParameters & parameters) :
 Real
 AEFVBC::computeQpResidual()
 {
-  // assemble the input vectors, which are
-  //   the reconstructed linear monomial
-  //   extrapolated at side center from the current element
-  std::vector<Real> uvec1 = {_u1[_qp]};
+  // // assemble the input vectors, which are
+  // //   the reconstructed linear monomial
+  // //   extrapolated at side center from the current element
+  // std::vector<Real> uvec1 = {_u1[_qp]};
+  //
+  // // calculate the flux
+  // const auto & flux = _flux.getFlux(_current_side, _current_elem->id(), uvec1, _normals[_qp], _tid);
+  //
+  // // distribute the contribution to the current element
+  // return flux[_component] * _test[_i][_qp];
 
-  // calculate the flux
-  const auto & flux = _flux.getFlux(_current_side, _current_elem->id(), uvec1, _normals[_qp], _tid);
-
-  // distribute the contribution to the current element
-  return flux[_component] * _test[_i][_qp];
+  return 0;
 }
 
 Real
 AEFVBC::computeQpJacobian()
 {
-  // assemble the input vectors, which are
-  //   the constant monomial from the current element
-  std::vector<Real> uvec1 = {_uc1[_qp]};
+  // // assemble the input vectors, which are
+  // //   the constant monomial from the current element
+  // std::vector<Real> uvec1 = {_uc1[_qp]};
+  //
+  // // calculate the flux
+  // auto & fjac1 = _flux.getJacobian(_current_side, _current_elem->id(), uvec1, _normals[_qp], _tid);
+  //
+  // // distribute the contribution to the current element
+  // return fjac1(_component, _component) * _phi[_j][_qp] * _test[_i][_qp];
 
-  // calculate the flux
-  auto & fjac1 = _flux.getJacobian(_current_side, _current_elem->id(), uvec1, _normals[_qp], _tid);
-
-  // distribute the contribution to the current element
-  return fjac1(_component, _component) * _phi[_j][_qp] * _test[_i][_qp];
+  return 0;
 }

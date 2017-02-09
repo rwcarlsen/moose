@@ -8,6 +8,10 @@
 #include "RDGSystem.h"
 #include "FEProblem.h"
 #include "TimeIntegrator.h"
+#include "RDGAssembleThread.h"
+#include "RDGSlopeReconstructionThread.h"
+#include "libmesh/sparse_matrix.h"
+#include "libmesh/linear_solver.h"
 
 RDGSystem::RDGAssembly::RDGAssembly(RDGSystem & rdg_system)
   : _rdg_system(rdg_system)
@@ -17,17 +21,15 @@ RDGSystem::RDGAssembly::RDGAssembly(RDGSystem & rdg_system)
 void
 RDGSystem::RDGAssembly::assemble()
 {
-  std::cerr << "RDGSystem::RDGAssembly::assemble()" << std::endl;
-
-  TransientExplicitSystem & sys = _rdg_system.sys();
+  _rdg_system.assemble();
 }
 
 
 RDGSystem::RDGSystem(FEProblemBase & fe_problem, const std::string & name)
-  : NonlinearSystemBase(fe_problem, fe_problem.es().add_system<TransientExplicitSystem>(name), name),
+  : NonlinearSystemBase(fe_problem, fe_problem.es().add_system<TransientLinearImplicitSystem>(name), name),
     _rdg_assembly(*this),
-    _sys(fe_problem.es().get_system<TransientExplicitSystem>(name)),
-    _mass_matrix(_sys.add_vector("mass_matrix"))
+    _sys(fe_problem.es().get_system<TransientLinearImplicitSystem>(name)),
+    _need_matrix(true)
 {
   _sys.attach_assemble_object(_rdg_assembly);
 }
@@ -46,20 +48,15 @@ RDGSystem::solve()
   // Initialize the solution vector using a predictor and known values from nodal bcs
   setInitialSolution();
 
-  std::cerr << "_time_integrator = " << _time_integrator << std::endl;
-
   _time_integrator->solve();
   _time_integrator->postSolve();
 
   // store info about the solve
   _n_iters = 0;
+  _n_linear_iters = 1;
+
   // TODO: compute final residual
   _final_residual = 0;
-
-  // FIXME
-// #ifdef LIBMESH_HAVE_PETSC
-//   _n_linear_iters = static_cast<PetscNonlinearSolver<Real> &>(*_transient_sys.nonlinear_solver).get_total_linear_iterations();
-// #endif
 }
 
 
@@ -77,6 +74,48 @@ RDGSystem::setupFiniteDifferencedPreconditioner()
 bool
 RDGSystem::converged()
 {
-  return true;
-  // return _transient_sys.nonlinear_solver->converged;
+  _console << "converged = " << _sys.linear_solver->get_converged_reason() << std::endl;
+
+  return _sys.linear_solver->get_converged_reason() > 0;
+}
+
+void
+RDGSystem::assemble()
+{
+  // residual contributions from the domain
+  PARALLEL_TRY
+  {
+    Moose::perf_log.push("RDGAssembleThread()", "Execution");
+
+    ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+    RDGSlopeReconstructionThread sr(_fe_problem,
+                                    _reconstruction_objects,
+                                    _limiting_objects);
+    Threads::parallel_reduce(elem_range, sr);
+
+    RDGAssembleThread as(_fe_problem,
+                         _need_matrix ? sys().matrix : NULL,
+                         _boundary_flux_objects,
+                         _internal_side_flux_objects);
+    Threads::parallel_reduce(elem_range, as);
+
+    Moose::perf_log.pop("RDGAssembleThread()", "Execution");
+  }
+  PARALLEL_CATCH;
+
+  sys().matrix->close();
+
+  // gather all contributions to rhs
+  residualVector(Moose::KT_TIME).close();
+  residualVector(Moose::KT_NONTIME).close();
+  _time_integrator->postStep(*sys().rhs);
+  sys().rhs->close();
+
+  std::cerr << "mat = " << std::endl;
+  sys().matrix->print(std::cerr);
+  std::cerr << "--" << std::endl;
+  sys().rhs->print(std::cerr);
+
+  // FIXME: need to be false, so we form the matrix only once. This is here until we fix libMesh
+  _need_matrix = true;
 }

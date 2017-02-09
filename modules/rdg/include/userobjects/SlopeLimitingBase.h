@@ -8,7 +8,7 @@
 #ifndef SLOPELIMITINGBASE_H
 #define SLOPELIMITINGBASE_H
 
-#include "ElementLoopUserObject.h"
+#include "ElementUserObject.h"
 #include "SlopeReconstructionBase.h"
 
 //Forward Declarations
@@ -21,25 +21,26 @@ InputParameters validParams<SlopeLimitingBase>();
  * Base class for slope limiting to limit
  * the slopes of cell average variables
  */
-class SlopeLimitingBase : public ElementLoopUserObject
+class SlopeLimitingBase : public ElementUserObject
 {
 public:
 
   SlopeLimitingBase(const InputParameters & parameters);
 
   virtual void initialize();
+  virtual void execute();
   virtual void threadJoin(const UserObject & y);
   virtual void finalize();
-
-  virtual void computeElement();
 
   /// accessor function call
   virtual const std::vector<RealGradient> & getElementSlope(dof_id_type elementid) const;
 
+  virtual void computeSlopeLimiter();
+
+protected:
   /// compute the slope of the cell
   virtual std::vector<RealGradient> limitElementSlope() const = 0;
 
-protected:
   virtual void serialize(std::string & serialized_buffer);
   virtual void deserialize(std::vector<std::string> & serialized_buffers);
 

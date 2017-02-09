@@ -8,7 +8,7 @@
 #ifndef INTERNALSIDEFLUXBASE_H
 #define INTERNALSIDEFLUXBASE_H
 
-#include "GeneralUserObject.h"
+#include "InternalSideUserObject.h"
 
 // Forward Declarations
 class InternalSideFluxBase;
@@ -29,7 +29,7 @@ InputParameters validParams<InternalSideFluxBase>();
  *   2. Derived classes need to provide computing of the fluxes and their jacobians,
  *      i.e., they need to implement `calcFlux` and `calcJacobian`.
  */
-class InternalSideFluxBase : public GeneralUserObject
+class InternalSideFluxBase : public InternalSideUserObject
 {
 public:
   InternalSideFluxBase(const InputParameters & parameters);
@@ -37,23 +37,13 @@ public:
   virtual void execute();
   virtual void initialize();
   virtual void finalize();
+  virtual void threadJoin(const UserObject & uo);
 
-  /**
-   * Get the flux vector
-   * @param[in]   iside     local  index of current side
-   * @param[in]   ielem     global index of the current element
-   * @param[in]   ineig     global index of the neighbor element
-   * @param[in]   uvec1     vector of variables on the "left"
-   * @param[in]   uvec2     vector of variables on the "right"
-   * @param[in]   dwave     vector of unit normal
-   */
-  virtual const std::vector<Real> & getFlux(unsigned int iside,
-                                            unsigned int ielem,
-                                            unsigned int ineig,
-                                            const std::vector<Real> & uvec1,
-                                            const std::vector<Real> & uvec2,
-                                            const RealVectorValue & dwave,
-                                            THREAD_ID tid) const;
+  virtual void computeFlux();
+  virtual void computeJacobian();
+
+  virtual const std::vector<Real> & getFlux() const;
+  virtual const DenseMatrix<Real> & getJacobian(Moose::DGResidualType type) const;
 
   /**
    * Solve the Riemann problem
@@ -71,25 +61,7 @@ public:
                         const std::vector<Real> & uvec1,
                         const std::vector<Real> & uvec2,
                         const RealVectorValue & dwave,
-                        std::vector<Real> & flux) const = 0;
-
-  /**
-   * Get the Jacobian matrix
-   * @param[in]   iside     local  index of current side
-   * @param[in]   ielem     global index of the current element
-   * @param[in]   ineig     global index of the neighbor element
-   * @param[in]   uvec1     vector of variables on the "left"
-   * @param[in]   uvec2     vector of variables on the "right"
-   * @param[in]   dwave     vector of unit normal
-   */
-  virtual const DenseMatrix<Real> & getJacobian(Moose::DGResidualType type,
-                                                unsigned int iside,
-                                                unsigned int ielem,
-                                                unsigned int ineig,
-                                                const std::vector<Real> & uvec1,
-                                                const std::vector<Real> & uvec2,
-                                                const RealVectorValue & dwave,
-                                                THREAD_ID tid) const;
+                        std::vector<Real> & flux) = 0;
 
   /**
    * Compute the Jacobian matrix
@@ -109,19 +81,15 @@ public:
                             const std::vector<Real> & uvec2,
                             const RealVectorValue & dwave,
                             DenseMatrix<Real> & jac1,
-                            DenseMatrix<Real> & jac2) const = 0;
+                            DenseMatrix<Real> & jac2) = 0;
 
 protected:
-
-  mutable unsigned int _cached_elem_id;
-  mutable unsigned int _cached_neig_id;
-
   /// flux vector of this side
-  mutable std::vector<std::vector<Real> > _flux;
+  std::vector<Real> _flux;
   /// Jacobian matrix contribution to the "left" cell
-  mutable std::vector<DenseMatrix<Real> > _jac1;
+  DenseMatrix<Real> _jac1;
   /// Jacobian matrix contribution to the "right" cell
-  mutable std::vector<DenseMatrix<Real> > _jac2;
+  DenseMatrix<Real> _jac2;
 
 private:
   static Threads::spin_mutex _mutex;

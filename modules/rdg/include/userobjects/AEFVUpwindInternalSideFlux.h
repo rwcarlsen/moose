@@ -24,9 +24,11 @@ InputParameters validParams<AEFVUpwindInternalSideFlux>();
 class AEFVUpwindInternalSideFlux : public InternalSideFluxBase
 {
 public:
-
   AEFVUpwindInternalSideFlux(const InputParameters & parameters);
   virtual ~AEFVUpwindInternalSideFlux();
+
+  virtual void computeFlux() override;
+  virtual void computeJacobian() override;
 
   virtual void calcFlux(unsigned int iside,
                         unsigned int ielem,
@@ -34,7 +36,7 @@ public:
                         const std::vector<Real> & uvec1,
                         const std::vector<Real> & uvec2,
                         const RealVectorValue & dwave,
-                        std::vector<Real> & flux) const override;
+                        std::vector<Real> & flux) override;
 
   virtual void calcJacobian(unsigned int iside,
                             unsigned int ielem,
@@ -43,9 +45,19 @@ public:
                             const std::vector<Real> & uvec2,
                             const RealVectorValue & dwave,
                             DenseMatrix<Real> & jac1,
-                            DenseMatrix<Real> & jac2) const override;
+                            DenseMatrix<Real> & jac2) override;
 
 protected:
+  // "1" denotes the "left" state
+  // "2" denotes the "right" state
+
+  /// piecewise constant variable values in cells
+  const VariableValue &  _uc1;
+  const VariableValue &  _uc2;
+
+  /// extrapolated variable values at side center
+  const MaterialProperty<Real> &  _u1;
+  const MaterialProperty<Real> &  _u2;
 
 };
 

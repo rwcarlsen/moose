@@ -12,12 +12,14 @@
 
 // BCs
 #include "AEFVBC.h"
+#include "RDGFluxBC.h"
 
 // Materials
 #include "AEFVMaterial.h"
 
 // DG kernels
 #include "AEFVKernel.h"
+#include "RDGFlux.h"
 
 // User objects
 #include "AEFVSlopeReconstructionOneD.h"
@@ -68,9 +70,11 @@ RdgApp::registerObjects(Factory & factory)
 {
   // DG kernels
   registerDGKernel(AEFVKernel);
+  registerDGKernel(RDGFlux);
 
   // BCs
   registerBoundaryCondition(AEFVBC);
+  registerBoundaryCondition(RDGFluxBC);
 
   // Materials
   registerMaterial(AEFVMaterial);

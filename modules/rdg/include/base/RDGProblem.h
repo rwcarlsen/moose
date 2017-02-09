@@ -11,6 +11,7 @@
 #include "FEProblemBase.h"
 
 class RDGProblem;
+class RDGSystem;
 
 template<>
 InputParameters validParams<RDGProblem>();
@@ -24,6 +25,9 @@ public:
 
   virtual void solve() override;
 
+  virtual void addUserObject(std::string user_object_name, const std::string & name, InputParameters parameters) override;
+
+  RDGSystem * _rdg_sys;
 };
 
 #endif

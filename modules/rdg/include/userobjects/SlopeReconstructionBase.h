@@ -9,7 +9,7 @@
 #define SLOPERECONSTRUCTIONBASE_H
 
 #include "BCUserObject.h"
-#include "ElementLoopUserObject.h"
+#include "ElementUserObject.h"
 
 //Forward Declarations
 class SlopeReconstructionBase;
@@ -21,17 +21,16 @@ InputParameters validParams<SlopeReconstructionBase>();
  * Base class for piecewise linear slope reconstruction
  * to get the slopes of element average variables
  */
-class SlopeReconstructionBase : public ElementLoopUserObject
+class SlopeReconstructionBase : public ElementUserObject
 {
 public:
 
   SlopeReconstructionBase(const InputParameters & parameters);
 
   virtual void initialize();
+  virtual void execute();
   virtual void finalize();
   virtual void threadJoin(const UserObject & y);
-
-  virtual void computeElement();
 
   /// accessor function call to get element slope values
   virtual const std::vector<RealGradient> & getElementSlope(dof_id_type elementid) const;

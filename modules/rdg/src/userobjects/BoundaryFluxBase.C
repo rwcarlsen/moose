@@ -13,22 +13,18 @@ Threads::spin_mutex BoundaryFluxBase::_mutex;
 template<>
 InputParameters validParams<BoundaryFluxBase>()
 {
-  InputParameters params = validParams<GeneralUserObject>();
+  InputParameters params = validParams<SideUserObject>();
   return params;
 }
 
 BoundaryFluxBase::BoundaryFluxBase(const InputParameters & parameters) :
-    GeneralUserObject(parameters)
+    SideUserObject(parameters)
 {
-  _flux.resize(libMesh::n_threads());
-  _jac1.resize(libMesh::n_threads());
 }
 
 void
 BoundaryFluxBase::initialize()
 {
-  _cached_elem_id = 0;
-  _cached_side_id = libMesh::invalid_uint;
 }
 
 void
@@ -41,6 +37,34 @@ BoundaryFluxBase::finalize()
 {
 }
 
+void
+BoundaryFluxBase::threadJoin(const UserObject & uo)
+{
+}
+
+void
+BoundaryFluxBase::computeFlux()
+{
+}
+
+void
+BoundaryFluxBase::computeJacobian()
+{
+}
+
+const std::vector<Real> &
+BoundaryFluxBase::getFlux() const
+{
+  return _flux;
+}
+
+const DenseMatrix<Real> &
+BoundaryFluxBase::getJacobian() const
+{
+  return _jac1;
+}
+
+/*
 const std::vector<Real> &
 BoundaryFluxBase::getFlux(unsigned int iside,
                           dof_id_type ielem,
@@ -84,3 +108,4 @@ BoundaryFluxBase::getJacobian(unsigned int iside,
   }
   return _jac1[tid];
 }
+*/

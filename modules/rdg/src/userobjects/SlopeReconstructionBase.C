@@ -6,6 +6,7 @@
 /****************************************************************/
 
 #include "SlopeReconstructionBase.h"
+#include "Assembly.h"
 
 // Static mutex definition
 Threads::spin_mutex SlopeReconstructionBase::_mutex;
@@ -13,13 +14,13 @@ Threads::spin_mutex SlopeReconstructionBase::_mutex;
 template<>
 InputParameters validParams<SlopeReconstructionBase>()
 {
-  InputParameters params = validParams<ElementLoopUserObject>();
+  InputParameters params = validParams<ElementUserObject>();
   params.addClassDescription("Base class for piecewise linear slope reconstruction to get the slopes of element average variables.");
   return params;
 }
 
 SlopeReconstructionBase::SlopeReconstructionBase(const InputParameters & parameters) :
-    ElementLoopUserObject(parameters),
+    ElementUserObject(parameters),
     _q_point_face(_assembly.qPointsFace()),
     _qrule_face(_assembly.qRuleFace()),
     _JxW_face(_assembly.JxWFace()),
@@ -35,7 +36,7 @@ SlopeReconstructionBase::SlopeReconstructionBase(const InputParameters & paramet
 void
 SlopeReconstructionBase::initialize()
 {
-  ElementLoopUserObject::initialize();
+  // ElementLoopUserObject::initialize();
 
   _rslope.clear();
   _avars.clear();
@@ -44,7 +45,8 @@ SlopeReconstructionBase::initialize()
 void
 SlopeReconstructionBase::finalize()
 {
-  ElementLoopUserObject::finalize();
+#if 0
+  // ElementLoopUserObject::finalize();
 
   if (_app.n_processors() > 1)
   {
@@ -58,12 +60,18 @@ SlopeReconstructionBase::finalize()
     comm().allgather_packed_range((void *)(nullptr), send_buffers.begin(), send_buffers.end(), std::back_inserter(recv_buffers));
     deserialize(recv_buffers);
   }
+#endif
+}
+
+void
+SlopeReconstructionBase::execute()
+{
 }
 
 void
 SlopeReconstructionBase::meshChanged()
 {
-  ElementLoopUserObject::meshChanged();
+  // ElementLoopUserObject::meshChanged();
 
   _side_geoinfo_cached = false;
   _side_centroid.clear();
@@ -77,11 +85,9 @@ SlopeReconstructionBase::meshChanged()
 void
 SlopeReconstructionBase::threadJoin(const UserObject & y)
 {
-  const SlopeReconstructionBase & pps =
-    static_cast<const SlopeReconstructionBase &>(y);
+  const SlopeReconstructionBase & pps = static_cast<const SlopeReconstructionBase &>(y);
 
   _rslope.insert(pps._rslope.begin(), pps._rslope.end());
-
   _avars.insert(pps._avars.begin(), pps._avars.end());
 }
 
@@ -89,12 +95,10 @@ const std::vector<RealGradient> &
 SlopeReconstructionBase::getElementSlope(dof_id_type elementid) const
 {
   Threads::spin_mutex::scoped_lock lock(_mutex);
-  std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos =
-    _rslope.find(elementid);
+  std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos = _rslope.find(elementid);
 
   if (pos == _rslope.end())
-    mooseError2("Reconstructed slope is not cached for element id '",
-       elementid, "' in ", __FUNCTION__);
+    mooseError2("Reconstructed slope is not cached for element id '", elementid, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -103,12 +107,10 @@ const std::vector<Real> &
 SlopeReconstructionBase::getElementAverageValue(dof_id_type elementid) const
 {
   Threads::spin_mutex::scoped_lock lock(_mutex);
-  std::map<dof_id_type, std::vector<Real> >::const_iterator pos =
-    _avars.find(elementid);
+  std::map<dof_id_type, std::vector<Real> >::const_iterator pos = _avars.find(elementid);
 
   if (pos == _avars.end())
-    mooseError2("Average variable values are not cached for element id '",
-       elementid, "' in ", __FUNCTION__);
+    mooseError2("Average variable values are not cached for element id '", elementid, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -121,8 +123,7 @@ SlopeReconstructionBase::getBoundaryAverageValue(dof_id_type elementid, unsigned
     _bnd_avars.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
   if (pos == _bnd_avars.end())
-    mooseError2("Average variable values are not cached for element id '",
-       elementid, "' and side '", side, "' in ", __FUNCTION__);
+    mooseError2("Average variable values are not cached for element id '", elementid, "' and side '", side, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -135,8 +136,7 @@ SlopeReconstructionBase::getSideCentroid(dof_id_type elementid, dof_id_type neig
     _side_centroid.find(std::pair<dof_id_type, dof_id_type>(elementid, neighborid));
 
   if (pos == _side_centroid.end())
-    mooseError2("Side centroid values are not cached for element id '",
-       elementid, "' and neighbor id '", neighborid, "' in ", __FUNCTION__);
+    mooseError2("Side centroid values are not cached for element id '", elementid, "' and neighbor id '", neighborid, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -149,8 +149,7 @@ SlopeReconstructionBase::getBoundarySideCentroid(dof_id_type elementid, unsigned
     _bnd_side_centroid.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
   if (pos == _bnd_side_centroid.end())
-    mooseError2("Boundary side centroid values are not cached for element id '",
-       elementid, "' and side '", side, "' in ", __FUNCTION__);
+    mooseError2("Boundary side centroid values are not cached for element id '", elementid, "' and side '", side, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -163,8 +162,7 @@ SlopeReconstructionBase::getSideNormal(dof_id_type elementid, dof_id_type neighb
     _side_normal.find(std::pair<dof_id_type, dof_id_type>(elementid, neighborid));
 
   if (pos == _side_normal.end())
-    mooseError2("Side normal values are not cached for element id '",
-       elementid, "' and neighbor id '", neighborid, "' in ", __FUNCTION__);
+    mooseError2("Side normal values are not cached for element id '", elementid, "' and neighbor id '", neighborid, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -177,8 +175,7 @@ SlopeReconstructionBase::getBoundarySideNormal(dof_id_type elementid, unsigned i
     _bnd_side_normal.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
   if (pos == _bnd_side_normal.end())
-    mooseError2("Boundary side normal values are not cached for element id '",
-       elementid, "' and side '", side, "' in ", __FUNCTION__);
+    mooseError2("Boundary side normal values are not cached for element id '", elementid, "' and side '", side, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -191,8 +188,7 @@ SlopeReconstructionBase::getSideArea(dof_id_type elementid, dof_id_type neighbor
     _side_area.find(std::pair<dof_id_type, dof_id_type>(elementid, neighborid));
 
   if (pos == _side_area.end())
-    mooseError2("Side area values are not cached for element id '",
-       elementid, "' and neighbor id '", neighborid, "' in ", __FUNCTION__);
+    mooseError2("Side area values are not cached for element id '", elementid, "' and neighbor id '", neighborid, "' in ", __FUNCTION__);
 
   return pos->second;
 }
@@ -205,21 +201,15 @@ SlopeReconstructionBase::getBoundarySideArea(dof_id_type elementid, unsigned int
     _bnd_side_area.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
   if (pos == _bnd_side_area.end())
-    mooseError2("Boundary side area values are not cached for element id '",
-       elementid, "' and side '", side, "' in ", __FUNCTION__);
+    mooseError2("Boundary side area values are not cached for element id '", elementid, "' and side '", side, "' in ", __FUNCTION__);
 
   return pos->second;
 }
 
 void
-SlopeReconstructionBase::computeElement()
-{
-  reconstructElementSlope();
-}
-
-void
 SlopeReconstructionBase::serialize(std::string & serialized_buffer)
 {
+#if 0
   std::ostringstream oss;
 
   // First store the number of elements to send
@@ -234,11 +224,13 @@ SlopeReconstructionBase::serialize(std::string & serialized_buffer)
 
   // Populate the passed in string pointer with the string stream's buffer contents
   serialized_buffer.assign(oss.str());
+#endif
 }
 
 void
 SlopeReconstructionBase::deserialize(std::vector<std::string> & serialized_buffers)
 {
+#if 0
   // The input string stream used for deserialization
   std::istringstream iss;
 
@@ -269,4 +261,5 @@ SlopeReconstructionBase::deserialize(std::vector<std::string> & serialized_buffe
       _rslope.insert(std::pair<dof_id_type, std::vector<RealGradient> >(key, value));
     }
   }
+#endif
 }

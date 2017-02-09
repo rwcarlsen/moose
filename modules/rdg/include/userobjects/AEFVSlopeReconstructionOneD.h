@@ -29,7 +29,6 @@ InputParameters validParams<AEFVSlopeReconstructionOneD>();
 class AEFVSlopeReconstructionOneD : public SlopeReconstructionOneD
 {
 public:
-
   AEFVSlopeReconstructionOneD(const InputParameters & parameters);
 
   /// compute the slope of the cell

@@ -12,11 +12,14 @@ InputParameters validParams<AEFVFreeOutflowBoundaryFlux>()
 {
   InputParameters params = validParams<BoundaryFluxBase>();
   params.addClassDescription("Free outflow BC based boundary flux user object for the advection equation using a cell-centered finite volume method.");
+  params.addRequiredCoupledVar("u", "Name of the variable to use");
   return params;
 }
 
 AEFVFreeOutflowBoundaryFlux::AEFVFreeOutflowBoundaryFlux(const InputParameters & parameters) :
-    BoundaryFluxBase(parameters)
+    BoundaryFluxBase(parameters),
+    _uc1(coupledValue("u")),
+    _u1(getMaterialProperty<Real>("u"))
 {
 }
 
@@ -25,11 +28,26 @@ AEFVFreeOutflowBoundaryFlux::~AEFVFreeOutflowBoundaryFlux()
 }
 
 void
+AEFVFreeOutflowBoundaryFlux::computeFlux()
+{
+  std::cerr << "AEFVFreeOutflowBoundaryFlux::computeFlux()" << std::endl;
+
+  unsigned int _qp = 0;
+
+  // assemble the input vectors, which are
+  //   the reconstructed linear monomial
+  //   extrapolated at side center from the current and neighbor elements
+  std::vector<Real> uvec1 = { _u1[_qp] };
+
+  calcFlux(_current_side, _current_elem->id(), uvec1, _normals[_qp], _flux);
+}
+
+void
 AEFVFreeOutflowBoundaryFlux::calcFlux(unsigned int /*iside*/,
                                       dof_id_type /*ielem*/,
                                       const std::vector<Real> & uvec1,
                                       const RealVectorValue & dwave,
-                                      std::vector<Real> & flux) const
+                                      std::vector<Real> & flux)
 {
   mooseAssert(uvec1.size() == 1, "Invalid size for uvec1. Must be single variable coupling.");
 
@@ -44,11 +62,24 @@ AEFVFreeOutflowBoundaryFlux::calcFlux(unsigned int /*iside*/,
 }
 
 void
+AEFVFreeOutflowBoundaryFlux::computeJacobian()
+{
+  unsigned int _qp = 0;
+
+  // assemble the input vectors, which are
+  //   the constant monomial from the current element
+  std::vector<Real> uvec1 = { _uc1[_qp] };
+
+  // calculate the flux
+  calcJacobian(_current_side, _current_elem->id(), uvec1, _normals[_qp], _jac1);
+}
+
+void
 AEFVFreeOutflowBoundaryFlux::calcJacobian(unsigned int /*iside*/,
                                           dof_id_type /*ielem*/,
                                           const std::vector<Real> & libmesh_dbg_var(uvec1),
                                           const RealVectorValue & /*dwave*/,
-                                          DenseMatrix<Real> & /*jac1*/) const
+                                          DenseMatrix<Real> & /*jac1*/)
 {
   mooseAssert(uvec1.size() == 1, "Invalid size for uvec1. Must be single variable coupling.");
 }

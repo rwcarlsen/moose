@@ -10,9 +10,15 @@
 
 #include "SystemBase.h"
 #include "NonlinearSystemBase.h"
+#include "SlopeReconstructionBase.h"
+#include "SlopeLimitingBase.h"
+#include "BoundaryFluxBase.h"
+#include "InternalSideFluxBase.h"
+#include "libmesh/linear_implicit_system.h"
+
 
 /**
- * Explicit system to be solved
+ * A system that hold a RDG system being solved
  *
  */
 class RDGSystem : public NonlinearSystemBase
@@ -50,7 +56,11 @@ public:
 
   virtual NumericVector<Number> & solutionOlder() override { return *_sys.older_local_solution; }
 
-  virtual TransientExplicitSystem & sys() { return _sys; }
+  virtual TransientLinearImplicitSystem & sys() { return _sys; }
+
+  virtual void assemble();
+
+  void needMatrix(bool state) { _need_matrix = state; }
 
 protected:
   class RDGAssembly : public System::Assembly
@@ -58,16 +68,22 @@ protected:
   public:
     RDGAssembly(RDGSystem & rdg_system);
 
-    virtual void assemble () override;
+    virtual void assemble() override;
 
   protected:
     RDGSystem & _rdg_system;
   };
 
   RDGAssembly _rdg_assembly;
-  TransientExplicitSystem & _sys;
+  TransientLinearImplicitSystem & _sys;
+  bool _need_matrix;
 
-  NumericVector<Number> & _mass_matrix;
+  MooseObjectWarehouse<SlopeReconstructionBase> _reconstruction_objects;
+  MooseObjectWarehouse<SlopeLimitingBase> _limiting_objects;
+  MooseObjectWarehouse<BoundaryFluxBase> _boundary_flux_objects;
+  MooseObjectWarehouse<InternalSideFluxBase> _internal_side_flux_objects;
+
+  friend class RDGProblem;
 };
 
 #endif /* RDGSYSTEM_H */

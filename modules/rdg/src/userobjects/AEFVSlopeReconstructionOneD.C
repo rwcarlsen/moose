@@ -23,4 +23,5 @@ AEFVSlopeReconstructionOneD::AEFVSlopeReconstructionOneD(const InputParameters &
 void
 AEFVSlopeReconstructionOneD::reconstructElementSlope()
 {
+  std::cerr << "AEFVSlopeReconstructionOneD::reconstructElementSlope(): elem = " << _current_elem->id() << std::endl;
 }

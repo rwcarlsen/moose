@@ -56,6 +56,8 @@ AEFVMaterial::computeQpProperties()
 
     // clear the temporary vectors
     ugrad.clear();
+
+    std::cerr << "AEFVMaterial::computeQpProperties(): qp = " << _qp << ", u = " << _u[_qp] << " | " << _uc[_qp] << std::endl;
   }
   // calculations only for elemental output
   else if (!_bnd)
