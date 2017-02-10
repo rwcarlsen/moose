@@ -2032,7 +2032,7 @@ FEProblemBase::prepareMaterials(SubdomainID blk_id, THREAD_ID tid)
 void
 FEProblemBase::reinitMaterials(SubdomainID blk_id, THREAD_ID tid, bool swap_stateful)
 {
-  if (_all_materials.hasActiveBlockObjects(blk_id, tid) && this->hasActiveMaterialProperties(tid))
+  if (hasActiveMaterialProperties(tid) && _all_materials.hasActiveBlockObjects(blk_id, tid))
   {
     const Elem * & elem = _assembly[tid]->elem();
     unsigned int n_points = _assembly[tid]->qRule()->n_points();
@@ -2053,7 +2053,7 @@ FEProblemBase::reinitMaterials(SubdomainID blk_id, THREAD_ID tid, bool swap_stat
 void
 FEProblemBase::reinitMaterialsFace(SubdomainID blk_id, THREAD_ID tid, bool swap_stateful)
 {
-  if (_all_materials[Moose::FACE_MATERIAL_DATA].hasActiveBlockObjects(blk_id, tid) && this->hasActiveMaterialProperties(tid))
+  if (hasActiveMaterialProperties(tid) && _all_materials[Moose::FACE_MATERIAL_DATA].hasActiveBlockObjects(blk_id, tid))
   {
     const Elem * & elem = _assembly[tid]->elem();
     unsigned int side = _assembly[tid]->side();
@@ -2075,7 +2075,7 @@ FEProblemBase::reinitMaterialsFace(SubdomainID blk_id, THREAD_ID tid, bool swap_
 void
 FEProblemBase::reinitMaterialsNeighbor(SubdomainID blk_id, THREAD_ID tid, bool swap_stateful)
 {
-  if (_all_materials[Moose::NEIGHBOR_MATERIAL_DATA].hasActiveBlockObjects(blk_id, tid) && this->hasActiveMaterialProperties(tid))
+  if (hasActiveMaterialProperties(tid) && _all_materials[Moose::NEIGHBOR_MATERIAL_DATA].hasActiveBlockObjects(blk_id, tid))
   {
     // NOTE: this will not work with h-adaptivity
     const Elem * & neighbor = _assembly[tid]->neighbor();
@@ -2098,7 +2098,7 @@ FEProblemBase::reinitMaterialsNeighbor(SubdomainID blk_id, THREAD_ID tid, bool s
 void
 FEProblemBase::reinitMaterialsBoundary(BoundaryID boundary_id, THREAD_ID tid, bool swap_stateful)
 {
-  if (_all_materials.hasActiveBoundaryObjects(boundary_id, tid) && this->hasActiveMaterialProperties(tid))
+  if (hasActiveMaterialProperties(tid) && _all_materials.hasActiveBoundaryObjects(boundary_id, tid))
   {
     const Elem * & elem = _assembly[tid]->elem();
     unsigned int side = _assembly[tid]->side();
