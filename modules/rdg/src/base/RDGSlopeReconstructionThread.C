@@ -41,6 +41,8 @@ RDGSlopeReconstructionThread::~RDGSlopeReconstructionThread()
 void
 RDGSlopeReconstructionThread::subdomainChanged()
 {
+  _fe_problem.subdomainSetup(_subdomain, _tid);
+
   std::set<MooseVariable *> needed_moose_vars;
   _sr_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
 
@@ -57,6 +59,7 @@ void
 RDGSlopeReconstructionThread::onElement(const Elem * elem)
 {
   _fe_problem.prepare(elem, _tid);
+  // _fe_problem.reinitElem(elem, _tid);
 
   if (_sr_objects.hasActiveBlockObjects(_subdomain, _tid))
   {

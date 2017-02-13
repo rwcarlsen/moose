@@ -97,7 +97,7 @@ RDGAssembleThread::onElement(const Elem * elem)
         kernel->subProblem().prepareShapes(kernel->variable().number(), _tid);
         kernel->computeJacobian();
       }
-      // kernel->computeResidual();
+      kernel->computeResidual();
     }
   }
 
@@ -151,17 +151,16 @@ RDGAssembleThread::onBoundary(const Elem *elem, unsigned int side, BoundaryID bn
 }
 
 void
-RDGAssembleThread::onInterface(const Elem *elem, unsigned int side, BoundaryID bnd_id)
+RDGAssembleThread::onInterface(const Elem * /*elem*/, unsigned int /*side*/, BoundaryID bnd_id)
 {
-#if 0
   if (_interface_kernels.hasActiveBoundaryObjects(bnd_id, _tid))
   {
-
+#if 0
     // Pointer to the neighbor we are currently working on.
     const Elem * neighbor = elem->neighbor(side);
 
     if (!(neighbor->level() == elem->level()))
-      mooseError("Sorry, interface kernels do not work with mesh adaptivity");
+      mooseError2("Sorry, interface kernels do not work with mesh adaptivity");
 
     if (neighbor->active())
     {
@@ -184,12 +183,12 @@ RDGAssembleThread::onInterface(const Elem *elem, unsigned int side, BoundaryID b
         _fe_problem.addResidualNeighbor(_tid);
       }
     }
-  }
 #endif
+  }
 }
 
 void
-RDGAssembleThread::onInternalSide(const Elem *elem, unsigned int side)
+RDGAssembleThread::onInternalSide(const Elem * elem, unsigned int side)
 {
 #if 1
   if (_dg_kernels.hasActiveBlockObjects(_subdomain, _tid))

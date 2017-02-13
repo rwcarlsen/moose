@@ -57,8 +57,6 @@ SlopeLimitingBase::computeSlopeLimiter()
 {
   dof_id_type elementID = _current_elem->id();
 
-  std::cerr << "SlopeLimitingBase::computeSlopeLimiter(): elem = " << elementID << std::endl;
-
   _lslope[elementID] = limitElementSlope();
 }
 

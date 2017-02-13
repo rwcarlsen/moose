@@ -27,9 +27,6 @@ RDGFluxBC::RDGFluxBC(const InputParameters & parameters) :
 Real
 RDGFluxBC::computeQpResidual()
 {
-  auto & flux = _flux.getFlux();
-  std::cerr << "flux.size() = " << flux.size() << std::endl;
-
   return _flux.getFlux()[_component] * _test[_i][_qp];
 }
 

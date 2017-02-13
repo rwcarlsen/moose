@@ -26,7 +26,7 @@ AEFVSlopeLimitingOneD::AEFVSlopeLimitingOneD(const InputParameters & parameters)
 }
 
 std::vector<RealGradient>
-AEFVSlopeLimitingOneD::limitElementSlope() const
+AEFVSlopeLimitingOneD::limitElementSlope()
 {
   // you should know how many equations you are solving and assign this number
   // e.g. = 1 (for the advection equation)

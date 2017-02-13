@@ -30,8 +30,6 @@ AEFVFreeOutflowBoundaryFlux::~AEFVFreeOutflowBoundaryFlux()
 void
 AEFVFreeOutflowBoundaryFlux::computeFlux()
 {
-  std::cerr << "AEFVFreeOutflowBoundaryFlux::computeFlux()" << std::endl;
-
   unsigned int _qp = 0;
 
   // assemble the input vectors, which are

@@ -29,7 +29,7 @@ public:
   AEFVSlopeLimitingOneD(const InputParameters & parameters);
 
   /// compute the limited slope of the cell
-  virtual std::vector<RealGradient> limitElementSlope() const override;
+  virtual std::vector<RealGradient> limitElementSlope() override;
 
 protected:
 

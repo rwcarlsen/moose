@@ -34,7 +34,7 @@ RDGFlux::computeQpResidual(Moose::DGResidualType type)
 {
   const auto & flux = _flux.getFlux();
 
-  std::cerr << "flux = " << flux[_component] << ", " << _test[_i][_qp] << std::endl;
+  // std::cerr << "flux = " << flux[_component] << ", " << _test[_i][_qp] << std::endl;
 
   // distribute the contribution to the current and neighbor elements
   switch (type)

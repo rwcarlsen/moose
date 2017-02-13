@@ -39,7 +39,7 @@ public:
 
 protected:
   /// compute the slope of the cell
-  virtual std::vector<RealGradient> limitElementSlope() const = 0;
+  virtual std::vector<RealGradient> limitElementSlope() = 0;
 
   virtual void serialize(std::string & serialized_buffer);
   virtual void deserialize(std::vector<std::string> & serialized_buffers);

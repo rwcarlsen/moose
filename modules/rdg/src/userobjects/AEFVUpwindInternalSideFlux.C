@@ -32,8 +32,6 @@ AEFVUpwindInternalSideFlux::~AEFVUpwindInternalSideFlux()
 void
 AEFVUpwindInternalSideFlux::computeFlux()
 {
-  std::cerr << "AEFVUpwindInternalSideFlux::computeFlux()" << std::endl;
-
   unsigned int _qp = 0;
 
   // assemble the input vectors, which are
@@ -44,7 +42,6 @@ AEFVUpwindInternalSideFlux::computeFlux()
 
   calcFlux(_current_side, _current_elem->id(), _neighbor_elem->id(),
            uvec1, uvec2, _normals[_qp], _flux);
-  std::cerr << "flux = " << _flux[0] << std::endl;
 }
 
 
