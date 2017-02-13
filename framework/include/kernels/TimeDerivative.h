@@ -35,6 +35,7 @@ protected:
   virtual Real computeQpJacobian() override;
 
   bool _lumping;
+  const VariableValue & _u_old;
 };
 
 #endif //TIMEDERIVATIVE_H

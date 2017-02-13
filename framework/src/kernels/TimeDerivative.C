@@ -28,20 +28,21 @@ InputParameters validParams<TimeDerivative>()
 
 TimeDerivative::TimeDerivative(const InputParameters & parameters) :
     TimeKernel(parameters),
-    _lumping(getParam<bool>("lumping"))
+    _lumping(getParam<bool>("lumping")),
+    _u_old(_var.slnOld())
 {
 }
 
 Real
 TimeDerivative::computeQpResidual()
 {
-  return _test[_i][_qp]*_u_dot[_qp];
+  return _test[_i][_qp] * _u_old[_qp] / _dt;
 }
 
 Real
 TimeDerivative::computeQpJacobian()
 {
-  return _test[_i][_qp]*_phi[_j][_qp]*_du_dot_du[_qp];
+  return _test[_i][_qp]*_phi[_j][_qp] / _dt;
 }
 
 void
@@ -59,4 +60,3 @@ TimeDerivative::computeJacobian()
   else
     TimeKernel::computeJacobian();
 }
-
