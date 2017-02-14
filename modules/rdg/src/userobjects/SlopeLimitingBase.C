@@ -11,9 +11,6 @@
 #include "libmesh/parallel.h"
 #include "libmesh/parallel_algebra.h"
 
-// Static mutex definition
-Threads::spin_mutex SlopeLimitingBase::_mutex;
-
 template<>
 InputParameters validParams<SlopeLimitingBase>()
 {
@@ -71,7 +68,6 @@ SlopeLimitingBase::threadJoin(const UserObject & y)
 const std::vector<RealGradient> &
 SlopeLimitingBase::getElementSlope(dof_id_type elementid) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos = _lslope.find(elementid);
 
   if (pos == _lslope.end())

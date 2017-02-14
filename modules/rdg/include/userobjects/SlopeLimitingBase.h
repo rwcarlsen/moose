@@ -67,9 +67,6 @@ protected:
 
   /// the neighboring element
   const Elem * & _neighbor_elem;
-
-private:
-  static Threads::spin_mutex _mutex;
 };
 
 #endif
