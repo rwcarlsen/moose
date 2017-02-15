@@ -35,8 +35,8 @@ SlopeReconstructionBase::initialize()
 {
   // ElementLoopUserObject::initialize();
 
-  _rslope.clear();
-  _avars.clear();
+  // _rslope.clear();
+  // _avars.clear();
 }
 
 void

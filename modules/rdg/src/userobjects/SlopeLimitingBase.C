@@ -7,6 +7,7 @@
 
 #include "SlopeLimitingBase.h"
 #include "Assembly.h"
+#include "MooseMesh.h"
 #include <unistd.h>
 #include "libmesh/parallel.h"
 #include "libmesh/parallel_algebra.h"
@@ -41,7 +42,7 @@ SlopeLimitingBase::initialize()
 {
   // ElementLoopUserObject::initialize();
 
-  _lslope.clear();
+  // _lslope.clear();
 }
 
 void
@@ -62,18 +63,13 @@ SlopeLimitingBase::threadJoin(const UserObject & y)
 {
   const SlopeLimitingBase & pps = static_cast<const SlopeLimitingBase &>(y);
 
-  _lslope.insert(pps._lslope.begin(), pps._lslope.end());
+  // _lslope.insert(pps._lslope.begin(), pps._lslope.end());
 }
 
 const std::vector<RealGradient> &
 SlopeLimitingBase::getElementSlope(dof_id_type elementid) const
 {
-  std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos = _lslope.find(elementid);
-
-  if (pos == _lslope.end())
-    mooseError2("Limited slope is not cached for element id '", elementid, "' in ", __FUNCTION__);
-
-  return pos->second;
+  return _lslope.at(elementid);
 }
 
 void
