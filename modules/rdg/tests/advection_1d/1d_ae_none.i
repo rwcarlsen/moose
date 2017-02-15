@@ -11,11 +11,10 @@
   dim = 1
   xmin = 0
   xmax = 1
-  nx = 3
+  nx = 100000
 []
 
 [Problem]
-  kernel_coverage_check = false
   type = RDGProblem
 []
 
@@ -103,10 +102,11 @@
 
 [Executioner]
   type = Transient
-  [./TimeIntegrator]
-    type = ExplicitMidpoint
-  [../]
-  solve_type = 'LINEAR'
+  #[./TimeIntegrator]
+  #  type = ExplicitMidpoint
+  #[../]
+  #solve_type = 'LINEAR'
+  scheme = explicit-euler
 
   l_tol = 1e-4
   nl_rel_tol = 1e-20
@@ -114,7 +114,7 @@
   nl_max_its = 60
 
   start_time = 0.0
-  num_steps = 2
+  num_steps = 1
   dt = 5e-4
   dtmin = 1e-4
 []
