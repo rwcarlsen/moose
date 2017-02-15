@@ -76,7 +76,12 @@ protected:
 
   RDGAssembly _rdg_assembly;
   TransientLinearImplicitSystem & _sys;
+  Real & _dt;
   bool _need_matrix;
+
+  void assembleMassMatrix();
+  void slopeReconstruction();
+  void assembleRHS();
 
   MooseObjectWarehouse<SlopeReconstructionBase> _reconstruction_objects;
   MooseObjectWarehouse<SlopeLimitingBase> _limiting_objects;
