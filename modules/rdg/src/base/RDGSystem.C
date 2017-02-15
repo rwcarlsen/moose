@@ -8,6 +8,7 @@
 #include "RDGSystem.h"
 #include "FEProblem.h"
 #include "TimeIntegrator.h"
+#include "AssembleMassMatrixThread.h"
 #include "RDGAssembleThread.h"
 #include "RDGSlopeReconstructionThread.h"
 #include "libmesh/sparse_matrix.h"
@@ -32,6 +33,7 @@ RDGSystem::RDGSystem(FEProblemBase & fe_problem, const std::string & name)
     _need_matrix(true)
 {
   _sys.attach_assemble_object(_rdg_assembly);
+  _sys.zero_out_matrix_and_rhs = false;
 }
 
 RDGSystem::~RDGSystem()
@@ -82,10 +84,31 @@ RDGSystem::converged()
 void
 RDGSystem::assemble()
 {
+  // mass matrix
+
+  PARALLEL_TRY
+  {
+    Moose::perf_log.push("AssembleMassMatrixThread()", "Execution");
+    if (_need_matrix)
+    {
+      sys().matrix->zero();
+
+      ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
+      AssembleMassMatrixThread amm(_fe_problem, *sys().matrix);
+      Threads::parallel_reduce(elem_range, amm);
+      _need_matrix = false;
+
+      sys().matrix->close();
+    }
+    Moose::perf_log.pop("AssembleMassMatrixThread()", "Execution");
+  }
+  PARALLEL_CATCH;
+
+  // right hand side
+
   residualVector(Moose::KT_TIME).zero();
   residualVector(Moose::KT_NONTIME).zero();
 
-  // residual contributions from the domain
   PARALLEL_TRY
   {
     Moose::perf_log.push("RDGSlopeReconstructionThread()", "Execution");
@@ -99,15 +122,12 @@ RDGSystem::assemble()
 
     Moose::perf_log.push("RDGAssembleThread()", "Execution");
     RDGAssembleThread as(_fe_problem,
-                         _need_matrix ? sys().matrix : NULL,
                          _boundary_flux_objects,
                          _internal_side_flux_objects);
     Threads::parallel_reduce(elem_range, as);
     Moose::perf_log.pop("RDGAssembleThread()", "Execution");
   }
   PARALLEL_CATCH;
-
-  sys().matrix->close();
 
   // gather all contributions to rhs
   residualVector(Moose::KT_TIME).close();
@@ -116,7 +136,4 @@ RDGSystem::assemble()
   sys().rhs->zero();
   _time_integrator->postStep(*sys().rhs);
   sys().rhs->close();
-
-  // FIXME: need to be false, so we form the matrix only once. This is here until we fix libMesh
-  _need_matrix = true;
 }

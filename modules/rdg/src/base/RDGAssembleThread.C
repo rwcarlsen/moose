@@ -23,12 +23,11 @@
 // libmesh includes
 #include "libmesh/threads.h"
 
-RDGAssembleThread::RDGAssembleThread(FEProblemBase & fe_problem, SparseMatrix<Number> * matrix,
+RDGAssembleThread::RDGAssembleThread(FEProblemBase & fe_problem,
                                      const MooseObjectWarehouse<BoundaryFluxBase> & bf_objects,
                                      const MooseObjectWarehouse<InternalSideFluxBase> & isf_objects)
   : ThreadedElementLoop<ConstElemRange>(fe_problem),
     _nl(fe_problem.getNonlinearSystemBase()),
-    _matrix(matrix),
     _num_cached(0),
     _integrated_bcs(_nl.getIntegratedBCWarehouse()),
     _dg_kernels(_nl.getDGKernelWarehouse()),
@@ -43,7 +42,6 @@ RDGAssembleThread::RDGAssembleThread(FEProblemBase & fe_problem, SparseMatrix<Nu
 RDGAssembleThread::RDGAssembleThread(RDGAssembleThread & x, Threads::split split) :
     ThreadedElementLoop<ConstElemRange>(x, split),
     _nl(x._nl),
-    _matrix(x._matrix),
     _num_cached(0),
     _integrated_bcs(x._integrated_bcs),
     _dg_kernels(x._dg_kernels),
@@ -91,14 +89,7 @@ RDGAssembleThread::onElement(const Elem * elem)
   {
     const std::vector<MooseSharedPointer<KernelBase> > & kernels = tk_warehouse.getActiveBlockObjects(_subdomain, _tid);
     for (const auto & kernel : kernels)
-    {
-      if (_matrix != NULL)
-      {
-        kernel->subProblem().prepareShapes(kernel->variable().number(), _tid);
-        kernel->computeJacobian();
-      }
       kernel->computeResidual();
-    }
   }
 
   // const MooseObjectWarehouse<KernelBase> & ntk_warehouse = _nl.getNonTimeKernelWarehouse();
@@ -240,8 +231,6 @@ RDGAssembleThread::onInternalSide(const Elem * elem, unsigned int side)
 void
 RDGAssembleThread::postElement(const Elem * /*elem*/)
 {
-  if (_matrix != NULL)
-    _fe_problem.cacheJacobian(_tid);
   _fe_problem.cacheResidual(_tid);
   _num_cached++;
 
@@ -249,8 +238,6 @@ RDGAssembleThread::postElement(const Elem * /*elem*/)
   {
     Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     _fe_problem.addCachedResidual(_tid);
-    if (_matrix != NULL)
-      _fe_problem.addCachedJacobian(*_matrix, _tid);
   }
 }
 
@@ -258,10 +245,7 @@ void
 RDGAssembleThread::post()
 {
   _fe_problem.clearActiveElementalMooseVariables(_tid);
-
   _fe_problem.addCachedResidual(_tid);
-  if (_matrix != NULL)
-    _fe_problem.addCachedJacobian(*_matrix, _tid);
 }
 
 

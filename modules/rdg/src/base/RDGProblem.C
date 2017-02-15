@@ -47,10 +47,7 @@ RDGProblem::solve()
 {
   Moose::perf_log.push("solve()", "Execution");
 
-  // FIXME: libMesh zeroes out the matrix in assemble(), we need to preserve it
-  // bool need_matrix = !_has_jacobian || !_const_jacobian;
-  // _rdg_sys->needMatrix(!_has_jacobian || !_const_jacobian);
-  _rdg_sys->needMatrix(true);
+  _rdg_sys->needMatrix(!_has_jacobian || !_const_jacobian);
 
   _nl->computeTimeDerivatives();
 
@@ -85,8 +82,6 @@ RDGProblem::addUserObject(std::string user_object_name, const std::string & name
     parameters.set<SubProblem *>("_subproblem") = this;
   }
 
-  std::cerr << "adding UO " << name << std::endl;
-
   for (THREAD_ID tid = 0; tid < libMesh::n_threads(); ++tid)
   {
     // Create the UserObject
@@ -103,10 +98,7 @@ RDGProblem::addUserObject(std::string user_object_name, const std::string & name
     else if (sluo)
       _rdg_sys->_limiting_objects.addObject(sluo, tid);
     else if (bfuo)
-    {
-      std::cerr << "added " << name << std::endl;
       _rdg_sys->_boundary_flux_objects.addObject(bfuo, tid);
-    }
     else if (isfuo)
       _rdg_sys->_internal_side_flux_objects.addObject(isfuo, tid);
     else
