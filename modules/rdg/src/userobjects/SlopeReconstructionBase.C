@@ -8,9 +8,6 @@
 #include "SlopeReconstructionBase.h"
 #include "Assembly.h"
 
-// Static mutex definition
-Threads::spin_mutex SlopeReconstructionBase::_mutex;
-
 template<>
 InputParameters validParams<SlopeReconstructionBase>()
 {
@@ -94,7 +91,6 @@ SlopeReconstructionBase::threadJoin(const UserObject & y)
 const std::vector<RealGradient> &
 SlopeReconstructionBase::getElementSlope(dof_id_type elementid) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<dof_id_type, std::vector<RealGradient> >::const_iterator pos = _rslope.find(elementid);
 
   if (pos == _rslope.end())
@@ -106,7 +102,6 @@ SlopeReconstructionBase::getElementSlope(dof_id_type elementid) const
 const std::vector<Real> &
 SlopeReconstructionBase::getElementAverageValue(dof_id_type elementid) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<dof_id_type, std::vector<Real> >::const_iterator pos = _avars.find(elementid);
 
   if (pos == _avars.end())
@@ -118,7 +113,6 @@ SlopeReconstructionBase::getElementAverageValue(dof_id_type elementid) const
 const std::vector<Real> &
 SlopeReconstructionBase::getBoundaryAverageValue(dof_id_type elementid, unsigned int side) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, unsigned int>, std::vector<Real> >::const_iterator pos =
     _bnd_avars.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
@@ -131,7 +125,6 @@ SlopeReconstructionBase::getBoundaryAverageValue(dof_id_type elementid, unsigned
 const Point &
 SlopeReconstructionBase::getSideCentroid(dof_id_type elementid, dof_id_type neighborid) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, dof_id_type>, Point >::const_iterator pos =
     _side_centroid.find(std::pair<dof_id_type, dof_id_type>(elementid, neighborid));
 
@@ -144,7 +137,6 @@ SlopeReconstructionBase::getSideCentroid(dof_id_type elementid, dof_id_type neig
 const Point &
 SlopeReconstructionBase::getBoundarySideCentroid(dof_id_type elementid, unsigned int side) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, unsigned int>, Point >::const_iterator pos =
     _bnd_side_centroid.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
@@ -157,7 +149,6 @@ SlopeReconstructionBase::getBoundarySideCentroid(dof_id_type elementid, unsigned
 const Point &
 SlopeReconstructionBase::getSideNormal(dof_id_type elementid, dof_id_type neighborid) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, dof_id_type>, Point >::const_iterator pos =
     _side_normal.find(std::pair<dof_id_type, dof_id_type>(elementid, neighborid));
 
@@ -170,7 +161,6 @@ SlopeReconstructionBase::getSideNormal(dof_id_type elementid, dof_id_type neighb
 const Point &
 SlopeReconstructionBase::getBoundarySideNormal(dof_id_type elementid, unsigned int side) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, unsigned int>, Point >::const_iterator pos =
     _bnd_side_normal.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 
@@ -183,7 +173,6 @@ SlopeReconstructionBase::getBoundarySideNormal(dof_id_type elementid, unsigned i
 const Real &
 SlopeReconstructionBase::getSideArea(dof_id_type elementid, dof_id_type neighborid) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, dof_id_type>, Real >::const_iterator pos =
     _side_area.find(std::pair<dof_id_type, dof_id_type>(elementid, neighborid));
 
@@ -196,7 +185,6 @@ SlopeReconstructionBase::getSideArea(dof_id_type elementid, dof_id_type neighbor
 const Real &
 SlopeReconstructionBase::getBoundarySideArea(dof_id_type elementid, unsigned int side) const
 {
-  Threads::spin_mutex::scoped_lock lock(_mutex);
   std::map<std::pair<dof_id_type, unsigned int>, Real >::const_iterator pos =
     _bnd_side_area.find(std::pair<dof_id_type, unsigned int>(elementid, side));
 

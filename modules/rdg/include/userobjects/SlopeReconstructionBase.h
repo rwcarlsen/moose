@@ -112,9 +112,6 @@ protected:
 
   /// flag to indicated if side geometry info is cached
   bool _side_geoinfo_cached;
-
-private:
-  static Threads::spin_mutex _mutex;
 };
 
 #endif
