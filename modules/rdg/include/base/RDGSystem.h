@@ -76,6 +76,7 @@ protected:
 
   RDGAssembly _rdg_assembly;
   TransientLinearImplicitSystem & _sys;
+  const DofMap & _dof_map;
   Real & _dt;
   bool _need_matrix;
 
@@ -83,10 +84,15 @@ protected:
   void slopeReconstruction();
   void assembleRHS();
 
+  std::vector<RealGradient> limitElementSlope(const Elem * elem);
+
   MooseObjectWarehouse<SlopeReconstructionBase> _reconstruction_objects;
   MooseObjectWarehouse<SlopeLimitingBase> _limiting_objects;
   MooseObjectWarehouse<BoundaryFluxBase> _boundary_flux_objects;
   MooseObjectWarehouse<InternalSideFluxBase> _internal_side_flux_objects;
+
+  /// store the updated slopes into this map indexed by element ID
+  std::map<dof_id_type, std::vector<RealGradient> > _lslope;
 
   friend class RDGProblem;
 };

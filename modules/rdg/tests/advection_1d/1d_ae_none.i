@@ -11,7 +11,7 @@
   dim = 1
   xmin = 0
   xmax = 1
-  nx = 100000
+  nx = 100 # 100000
 []
 
 [Problem]
@@ -114,7 +114,7 @@
   nl_max_its = 60
 
   start_time = 0.0
-  num_steps = 1
+  num_steps = 100
   dt = 5e-4
   dtmin = 1e-4
 []
