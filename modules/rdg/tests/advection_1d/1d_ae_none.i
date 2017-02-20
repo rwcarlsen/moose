@@ -11,7 +11,7 @@
   dim = 1
   xmin = 0
   xmax = 1
-  nx = 100 # 100000
+  nx = 1000
 []
 
 [Problem]
@@ -108,15 +108,15 @@
   #solve_type = 'LINEAR'
   scheme = explicit-euler
 
-  l_tol = 1e-4
+  l_tol = 1e-10
   nl_rel_tol = 1e-20
   nl_abs_tol = 1e-8
   nl_max_its = 60
 
   start_time = 0.0
-  num_steps = 100
-  dt = 5e-4
-  dtmin = 1e-4
+  num_steps = 10000
+  dt = 5e-6
+  dtmin = 1e-6
 []
 
 [Outputs]

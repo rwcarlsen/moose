@@ -91,6 +91,15 @@ protected:
   MooseObjectWarehouse<BoundaryFluxBase> _boundary_flux_objects;
   MooseObjectWarehouse<InternalSideFluxBase> _internal_side_flux_objects;
 
+  /// Stored JxW per element
+  std::map<dof_id_type, Real> _elem_JxW;
+  /// Stored element centroids
+  std::map<dof_id_type, Point> _elem_centroid;
+  std::map<dof_id_type, std::vector<dof_id_type> > _dof_indices;
+
+  std::map<std::pair<dof_id_type, unsigned int>, Point> _face_point;
+  std::map<std::pair<dof_id_type, unsigned int>, Point> _normals;
+
   /// store the updated slopes into this map indexed by element ID
   std::map<dof_id_type, std::vector<RealGradient> > _lslope;
 

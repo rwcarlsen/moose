@@ -108,6 +108,15 @@ RDGSystem::assembleMassMatrix()
   const std::vector<Real> & JxW = fe->get_JxW();
   const std::vector<std::vector<Real> > & phi = fe->get_phi();
 
+
+  UniquePtr<FEBase> fe_face (FEBase::build(dim, fe_type));
+  UniquePtr<QBase>  qface (QBase::build(QGAUSS, dim - 1, FIRST));
+  fe_face->attach_quadrature_rule (qface.get());
+
+  const std::vector<Point> & qface_point = fe_face->get_xyz();
+  const std::vector<Point> & normals = fe_face->get_normals();
+
+
   DenseMatrix<Number> Ke;
   Ke.resize(1, 1);
   std::vector<dof_id_type> dof_indices;
@@ -124,7 +133,23 @@ RDGSystem::assembleMassMatrix()
     Ke(0, 0) = JxW[0] * (phi[0][0] * phi[0][0]) / _dt;
     // std::cerr << "Ke = " << Ke(0, 0) << std::endl;
 
+    dof_id_type elem_id = elem->id();
+    _elem_JxW[elem_id] = JxW[0];
+    _elem_centroid[elem_id] = elem->centroid();
+    _dof_indices[elem_id] = dof_indices;
+
     _sys.matrix->add_matrix (Ke, dof_indices);
+
+    for (unsigned int side = 0; side<elem->n_sides(); side++)
+    {
+      std::vector<BoundaryID> boundary_ids = _mesh.getBoundaryIDs(elem, side);
+
+      fe_face->reinit(elem, side);
+
+      std::pair<dof_id_type, unsigned int> key(elem_id, side);
+      _face_point[key] = qface_point[0];
+      _normals[key] = normals[0];
+    }
   }
 }
 
@@ -132,9 +157,11 @@ RDGSystem::assembleMassMatrix()
 std::vector<RealGradient>
 RDGSystem::limitElementSlope(const Elem * elem)
 {
-  std::vector<dof_id_type> dof_indices;
-  std::vector<dof_id_type> neig_dof_indices;
-  _dof_map.dof_indices(elem, dof_indices);
+  dof_id_type elem_id = elem->id();
+
+  const std::vector<dof_id_type> & dof_indices = _dof_indices[elem_id];
+  // _dof_map.dof_indices(elem, dof_indices);
+
 
   // you should know how many equations you are solving and assign this number
   // e.g. = 1 (for the advection equation)
@@ -162,7 +189,7 @@ RDGSystem::limitElementSlope(const Elem * elem)
   std::vector<Real> xc(nsten, 0.);
 
   // the first always stores the current cell
-  xc[0] = elem->centroid()(0);
+  xc[0] = _elem_centroid[elem_id](0);
 
   // array for the cell-average values in the current cell and its neighbors
   std::vector <std::vector<Real> > ucell(nsten, std::vector<Real>(nvars, 0.));
@@ -204,11 +231,12 @@ RDGSystem::limitElementSlope(const Elem * elem)
     {
       const Elem * neig = elem->neighbor(is);
 
-      _dof_map.dof_indices(neig, neig_dof_indices);
+      // _dof_map.dof_indices(neig, neig_dof_indices);
+      const std::vector<dof_id_type> & neig_dof_indices = _dof_indices[neig->id()];
 
       // if (this->hasBlocks(neig->subdomain_id()))
       {
-        xc[in] = neig->centroid()(0);
+        xc[in] = _elem_centroid[neig->id()](0);
 
         // get the cell-average variable in this neighbor cell
         ucell[in][0] = (*_sys.solution)(neig_dof_indices[0]);
@@ -260,29 +288,30 @@ RDGSystem::assembleRHS()
   // std::cerr << "RDGSystem::assembleRHS()" << std::endl;
 
   const MeshBase & mesh = this->mesh().getMesh();
-  const unsigned int dim = mesh.mesh_dimension();
+  // const unsigned int dim = mesh.mesh_dimension();
 
   FEType fe_type(CONSTANT, MONOMIAL);
-  UniquePtr<FEBase> fe(FEBase::build(dim, fe_type));
-  UniquePtr<QBase> qrule(QBase::build(QGAUSS, dim, FIRST));
-  fe->attach_quadrature_rule(qrule.get());
 
-  UniquePtr<FEBase> fe_face (FEBase::build(dim, fe_type));
-  UniquePtr<QBase>  qface (QBase::build(QGAUSS, dim - 1, FIRST));
-  fe_face->attach_quadrature_rule (qface.get());
+  // UniquePtr<FEBase> fe(FEBase::build(dim, fe_type));
+  // UniquePtr<QBase> qrule(QBase::build(QGAUSS, dim, FIRST));
+  // fe->attach_quadrature_rule(qrule.get());
 
-  const std::vector<Real> & JxW = fe->get_JxW();
+  // UniquePtr<FEBase> fe_face (FEBase::build(dim, fe_type));
+  // UniquePtr<QBase>  qface (QBase::build(QGAUSS, dim - 1, FIRST));
+  // fe_face->attach_quadrature_rule (qface.get());
+
+  // const std::vector<Real> & JxW = fe->get_JxW();
   // const std::vector<std::vector<Real> > & phi = fe->get_phi();
 
   // const std::vector<Real> & JxW = fe_face->get_JxW();
-  const std::vector<Point> & qface_point = fe_face->get_xyz();
-  const std::vector<Point> & normals = fe_face->get_normals();
+  // const std::vector<Point> & qface_point = fe_face->get_xyz();
+  // const std::vector<Point> & normals = fe_face->get_normals();
 
   DenseVector<Number> rhs;
   rhs.resize(2);
 
-  std::vector<dof_id_type> dof_indices;
-  std::vector<dof_id_type> neig_dof_indices;
+  // std::vector<dof_id_type> dof_indices;
+  // std::vector<dof_id_type> neig_dof_indices;
 
   std::vector<dof_id_type> dofs;
   dofs.resize(2);
@@ -293,16 +322,17 @@ RDGSystem::assembleRHS()
     const Elem * elem = *el;
     const dof_id_type elem_id = elem->id();
 
-    fe->reinit(elem);
+    // fe->reinit(elem);
 
-    Point centroid = elem->centroid();
+    Point centroid = _elem_centroid[elem_id];
 
-    _dof_map.dof_indices(elem, dof_indices);
+    // _dof_map.dof_indices(elem, dof_indices);
+    const std::vector<dof_id_type> & dof_indices = _dof_indices[elem_id];
     dofs[0] = dof_indices[0];
 
     Real u_old = _sys.old_solution(dof_indices[0]);
 
-    rhs(0) = JxW[0] * (u_old / _dt);
+    rhs(0) = _elem_JxW[elem_id] * (u_old / _dt);
     // std::cerr << "u_old / dt = " << rhs(0) << std::endl;
     _sys.rhs->add_vector(rhs, dof_indices);
 
@@ -318,16 +348,19 @@ RDGSystem::assembleRHS()
     {
       std::vector<BoundaryID> boundary_ids = _mesh.getBoundaryIDs(elem, side);
 
-      fe_face->reinit(elem, side);
+      // fe_face->reinit(elem, side);
 
-      const Point & dwave = normals[0];
+      std::pair<dof_id_type, unsigned int> key(elem_id, side);
+
+      const Point & dwave = _normals[key];
+      const Point & face_point = _face_point[key];
 
       // unsigned int nvars = 1;
 
       // std::vector<RealGradient> ugrad(nvars, RealGradient(0., 0., 0.));
       RealGradient dvec;
 
-      dvec = qface_point[0] - centroid;
+      dvec = face_point - centroid;
       // calculate the variable at face center
       Real uvec1 = uc + ugrad[0] * dvec;
 
@@ -378,7 +411,8 @@ RDGSystem::assembleRHS()
         // if ((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) || (neighbor->level() < elem->level()))
         if (elem_id < neighbor_id)
         {
-          _dof_map.dof_indices(neighbor, neig_dof_indices);
+          // _dof_map.dof_indices(neighbor, neig_dof_indices);
+          const std::vector<dof_id_type> & neig_dof_indices = _dof_indices[neighbor_id];
           dofs[1] = neig_dof_indices[0];
 
           // unsigned int nvars = 1;
@@ -396,7 +430,7 @@ RDGSystem::assembleRHS()
 
           // neighbor
           ugrad = _lslope[neighbor_id];
-          dvec = qface_point[0] - neighbor->centroid();
+          dvec = face_point - _elem_centroid[neighbor->id()];
           un = (*_sys.solution)(neig_dof_indices[0]);
           Real uvec2 = un + ugrad[0] * dvec;
 
