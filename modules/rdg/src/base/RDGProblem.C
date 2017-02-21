@@ -49,7 +49,7 @@ RDGProblem::solve()
 
   _rdg_sys->needMatrix(!_has_jacobian || !_const_jacobian);
 
-  _nl->computeTimeDerivatives();
+  // _nl->computeTimeDerivatives();
 
   if (_solve)
   {

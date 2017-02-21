@@ -103,6 +103,15 @@ protected:
   /// store the updated slopes into this map indexed by element ID
   std::map<dof_id_type, std::vector<RealGradient> > _lslope;
 
+  DenseVector<Number> _rhs;
+  std::vector<dof_id_type> _dofs;
+  Point _centroid;
+  RealGradient _dvec;
+
+  RealVectorValue _uadv1;
+  RealVectorValue _uadv2;
+
+
   friend class RDGProblem;
 };
 

@@ -35,10 +35,16 @@ RDGSystem::RDGSystem(FEProblemBase & fe_problem, const std::string & name)
     _sys(fe_problem.es().get_system<TransientLinearImplicitSystem>(name)),
     _dof_map(_sys.get_dof_map()),
     _dt(_fe_problem.dt()),
-    _need_matrix(true)
+    _need_matrix(true),
+    _uadv1(1.0, 1.0, 1.0),
+    _uadv2(1.0, 1.0, 1.0)
+
 {
   _sys.attach_assemble_object(_rdg_assembly);
   _sys.zero_out_matrix_and_rhs = false;
+
+  _rhs.resize(2);
+  _dofs.resize(2);
 }
 
 RDGSystem::~RDGSystem()
@@ -53,10 +59,12 @@ RDGSystem::solve()
   _current_nl_its = 0;
 
   // Initialize the solution vector using a predictor and known values from nodal bcs
-  setInitialSolution();
+  // setInitialSolution();
 
-  _time_integrator->solve();
-  _time_integrator->postSolve();
+  // _time_integrator->solve();
+  // _time_integrator->postSolve();
+
+  system().solve();
 
   // std::cerr << "rhs = " << std::endl;
   // _sys.rhs->print(std::cerr);
@@ -290,7 +298,7 @@ RDGSystem::assembleRHS()
   const MeshBase & mesh = this->mesh().getMesh();
   // const unsigned int dim = mesh.mesh_dimension();
 
-  FEType fe_type(CONSTANT, MONOMIAL);
+  // FEType fe_type(CONSTANT, MONOMIAL);
 
   // UniquePtr<FEBase> fe(FEBase::build(dim, fe_type));
   // UniquePtr<QBase> qrule(QBase::build(QGAUSS, dim, FIRST));
@@ -307,47 +315,41 @@ RDGSystem::assembleRHS()
   // const std::vector<Point> & qface_point = fe_face->get_xyz();
   // const std::vector<Point> & normals = fe_face->get_normals();
 
-  DenseVector<Number> rhs;
-  rhs.resize(2);
+  // DenseVector<Number> rhs;
 
   // std::vector<dof_id_type> dof_indices;
   // std::vector<dof_id_type> neig_dof_indices;
-
-  std::vector<dof_id_type> dofs;
-  dofs.resize(2);
 
   auto el_end = mesh.active_local_elements_end();
   for (auto el = mesh.active_local_elements_begin(); el != el_end; ++el)
   {
     const Elem * elem = *el;
-    const dof_id_type elem_id = elem->id();
+    const dof_id_type & elem_id = elem->id();
 
     // fe->reinit(elem);
 
-    Point centroid = _elem_centroid[elem_id];
+    _centroid = _elem_centroid[elem_id];
 
     // _dof_map.dof_indices(elem, dof_indices);
     const std::vector<dof_id_type> & dof_indices = _dof_indices[elem_id];
-    dofs[0] = dof_indices[0];
+    _dofs[0] = dof_indices[0];
 
-    Real u_old = _sys.old_solution(dof_indices[0]);
+    const Real & u_old = _sys.old_solution(dof_indices[0]);
 
-    rhs(0) = _elem_JxW[elem_id] * (u_old / _dt);
-    // std::cerr << "u_old / dt = " << rhs(0) << std::endl;
-    _sys.rhs->add_vector(rhs, dof_indices);
+    _rhs(0) = _elem_JxW[elem_id] * (u_old / _dt);
+    // std::cerr << "u_old / dt = " << _rhs(0) << std::endl;
+    // _sys.rhs->add_vector(_rhs, dof_indices);
+    _sys.rhs->add(dof_indices[0], _rhs(0));
 
 
-    unsigned int nvars = 1;
+    // unsigned int nvars = 1;
 
-    std::vector<RealGradient> ugrad(nvars, RealGradient(0., 0., 0.));
-    RealGradient dvec;
-    Real uc = (*_sys.solution)(dof_indices[0]);
-    ugrad = _lslope[elem_id];
+    // std::vector<RealGradient> ugrad(nvars, RealGradient(0., 0., 0.));
+    const Real & uc = (*_sys.solution)(dof_indices[0]);
+    const std::vector<RealGradient> & ugrad = _lslope[elem_id];
 
-    for (unsigned int side = 0; side<elem->n_sides(); side++)
+    for (unsigned int side = 0; side < elem->n_sides(); side++)
     {
-      std::vector<BoundaryID> boundary_ids = _mesh.getBoundaryIDs(elem, side);
-
       // fe_face->reinit(elem, side);
 
       std::pair<dof_id_type, unsigned int> key(elem_id, side);
@@ -358,15 +360,16 @@ RDGSystem::assembleRHS()
       // unsigned int nvars = 1;
 
       // std::vector<RealGradient> ugrad(nvars, RealGradient(0., 0., 0.));
-      RealGradient dvec;
 
-      dvec = face_point - centroid;
+      _dvec = face_point - _centroid;
       // calculate the variable at face center
-      Real uvec1 = uc + ugrad[0] * dvec;
+      Real uvec1 = uc + ugrad[0] * _dvec;
 
-      if (boundary_ids.size() > 0)
-        for (std::vector<BoundaryID>::iterator it = boundary_ids.begin(); it != boundary_ids.end(); ++it)
-        {
+      if (elem->neighbor(side) == NULL)
+      {
+      // if (boundary_ids.size() > 0)
+        // for (std::vector<BoundaryID>::iterator it = boundary_ids.begin(); it != boundary_ids.end(); ++it)
+        // {
           // onBoundary(elem, side, *it);
 
           // unsigned int nvars = 1;
@@ -386,34 +389,35 @@ RDGSystem::assembleRHS()
           //   const Point & dwave = normals[0];
 
             // assume the velocity vector is constant, e.g. = (1., 1., 1.)
-            RealVectorValue uadv1(1.0, 1.0, 1.0);
+            // RealVectorValue uadv1(1.0, 1.0, 1.0);
 
             // finally calculate the flux
-            Real flux = (uadv1 * dwave) * uvec1;
+            Real flux = (_uadv1 * dwave) * uvec1;
 
-            rhs(0) = -flux * 1;
+            _rhs(0) = -flux * 1;
 
             // std::cerr << " BF: e=" << elem_id << ", (" << side <<"), u1=(" << uvec1 <<"), flux=(" << flux << "), normal=(" << dwave(0) << ")\n";
 
-            _sys.rhs->add_vector(rhs, dof_indices);
+            // _sys.rhs->add_vector(_rhs, dof_indices);
+            _sys.rhs->add(dof_indices[0], _rhs(0));
 
           // }
-        }
-
-      if (elem->neighbor(side) != NULL)
+        // }
+      }
+      else
       {
         // Pointer to the neighbor we are currently working on.
         const Elem * neighbor = elem->neighbor(side);
 
         // Get the global id of the element and the neighbor
-        const dof_id_type neighbor_id = neighbor->id();
+        const dof_id_type & neighbor_id = neighbor->id();
 
         // if ((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) || (neighbor->level() < elem->level()))
         if (elem_id < neighbor_id)
         {
           // _dof_map.dof_indices(neighbor, neig_dof_indices);
           const std::vector<dof_id_type> & neig_dof_indices = _dof_indices[neighbor_id];
-          dofs[1] = neig_dof_indices[0];
+          _dofs[1] = neig_dof_indices[0];
 
           // unsigned int nvars = 1;
 
@@ -429,22 +433,22 @@ RDGSystem::assembleRHS()
           // Real uvec1 = uc + ugrad[0] * dvec;
 
           // neighbor
-          ugrad = _lslope[neighbor_id];
-          dvec = face_point - _elem_centroid[neighbor->id()];
+          const std::vector<RealGradient> & neig_ugrad = _lslope[neighbor_id];
+          _dvec = face_point - _elem_centroid[neighbor->id()];
           un = (*_sys.solution)(neig_dof_indices[0]);
-          Real uvec2 = un + ugrad[0] * dvec;
+          Real uvec2 = un + neig_ugrad[0] * _dvec;
 
 
           // const Point & dwave = normals[0];
 
-          // assume a constant velocity on the left
-          RealVectorValue uadv1(1.0, 1.0, 1.0);
-          // assume a constant velocity on the right
-          RealVectorValue uadv2(1.0, 1.0, 1.0);
+          // // assume a constant velocity on the left
+          // RealVectorValue uadv1(1.0, 1.0, 1.0);
+          // // assume a constant velocity on the right
+          // RealVectorValue uadv2(1.0, 1.0, 1.0);
 
           // normal velocity on the left and right
-          Real vdon1 = uadv1 * dwave;
-          Real vdon2 = uadv2 * dwave;
+          Real vdon1 = _uadv1 * dwave;
+          Real vdon2 = _uadv2 * dwave;
 
           // calculate the so-called a^plus and a^minus
           Real aplus = 0.5 * (vdon1 + std::abs(vdon1));
@@ -453,12 +457,14 @@ RDGSystem::assembleRHS()
           // finally calculate the flux
           Real flux = aplus * uvec1 + amins * uvec2;
 
-          rhs(0) = -flux * 1;
-          rhs(1) =  flux * 1;
+          _rhs(0) = -flux * 1;
+          _rhs(1) =  flux * 1;
 
           // std::cerr << "ISF: e=" << elem_id << ", (" << side <<"), n=" << neighbor_id << ", u1=(" << uvec1 <<"), u2=(" << uvec2 << "), flux=(" << flux << ")\n";
 
-          _sys.rhs->add_vector(rhs, dofs);
+          // _sys.rhs->add_vector(_rhs, _dofs);
+          _sys.rhs->add(dof_indices[0], _rhs(0));
+          _sys.rhs->add(neig_dof_indices[0], _rhs(1));
         }
       }
     } // sides
@@ -474,7 +480,7 @@ RDGSystem::assemble()
   {
     PARALLEL_TRY
     {
-      Moose::perf_log.push("Assemble mass matrix", "Execution");
+      // Moose::perf_log.push("Assemble mass matrix", "Execution");
       sys().matrix->zero();
 
       assembleMassMatrix();
@@ -482,7 +488,7 @@ RDGSystem::assemble()
 
       sys().matrix->close();
       // sys().matrix->print(std::cerr);
-      Moose::perf_log.pop("Assemble mass matrix", "Execution");
+      // Moose::perf_log.pop("Assemble mass matrix", "Execution");
     }
     PARALLEL_CATCH;
   }

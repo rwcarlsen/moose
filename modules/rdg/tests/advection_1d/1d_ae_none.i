@@ -122,7 +122,13 @@
 [Outputs]
   [./exodus]
     type = Exodus
-      file_base = 1d_ae_none
+    file_base = 1d_ae_none
+    execute_on = 'initial final'
   [../]
   print_perf_log = true
+  #console = false
+  [./console]
+    type = Console
+    outlier_variable_norms = false
+  [../]
 []
