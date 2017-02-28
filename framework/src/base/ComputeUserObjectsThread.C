@@ -94,71 +94,71 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
   }
 
   // UserObject Jacobians
-  if (_fe_problem.currentlyComputingJacobian())
-    if (_elemental_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+  if (_fe_problem.currentlyComputingJacobian()
+      && _elemental_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+  {
+    // Prepare shape functions for ShapeElementUserObjects
+    std::vector<MooseVariable *> jacobian_moose_vars = _fe_problem.getUserObjectJacobianVariables(_tid);
+    for (auto & jvar : jacobian_moose_vars)
     {
-      // Prepare shape functions for ShapeElementUserObjects
-      std::vector<MooseVariable *> jacobian_moose_vars = _fe_problem.getUserObjectJacobianVariables(_tid);
-      for (auto & jvar : jacobian_moose_vars)
+      unsigned int jvar_id = jvar->number();
+      std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
+
+      _fe_problem.prepareShapes(jvar_id, _tid);
+
+      const auto & e_objects = _elemental_user_objects.getActiveBlockObjects(_subdomain, _tid);
+      for (const auto & uo : e_objects)
       {
-        unsigned int jvar_id = jvar->number();
-        std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
-
-        _fe_problem.prepareShapes(jvar_id, _tid);
-
-        const auto & e_objects = _elemental_user_objects.getActiveBlockObjects(_subdomain, _tid);
-        for (const auto & uo : e_objects)
-        {
-          std::shared_ptr<ShapeElementUserObject> shape_element_uo = std::dynamic_pointer_cast<ShapeElementUserObject>(uo);
-          if (shape_element_uo)
-            shape_element_uo->executeJacobianWrapper(jvar_id, dof_indices);
-        }
+        auto shape_element_uo = std::dynamic_pointer_cast<ShapeElementUserObject>(uo);
+        if (shape_element_uo)
+          shape_element_uo->executeJacobianWrapper(jvar_id, dof_indices);
       }
     }
+  }
 }
 
 void
 ComputeUserObjectsThread::onBoundary(const Elem *elem, unsigned int side, BoundaryID bnd_id)
 {
-  if (_side_user_objects.hasActiveBoundaryObjects(bnd_id, _tid))
+  if (!_side_user_objects.hasActiveBoundaryObjects(bnd_id, _tid))
+    return;
+
+  _fe_problem.reinitElemFace(elem, side, bnd_id, _tid);
+
+  // Set up Sentinel class so that, even if reinitMaterialsFace() throws, we
+  // still remember to swap back during stack unwinding.
+  SwapBackSentinel sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
+  _fe_problem.reinitMaterialsFace(_subdomain, _tid);
+  _fe_problem.reinitMaterialsBoundary(bnd_id, _tid);
+
+  _fe_problem.setCurrentBoundaryID(bnd_id);
+
+  const auto & objects = _side_user_objects.getActiveBoundaryObjects(bnd_id, _tid);
+  for (const auto & uo : objects)
+    uo->execute();
+
+  // UserObject Jacobians
+  if (_fe_problem.currentlyComputingJacobian())
   {
-    _fe_problem.reinitElemFace(elem, side, bnd_id, _tid);
-
-    // Set up Sentinel class so that, even if reinitMaterialsFace() throws, we
-    // still remember to swap back during stack unwinding.
-    SwapBackSentinel sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
-    _fe_problem.reinitMaterialsFace(_subdomain, _tid);
-    _fe_problem.reinitMaterialsBoundary(bnd_id, _tid);
-
-    _fe_problem.setCurrentBoundaryID(bnd_id);
-
-    const auto & objects = _side_user_objects.getActiveBoundaryObjects(bnd_id, _tid);
-    for (const auto & uo : objects)
-      uo->execute();
-
-    // UserObject Jacobians
-    if (_fe_problem.currentlyComputingJacobian())
+    // Prepare shape functions for ShapeSideUserObjects
+    std::vector<MooseVariable *> jacobian_moose_vars = _fe_problem.getUserObjectJacobianVariables(_tid);
+    for (auto & jvar : jacobian_moose_vars)
     {
-      // Prepare shape functions for ShapeSideUserObjects
-      std::vector<MooseVariable *> jacobian_moose_vars = _fe_problem.getUserObjectJacobianVariables(_tid);
-      for (auto & jvar : jacobian_moose_vars)
-      {
-        unsigned int jvar_id = jvar->number();
-        std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
+      unsigned int jvar_id = jvar->number();
+      std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
 
-        _fe_problem.prepareFaceShapes(jvar_id, _tid);
-;
-        for (const auto & uo : objects)
-        {
-          std::shared_ptr<ShapeSideUserObject> shape_side_uo = std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
-          if (shape_side_uo)
-            shape_side_uo->executeJacobianWrapper(jvar_id, dof_indices);
-        }
+      _fe_problem.prepareFaceShapes(jvar_id, _tid);
+
+      for (const auto & uo : objects)
+      {
+        auto shape_side_uo = std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
+        if (shape_side_uo)
+          shape_side_uo->executeJacobianWrapper(jvar_id, dof_indices);
       }
     }
-
-    _fe_problem.setCurrentBoundaryID(Moose::INVALID_BOUNDARY_ID);
   }
+
+  _fe_problem.setCurrentBoundaryID(Moose::INVALID_BOUNDARY_ID);
 }
 
 void
@@ -172,31 +172,29 @@ ComputeUserObjectsThread::onInternalSide(const Elem *elem, unsigned int side)
     elem_id = elem->id(),
     neighbor_id = neighbor->id();
 
-  if (_internal_side_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+  if (!_internal_side_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+    return;
+  if (!((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) || (neighbor->level() < elem->level())))
+    return;
+
+  _fe_problem.prepareFace(elem, _tid);
+  _fe_problem.reinitNeighbor(elem, side, _tid);
+
+  // Set up Sentinels so that, even if one of the reinitMaterialsXXX() calls throws, we
+  // still remember to swap back during stack unwinding.
+  SwapBackSentinel face_sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
+  _fe_problem.reinitMaterialsFace(elem->subdomain_id(), _tid);
+
+  SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
+  _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
+
+  const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
+  for (const auto & uo : objects)
   {
-    if ((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) || (neighbor->level() < elem->level()))
-    {
-      _fe_problem.prepareFace(elem, _tid);
-      _fe_problem.reinitNeighbor(elem, side, _tid);
-
-      // Set up Sentinels so that, even if one of the reinitMaterialsXXX() calls throws, we
-      // still remember to swap back during stack unwinding.
-      SwapBackSentinel face_sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
-      _fe_problem.reinitMaterialsFace(elem->subdomain_id(), _tid);
-
-      SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
-      _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
-
-      const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
-      for (const auto & uo : objects)
-      {
-        if (!uo->blockRestricted())
-          uo->execute();
-
-        else if (uo->hasBlocks(neighbor->subdomain_id()))
-          uo->execute();
-      }
-    }
+    if (!uo->blockRestricted())
+      uo->execute();
+    else if (uo->hasBlocks(neighbor->subdomain_id()))
+      uo->execute();
   }
 }
 
