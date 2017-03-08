@@ -153,7 +153,7 @@ The following options may be passed to control how the output is formatted.
 | label                | True    | Include a label with the filename before the code content block. |
 | overflow-y           | Scroll  | The action to take when the text overflow the html container (see [overflow-y](http://www.w3schools.com/cssref/css3_pr_overflow-y.asp)). |
 | max-height           | 500px   | The maximum height of the code window (see [max-height](http://www.w3schools.com/cssref/pr_dim_max-height.asp)). |
-| strip-extra-newlines | True   | Remove excessive newlines from the included code. |
+| strip-extra-newlines | True    | Remove excessive newlines from the included code. |
 
 ---
 
