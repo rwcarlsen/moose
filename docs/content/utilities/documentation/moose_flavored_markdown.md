@@ -88,10 +88,10 @@ You can include complete files from the repository using the `!text` syntax. For
 includes the complete code as shown.
 
 ```markdown
-!text framework/src/kernels/Diffusion.C max-height=200px
+!text framework/src/kernels/Diffusion.C max-height=200px overflow-y=scroll
 ```
 
-!text framework/src/kernels/Diffusion.C max-height=200px
+!text framework/src/kernels/Diffusion.C max-height=200px overflow-y=scroll
 
 ### Single Line Match
 It is possible to show a single line of a file by a snippet that allows the line to be located within

@@ -26,9 +26,9 @@ values in the above mentioned functions:
 * `_u`, `_grad_u`: value and gradient of the variable this Kernel operates on;
   indexed by `_qp` (i.e. `_u[_qp]`).
 * `_test`, `_grad_test`: value ($\psi$) and gradient ($\nabla \psi$) of the
-  test functions at the q-points; indexed by `_i` and then `_qp` (i.e. `_test[_i][_qp]`).
+  test functions at the q-points; indexed by `_i` and then `_qp` (i.e. ``_test[_i][_qp]``).
 * `_phi`, `_grad_phi`: value ($\phi$) and gradient ($\nabla \phi$) of the
-    trial functions at the q-points; indexed by `_j` and then `_qp` (i.e. `_phi[_j][_qp]`).
+    trial functions at the q-points; indexed by `_j` and then `_qp` (i.e. ``_phi[_j][_qp]``).
 * `_q_point`: XYZ coordinates of the current quadrature point.
 * `_current_elem`: pointer to the current element being operated on.
 
@@ -60,9 +60,9 @@ $$ (\nabla \phi_j, \nabla \psi_i)$$
 
 The diffusion kernel header and implementation files are:
 
-!text framework/src/kernels/Diffusion.h max-height=400px
+!text framework/include/kernels/Diffusion.h max-height=400px overflow-y=scroll
 
-!text framework/src/kernels/Diffusion.C max-height=400px
+!text framework/src/kernels/Diffusion.C max-height=400px overflow-y=scroll
 
 Before a custom physics kernel is available for use, it must be registered.
 This is done in e.g. `src/base/YourApp.C` for the YourApp application.
