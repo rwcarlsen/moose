@@ -586,6 +586,9 @@ protected:
   friend class NodeFaceConstraint;
   friend class ValueThresholdMarker;
   friend class ValueRangeMarker;
+
+private:
+  void resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs);
 };
 
 #endif /* MOOSEVARIABLE_H */

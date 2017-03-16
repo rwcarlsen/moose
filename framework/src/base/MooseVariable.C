@@ -846,24 +846,17 @@ MooseVariable::restoreUnperturbedElemValues()
 }
 
 void
-MooseVariable::computeElemValues()
+MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs)
 {
-
-  bool is_transient = _subproblem.isTransient();
-  unsigned int nqp = _qrule->n_points();
-
   _u.resize(nqp);
   _grad_u.resize(nqp);
 
   if (_need_second)
     _second_u.resize(nqp);
-
   if (_need_u_previous_nl)
     _u_previous_nl.resize(nqp);
-
   if (_need_grad_previous_nl)
     _grad_u_previous_nl.resize(nqp);
-
   if (_need_second_previous_nl)
     _second_u_previous_nl.resize(nqp);
 
@@ -874,22 +867,29 @@ MooseVariable::computeElemValues()
 
     if (_need_u_old)
       _u_old.resize(nqp);
-
     if (_need_u_older)
       _u_older.resize(nqp);
-
     if (_need_grad_old)
       _grad_u_old.resize(nqp);
-
     if (_need_grad_older)
       _grad_u_older.resize(nqp);
-
     if (_need_second_old)
       _second_u_old.resize(nqp);
-
     if (_need_second_older)
       _second_u_older.resize(nqp);
+
+    if (_need_nodal_u_old)
+      _nodal_u_old.resize(num_dofs);
+    if (_need_nodal_u_older)
+      _nodal_u_older.resize(num_dofs);
+    if (_need_nodal_u_dot)
+      _nodal_u_dot.resize(num_dofs);
   }
+
+  if (_need_nodal_u)
+    _nodal_u.resize(num_dofs);
+  if (_need_nodal_u_previous_nl)
+    _nodal_u_previous_nl.resize(num_dofs);
 
   for (unsigned int i = 0; i < nqp; ++i)
   {
@@ -932,24 +932,117 @@ MooseVariable::computeElemValues()
         _second_u_older[i] = 0;
     }
   }
+}
 
-  unsigned int num_dofs = _dof_indices.size();
+#define LOOP1_DOF_MAIN                                                                             \
+  idx = _dof_indices[i];                                                                           \
+  soln_local = current_solution(idx);                                                              \
+                                                                                                   \
+  if (_need_nodal_u)                                                                               \
+    _nodal_u[i] = soln_local;                                                                      \
+                                                                                                   \
+  if (_need_u_previous_nl || _need_grad_previous_nl || _need_second_previous_nl ||                 \
+      _need_nodal_u_previous_nl)                                                                   \
+    soln_previous_nl_local = (*solution_prev_nl)(idx);                                             \
+                                                                                                   \
+  if (_need_nodal_u_previous_nl)                                                                   \
+    _nodal_u_previous_nl[i] = soln_previous_nl_local;
 
-  if (_need_nodal_u)
-    _nodal_u.resize(num_dofs);
+#define LOOP2_DOF_IS_TRANS                                                                         \
+  if (_need_u_old || _need_grad_old || _need_second_old || _need_nodal_u_old)                      \
+    soln_old_local = solution_old(idx);                                                            \
+                                                                                                   \
+  if (_need_u_older || _need_grad_older || _need_second_older || _need_nodal_u_older)              \
+    soln_older_local = solution_older(idx);                                                        \
+                                                                                                   \
+  if (_need_nodal_u_old)                                                                           \
+    _nodal_u_old[i] = soln_old_local;                                                              \
+  if (_need_nodal_u_older)                                                                         \
+    _nodal_u_older[i] = soln_older_local;                                                          \
+                                                                                                   \
+  u_dot_local = u_dot(idx);                                                                        \
+  if (_need_nodal_u_dot)                                                                           \
+    _nodal_u_dot[i] = u_dot_local;
 
-  if (_need_nodal_u_previous_nl)
-    _nodal_u_previous_nl.resize(num_dofs);
+#define LOOP3_DOF_QP_MAIN                                                                          \
+  phi_local = _phi[i][qp];                                                                         \
+  dphi_qp = &_grad_phi[i][qp];                                                                     \
+                                                                                                   \
+  grad_u_qp = &_grad_u[qp];                                                                        \
+                                                                                                   \
+  if (_need_grad_previous_nl)                                                                      \
+    grad_u_previous_nl_qp = &_grad_u_previous_nl[qp];
 
-  if (is_transient)
-  {
-    if (_need_nodal_u_old)
-      _nodal_u_old.resize(num_dofs);
-    if (_need_nodal_u_older)
-      _nodal_u_older.resize(num_dofs);
-    if (_need_nodal_u_dot)
-      _nodal_u_dot.resize(num_dofs);
+#define LOOP4_DOF_QP_IS_TRANS                                                                      \
+  if (_need_grad_old)                                                                              \
+    grad_u_old_qp = &_grad_u_old[qp];                                                              \
+                                                                                                   \
+  if (_need_grad_older)                                                                            \
+    grad_u_older_qp = &_grad_u_older[qp];
+
+#define LOOP5_DOF_QP_SECOND_OR_SECOND_OLD_OR_SECOND_OLDER_OR_SECOND_PREVIOUS_NL                    \
+  d2phi_local = &(*_second_phi)[i][qp];                                                            \
+                                                                                                   \
+  if (_need_second)                                                                                \
+  {                                                                                                \
+    second_u_qp = &_second_u[qp];                                                                  \
+    second_u_qp->add_scaled(*d2phi_local, soln_local);                                             \
+  }                                                                                                \
+                                                                                                   \
+  if (_need_second_previous_nl)                                                                    \
+  {                                                                                                \
+    second_u_previous_nl_qp = &_second_u_previous_nl[qp];                                          \
+    second_u_previous_nl_qp->add_scaled(*d2phi_local, soln_previous_nl_local);                     \
+  }                                                                                                \
+                                                                                                   \
+  if (is_transient)                                                                                \
+  {                                                                                                \
+    if (_need_second_old)                                                                          \
+      second_u_old_qp = &_second_u_old[qp];                                                        \
+                                                                                                   \
+    if (_need_second_older)                                                                        \
+      second_u_older_qp = &_second_u_older[qp];                                                    \
   }
+
+#define LOOP6_DOF_QP_MAIN                                                                          \
+  _u[qp] += phi_local * soln_local;                                                                \
+                                                                                                   \
+  grad_u_qp->add_scaled(*dphi_qp, soln_local);                                                     \
+                                                                                                   \
+  if (_need_u_previous_nl)                                                                         \
+    _u_previous_nl[qp] += phi_local * soln_previous_nl_local;                                      \
+  if (_need_grad_previous_nl)                                                                      \
+    grad_u_previous_nl_qp->add_scaled(*dphi_qp, soln_previous_nl_local);
+
+#define LOOP7_DOF_QP_IS_TRANS                                                                      \
+  _u_dot[qp] += phi_local * u_dot_local;                                                           \
+  _du_dot_du[qp] = du_dot_du;                                                                      \
+                                                                                                   \
+  if (_need_u_old)                                                                                 \
+    _u_old[qp] += phi_local * soln_old_local;                                                      \
+                                                                                                   \
+  if (_need_u_older)                                                                               \
+    _u_older[qp] += phi_local * soln_older_local;                                                  \
+                                                                                                   \
+  if (_need_grad_old)                                                                              \
+    grad_u_old_qp->add_scaled(*dphi_qp, soln_old_local);                                           \
+                                                                                                   \
+  if (_need_grad_older)                                                                            \
+    grad_u_older_qp->add_scaled(*dphi_qp, soln_older_local);                                       \
+                                                                                                   \
+  if (_need_second_old)                                                                            \
+    second_u_old_qp->add_scaled(*d2phi_local, soln_old_local);                                     \
+                                                                                                   \
+  if (_need_second_older)                                                                          \
+    second_u_older_qp->add_scaled(*d2phi_local, soln_older_local);
+
+void
+MooseVariable::computeElemValues()
+{
+  bool is_transient = _subproblem.isTransient();
+  unsigned int nqp = _qrule->n_points();
+  unsigned int num_dofs = _dof_indices.size();
+  resizeAll(nqp, is_transient, num_dofs);
 
   const NumericVector<Real> & current_solution = *_sys.currentSolution();
   const NumericVector<Real> & solution_old = _sys.solutionOld();
@@ -981,118 +1074,66 @@ MooseVariable::computeElemValues()
   RealTensor * second_u_older_qp = NULL;
   RealTensor * second_u_previous_nl_qp = NULL;
 
-  for (unsigned int i = 0; i < num_dofs; i++)
+  bool second_cond =
+      _need_second || _need_second_old || _need_second_older || _need_second_previous_nl;
+  if (is_transient && !second_cond)
   {
-    idx = _dof_indices[i];
-    soln_local = current_solution(idx);
-
-    if (_need_nodal_u)
-      _nodal_u[i] = soln_local;
-
-    if (_need_u_previous_nl || _need_grad_previous_nl || _need_second_previous_nl ||
-        _need_nodal_u_previous_nl)
-      soln_previous_nl_local = (*solution_prev_nl)(idx);
-
-    if (_need_nodal_u_previous_nl)
-      _nodal_u_previous_nl[i] = soln_previous_nl_local;
-
-    if (is_transient)
+    for (unsigned int i = 0; i < num_dofs; i++)
     {
-      if (_need_u_old || _need_grad_old || _need_second_old || _need_nodal_u_old)
-        soln_old_local = solution_old(idx);
-
-      if (_need_u_older || _need_grad_older || _need_second_older || _need_nodal_u_older)
-        soln_older_local = solution_older(idx);
-
-      if (_need_nodal_u_old)
-        _nodal_u_old[i] = soln_old_local;
-      if (_need_nodal_u_older)
-        _nodal_u_older[i] = soln_older_local;
-
-      u_dot_local = u_dot(idx);
-      if (_need_nodal_u_dot)
-        _nodal_u_dot[i] = u_dot_local;
-    }
-
-    for (unsigned int qp = 0; qp < nqp; qp++)
-    {
-      phi_local = _phi[i][qp];
-      dphi_qp = &_grad_phi[i][qp];
-
-      grad_u_qp = &_grad_u[qp];
-
-      if (_need_grad_previous_nl)
-        grad_u_previous_nl_qp = &_grad_u_previous_nl[qp];
-
-      if (is_transient)
+      LOOP1_DOF_MAIN
+      LOOP2_DOF_IS_TRANS
+      for (unsigned int qp = 0; qp < nqp; qp++)
       {
-        if (_need_grad_old)
-          grad_u_old_qp = &_grad_u_old[qp];
-
-        if (_need_grad_older)
-          grad_u_older_qp = &_grad_u_older[qp];
-      }
-
-      if (_need_second || _need_second_old || _need_second_older || _need_second_previous_nl)
-      {
-        d2phi_local = &(*_second_phi)[i][qp];
-
-        if (_need_second)
-        {
-          second_u_qp = &_second_u[qp];
-          second_u_qp->add_scaled(*d2phi_local, soln_local);
-        }
-
-        if (_need_second_previous_nl)
-        {
-          second_u_previous_nl_qp = &_second_u_previous_nl[qp];
-          second_u_previous_nl_qp->add_scaled(*d2phi_local, soln_previous_nl_local);
-        }
-
-        if (is_transient)
-        {
-          if (_need_second_old)
-            second_u_old_qp = &_second_u_old[qp];
-
-          if (_need_second_older)
-            second_u_older_qp = &_second_u_older[qp];
-        }
-      }
-
-      _u[qp] += phi_local * soln_local;
-
-      grad_u_qp->add_scaled(*dphi_qp, soln_local);
-
-      if (_need_u_previous_nl)
-        _u_previous_nl[qp] += phi_local * soln_previous_nl_local;
-      if (_need_grad_previous_nl)
-        grad_u_previous_nl_qp->add_scaled(*dphi_qp, soln_previous_nl_local);
-
-      if (is_transient)
-      {
-        _u_dot[qp] += phi_local * u_dot_local;
-        _du_dot_du[qp] = du_dot_du;
-
-        if (_need_u_old)
-          _u_old[qp] += phi_local * soln_old_local;
-
-        if (_need_u_older)
-          _u_older[qp] += phi_local * soln_older_local;
-
-        if (_need_grad_old)
-          grad_u_old_qp->add_scaled(*dphi_qp, soln_old_local);
-
-        if (_need_grad_older)
-          grad_u_older_qp->add_scaled(*dphi_qp, soln_older_local);
-
-        if (_need_second_old)
-          second_u_old_qp->add_scaled(*d2phi_local, soln_old_local);
-
-        if (_need_second_older)
-          second_u_older_qp->add_scaled(*d2phi_local, soln_older_local);
+        LOOP3_DOF_QP_MAIN
+        LOOP4_DOF_QP_IS_TRANS
+        LOOP6_DOF_QP_MAIN
+        LOOP7_DOF_QP_IS_TRANS
       }
     }
   }
+  else if (is_transient && second_cond)
+  {
+    for (unsigned int i = 0; i < num_dofs; i++)
+    {
+      LOOP1_DOF_MAIN
+      LOOP2_DOF_IS_TRANS
+      for (unsigned int qp = 0; qp < nqp; qp++)
+      {
+        LOOP3_DOF_QP_MAIN
+        LOOP4_DOF_QP_IS_TRANS
+        LOOP5_DOF_QP_SECOND_OR_SECOND_OLD_OR_SECOND_OLDER_OR_SECOND_PREVIOUS_NL
+        LOOP6_DOF_QP_MAIN
+        LOOP7_DOF_QP_IS_TRANS
+      }
+    }
+  }
+  else if (!is_transient && !second_cond)
+  {
+    for (unsigned int i = 0; i < num_dofs; i++)
+    {
+      LOOP1_DOF_MAIN
+      for (unsigned int qp = 0; qp < nqp; qp++)
+      {
+        LOOP3_DOF_QP_MAIN
+        LOOP6_DOF_QP_MAIN
+      }
+    }
+  }
+  else if (!is_transient && second_cond)
+  {
+    for (unsigned int i = 0; i < num_dofs; i++)
+    {
+      LOOP1_DOF_MAIN
+      for (unsigned int qp = 0; qp < nqp; qp++)
+      {
+        LOOP3_DOF_QP_MAIN
+        LOOP5_DOF_QP_SECOND_OR_SECOND_OLD_OR_SECOND_OLDER_OR_SECOND_PREVIOUS_NL
+        LOOP6_DOF_QP_MAIN
+      }
+    }
+  }
+  else
+    throw std::runtime_error("unreachable");
 }
 
 void
