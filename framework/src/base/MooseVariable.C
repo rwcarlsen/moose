@@ -1040,7 +1040,92 @@ MooseVariable::computeElemValues()
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
   unsigned int num_dofs = _dof_indices.size();
-  resizeAll(nqp, is_transient, num_dofs);
+  // resizeAll(nqp, is_transient, num_dofs);
+
+  _u.resize(nqp);
+  _grad_u.resize(nqp);
+
+  if (_need_second)
+    _second_u.resize(nqp);
+  if (_need_u_previous_nl)
+    _u_previous_nl.resize(nqp);
+  if (_need_grad_previous_nl)
+    _grad_u_previous_nl.resize(nqp);
+  if (_need_second_previous_nl)
+    _second_u_previous_nl.resize(nqp);
+
+  if (is_transient)
+  {
+    _u_dot.resize(nqp);
+    _du_dot_du.resize(nqp);
+
+    if (_need_u_old)
+      _u_old.resize(nqp);
+    if (_need_u_older)
+      _u_older.resize(nqp);
+    if (_need_grad_old)
+      _grad_u_old.resize(nqp);
+    if (_need_grad_older)
+      _grad_u_older.resize(nqp);
+    if (_need_second_old)
+      _second_u_old.resize(nqp);
+    if (_need_second_older)
+      _second_u_older.resize(nqp);
+
+    if (_need_nodal_u_old)
+      _nodal_u_old.resize(num_dofs);
+    if (_need_nodal_u_older)
+      _nodal_u_older.resize(num_dofs);
+    if (_need_nodal_u_dot)
+      _nodal_u_dot.resize(num_dofs);
+  }
+
+  if (_need_nodal_u)
+    _nodal_u.resize(num_dofs);
+  if (_need_nodal_u_previous_nl)
+    _nodal_u_previous_nl.resize(num_dofs);
+
+  for (unsigned int i = 0; i < nqp; ++i)
+  {
+    _u[i] = 0;
+    _grad_u[i] = 0;
+
+    if (_need_second)
+      _second_u[i] = 0;
+
+    if (_need_u_previous_nl)
+      _u_previous_nl[i] = 0;
+
+    if (_need_grad_previous_nl)
+      _grad_u_previous_nl[i] = 0;
+
+    if (_need_second_previous_nl)
+      _second_u_previous_nl[i] = 0;
+
+    if (is_transient)
+    {
+      _u_dot[i] = 0;
+      _du_dot_du[i] = 0;
+
+      if (_need_u_old)
+        _u_old[i] = 0;
+
+      if (_need_u_older)
+        _u_older[i] = 0;
+
+      if (_need_grad_old)
+        _grad_u_old[i] = 0;
+
+      if (_need_grad_older)
+        _grad_u_older[i] = 0;
+
+      if (_need_second_old)
+        _second_u_old[i] = 0;
+
+      if (_need_second_older)
+        _second_u_older[i] = 0;
+    }
+  }
 
   const NumericVector<Real> & current_solution = *_sys.currentSolution();
   const NumericVector<Real> & solution_old = _sys.solutionOld();
