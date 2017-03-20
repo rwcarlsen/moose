@@ -993,16 +993,14 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
   {                                                                                                \
     second_u_previous_nl_qp = &_second_u_previous_nl[qp];                                          \
     second_u_previous_nl_qp->add_scaled(*d2phi_local, soln_previous_nl_local);                     \
-  }                                                                                                \
-                                                                                                   \
-  if (is_transient)                                                                                \
-  {                                                                                                \
-    if (_need_second_old)                                                                          \
-      second_u_old_qp = &_second_u_old[qp];                                                        \
-                                                                                                   \
-    if (_need_second_older)                                                                        \
-      second_u_older_qp = &_second_u_older[qp];                                                    \
   }
+
+#define LOOP5b_DOF_QP_SECOND_OR_SECOND_OLD_OR_SECOND_OLDER_OR_SECOND_PREVIOUS_NL_AND_IS_TRANS      \
+  if (_need_second_old)                                                                            \
+    second_u_old_qp = &_second_u_old[qp];                                                          \
+                                                                                                   \
+  if (_need_second_older)                                                                          \
+    second_u_older_qp = &_second_u_older[qp];
 
 #define LOOP6_DOF_QP_MAIN                                                                          \
   _u[qp] += phi_local * soln_local;                                                                \
@@ -1102,8 +1100,8 @@ MooseVariable::computeElemValues()
         LOOP3_DOF_QP_MAIN
         LOOP4_DOF_QP_IS_TRANS
         LOOP5_DOF_QP_SECOND_OR_SECOND_OLD_OR_SECOND_OLDER_OR_SECOND_PREVIOUS_NL
-        LOOP6_DOF_QP_MAIN
-        LOOP7_DOF_QP_IS_TRANS
+        LOOP5b_DOF_QP_SECOND_OR_SECOND_OLD_OR_SECOND_OLDER_OR_SECOND_PREVIOUS_NL_AND_IS_TRANS
+            LOOP6_DOF_QP_MAIN LOOP7_DOF_QP_IS_TRANS
       }
     }
   }
