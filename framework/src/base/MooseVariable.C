@@ -17,6 +17,7 @@
 #include "SystemBase.h"
 #include "Assembly.h"
 #include "MooseMesh.h"
+#include "MooseVariableFast.h"
 
 // libMesh
 #include "libmesh/numeric_vector.h"
@@ -863,6 +864,84 @@ MooseVariable::restoreUnperturbedElemValues()
   }
 }
 
+unsigned int
+MooseVariable::fastMask()
+{
+  unsigned int mask = 0;
+
+  if (_subproblem.isTransient())
+    mask |= 1 << 1;
+
+  if (_need_u_old)
+    mask |= 1 << 2;
+  if (_need_u_older)
+    mask |= 1 << 3;
+  if (_need_u_previous_nl)
+    mask |= 1 << 4;
+
+  if (_need_grad_old)
+    mask |= 1 << 5;
+  if (_need_grad_older)
+    mask |= 1 << 6;
+  if (_need_grad_previous_nl)
+    mask |= 1 << 7;
+
+  if (_need_second)
+    mask |= 1 << 8;
+  if (_need_second_old)
+    mask |= 1 << 9;
+  if (_need_second_older)
+    mask |= 1 << 10;
+  if (_need_second_previous_nl)
+    mask |= 1 << 11;
+
+  if (_need_u_old_neighbor)
+    mask |= 1 << 12;
+  if (_need_u_older_neighbor)
+    mask |= 1 << 13;
+  if (_need_u_previous_nl_neighbor)
+    mask |= 1 << 14;
+
+  if (_need_grad_old_neighbor)
+    mask |= 1 << 15;
+  if (_need_grad_older_neighbor)
+    mask |= 1 << 16;
+  if (_need_grad_previous_nl_neighbor)
+    mask |= 1 << 17;
+
+  if (_need_second_neighbor)
+    mask |= 1 << 18;
+  if (_need_second_old_neighbor)
+    mask |= 1 << 19;
+  if (_need_second_older_neighbor)
+    mask |= 1 << 20;
+  if (_need_second_previous_nl_neighbor)
+    mask |= 1 << 21;
+
+  if (_need_nodal_u)
+    mask |= 1 << 22;
+  if (_need_nodal_u_old)
+    mask |= 1 << 23;
+  if (_need_nodal_u_older)
+    mask |= 1 << 24;
+  if (_need_nodal_u_previous_nl)
+    mask |= 1 << 25;
+  if (_need_nodal_u_dot)
+    mask |= 1 << 26;
+
+  if (_need_nodal_u_neighbor)
+    mask |= 1 << 27;
+  if (_need_nodal_u_old_neighbor)
+    mask |= 1 << 28;
+  if (_need_nodal_u_older_neighbor)
+    mask |= 1 << 29;
+  if (_need_nodal_u_previous_nl_neighbor)
+    mask |= 1 << 30;
+  if (_need_nodal_u_dot_neighbor)
+    mask |= 1 << 31;
+  return mask;
+}
+
 void
 MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs)
 {
@@ -1052,9 +1131,92 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
   if (_need_second_older)                                                                          \
     second_u_older_qp->add_scaled(*d2phi_local, soln_older_local);
 
+MooseVariable *
+MooseVariable::primeFasts()
+{
+  if (_fasts.size() == 0)
+  {
+    unsigned int mask = 0;
+    mask = 1 << 1 | 1 << 2 | 1 << 3;
+    _fasts[mask] = new MooseVariableFast<true,
+                                         true,
+                                         true,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false>(this, _assembly);
+    mask = 1 << 1;
+    _fasts[mask] = new MooseVariableFast<true,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false,
+                                         false>(this, _assembly);
+  }
+  return _fasts[fastMask()];
+}
+
 void
 MooseVariable::computeElemValues()
 {
+  auto fast = primeFasts();
+  if (fast)
+  {
+    std::cout << "USING FAST implementation\n";
+    fast->computeElemValues();
+    return;
+  }
+  std::cout << "NOT USING FAST implementation\n";
+
   // if (_count_need_second == 0)
   //  _varname = name();
 
