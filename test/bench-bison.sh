@@ -12,5 +12,5 @@ for i in $(seq $N); do
     (cd "$BISON_DIR/$TEST_DIR" && time ${BISON_DIR}/bison-${METHOD} ${BISON_FLAGS}) 2>&1 | tail -n3 | awk 'NR==1 {print "";} {printf " %s", $2}'
 done
 
-sed -e 's/[ms]/ /g' | awk '{print $1*60+$2" "$3*60+$4" "$5*60+$6}'
+#sed -e 's/[ms]/ /g' | awk '{print $1*60+$2" "$3*60+$4" "$5*60+$6}'
 
