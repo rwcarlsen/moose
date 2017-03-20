@@ -108,6 +108,24 @@ MooseVariable::MooseVariable(unsigned int var_num,
 
 MooseVariable::~MooseVariable()
 {
+  std::cout << "MooseVariable '" << _varname << "' counts:\n";
+  std::cout << "    _count_need_second=" << _count_need_second << "\n";
+  std::cout << "    _count_u_previous_nl=" << _count_u_previous_nl << "\n";
+  std::cout << "    _count_grad_u_previous_nl=" << _count_grad_u_previous_nl << "\n";
+  std::cout << "    _count_second_u_previous_nl=" << _count_second_u_previous_nl << "\n";
+  std::cout << "    _count_is_transient=" << _count_is_transient << "\n";
+  std::cout << "    _count_u_old=" << _count_u_old << "\n";
+  std::cout << "    _count_u_older=" << _count_u_older << "\n";
+  std::cout << "    _count_grad_u_old=" << _count_grad_u_old << "\n";
+  std::cout << "    _count_grad_u_older=" << _count_grad_u_older << "\n";
+  std::cout << "    _count_second_u_old=" << _count_second_u_old << "\n";
+  std::cout << "    _count_second_u_older=" << _count_second_u_older << "\n";
+  std::cout << "    _count_nodal_u_old=" << _count_nodal_u_old << "\n";
+  std::cout << "    _count_nodal_u_older=" << _count_nodal_u_older << "\n";
+  std::cout << "    _count_nodal_u_dot=" << _count_nodal_u_dot << "\n";
+  std::cout << "    _count_nodal_u=" << _count_nodal_u << "\n";
+  std::cout << "    _count_nodal_u_previous_nl=" << _count_nodal_u_previous_nl << "\n";
+
   _u.release();
   _u_bak.release();
   _u_old.release();
@@ -1037,6 +1055,42 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
 void
 MooseVariable::computeElemValues()
 {
+  // if (_count_need_second == 0)
+  //  _varname = name();
+
+  // if (_need_second)
+  //  _count_need_second++;
+  // if (_need_u_previous_nl)
+  //  _count_u_previous_nl++;
+  // if (_need_grad_previous_nl)
+  //  _count_grad_u_previous_nl++;
+  // if (_need_second_previous_nl)
+  //  _count_second_u_previous_nl++;
+  // if (_subproblem.isTransient())
+  //  _count_is_transient++;
+  // if (_need_u_old)
+  //  _count_u_old++;
+  // if (_need_u_older)
+  //  _count_u_older++;
+  // if (_need_grad_old)
+  //  _count_grad_u_old++;
+  // if (_need_grad_older)
+  //  _count_grad_u_older++;
+  // if (_need_second_old)
+  //  _count_second_u_old++;
+  // if (_need_second_older)
+  //  _count_second_u_older++;
+  // if (_need_nodal_u_old)
+  //  _count_nodal_u_old++;
+  // if (_need_nodal_u_older)
+  //  _count_nodal_u_older++;
+  // if (_need_nodal_u_dot)
+  //  _count_nodal_u_dot++;
+  // if (_need_nodal_u)
+  //  _count_nodal_u++;
+  // if (_need_nodal_u_previous_nl)
+  //  _count_nodal_u_previous_nl++;
+
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
   unsigned int num_dofs = _dof_indices.size();
