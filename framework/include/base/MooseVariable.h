@@ -311,7 +311,7 @@ public:
   /**
    * Compute values at interior quadrature points
    */
-  void computeElemValues();
+  virtual void computeElemValues();
   /**
    * Compute values at facial quadrature points
    */
@@ -589,6 +589,8 @@ protected:
 
 private:
   void resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs);
+  MooseVariable * primeFasts();
+  unsigned int fastMask();
 
   int _count_need_second = 0;
   int _count_u_previous_nl = 0;
@@ -607,6 +609,8 @@ private:
   int _count_nodal_u = 0;
   int _count_nodal_u_previous_nl = 0;
   std::string _varname;
+
+  std::map<unsigned int, MooseVariable *> _fasts;
 };
 
 #endif /* MOOSEVARIABLE_H */
