@@ -589,6 +589,24 @@ protected:
 
 private:
   void resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs);
+
+  int _count_need_second = 0;
+  int _count_u_previous_nl = 0;
+  int _count_grad_u_previous_nl = 0;
+  int _count_second_u_previous_nl = 0;
+  int _count_is_transient = 0;
+  int _count_u_old = 0;
+  int _count_u_older = 0;
+  int _count_grad_u_old = 0;
+  int _count_grad_u_older = 0;
+  int _count_second_u_old = 0;
+  int _count_second_u_older = 0;
+  int _count_nodal_u_old = 0;
+  int _count_nodal_u_older = 0;
+  int _count_nodal_u_dot = 0;
+  int _count_nodal_u = 0;
+  int _count_nodal_u_previous_nl = 0;
+  std::string _varname;
 };
 
 #endif /* MOOSEVARIABLE_H */
