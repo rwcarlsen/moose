@@ -311,7 +311,7 @@ public:
   /**
    * Compute values at interior quadrature points
    */
-  virtual void computeElemValues();
+  void computeElemValues();
   /**
    * Compute values at facial quadrature points
    */

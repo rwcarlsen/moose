@@ -845,84 +845,6 @@ MooseVariable::restoreUnperturbedElemValues()
   }
 }
 
-unsigned int
-MooseVariable::fastMask()
-{
-  unsigned int mask = 0;
-
-  if (_subproblem.isTransient())
-    mask |= 1 << 0;
-
-  if (_need_u_old)
-    mask |= 1 << 1;
-  if (_need_u_older)
-    mask |= 1 << 2;
-  if (_need_u_previous_nl)
-    mask |= 1 << 3;
-
-  if (_need_grad_old)
-    mask |= 1 << 4;
-  if (_need_grad_older)
-    mask |= 1 << 5;
-  if (_need_grad_previous_nl)
-    mask |= 1 << 6;
-
-  if (_need_second)
-    mask |= 1 << 7;
-  if (_need_second_old)
-    mask |= 1 << 8;
-  if (_need_second_older)
-    mask |= 1 << 9;
-  if (_need_second_previous_nl)
-    mask |= 1 << 10;
-
-  if (_need_u_old_neighbor)
-    mask |= 1 << 11;
-  if (_need_u_older_neighbor)
-    mask |= 1 << 12;
-  if (_need_u_previous_nl_neighbor)
-    mask |= 1 << 13;
-
-  if (_need_grad_old_neighbor)
-    mask |= 1 << 14;
-  if (_need_grad_older_neighbor)
-    mask |= 1 << 15;
-  if (_need_grad_previous_nl_neighbor)
-    mask |= 1 << 16;
-
-  if (_need_second_neighbor)
-    mask |= 1 << 17;
-  if (_need_second_old_neighbor)
-    mask |= 1 << 18;
-  if (_need_second_older_neighbor)
-    mask |= 1 << 19;
-  if (_need_second_previous_nl_neighbor)
-    mask |= 1 << 20;
-
-  if (_need_nodal_u)
-    mask |= 1 << 21;
-  if (_need_nodal_u_old)
-    mask |= 1 << 22;
-  if (_need_nodal_u_older)
-    mask |= 1 << 23;
-  if (_need_nodal_u_previous_nl)
-    mask |= 1 << 24;
-  if (_need_nodal_u_dot)
-    mask |= 1 << 25;
-
-  if (_need_nodal_u_neighbor)
-    mask |= 1 << 26;
-  if (_need_nodal_u_old_neighbor)
-    mask |= 1 << 27;
-  if (_need_nodal_u_older_neighbor)
-    mask |= 1 << 28;
-  if (_need_nodal_u_previous_nl_neighbor)
-    mask |= 1 << 29;
-  if (_need_nodal_u_dot_neighbor)
-    mask |= 1 << 30;
-  return mask;
-}
-
 void
 MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs)
 {
@@ -1115,10 +1037,10 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
 void
 MooseVariable::computeElemValues()
 {
-  std::cout << "trying fast...\n";
   if (tryFast())
     return;
-  std::cout << "   ... fallback to slow\n";
+  // std::bitset<32> mask = fastMask();
+  // std::c o ut << "mask=" << mask << "\n";
 
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
@@ -2386,69 +2308,76 @@ MooseVariable::computeElemValuesFast()
   }
 }
 
-#define FASTCASE(arg1,                                                                                                                                                                                         \
-                 arg2,                                                                                                                                                                                         \
-                 arg3,                                                                                                                                                                                         \
-                 arg4,                                                                                                                                                                                         \
-                 arg5,                                                                                                                                                                                         \
-                 arg6,                                                                                                                                                                                         \
-                 arg7,                                                                                                                                                                                         \
-                 arg8,                                                                                                                                                                                         \
-                 arg9,                                                                                                                                                                                         \
-                 arg10,                                                                                                                                                                                        \
-                 arg11,                                                                                                                                                                                        \
-                 arg12,                                                                                                                                                                                        \
-                 arg13,                                                                                                                                                                                        \
-                 arg14,                                                                                                                                                                                        \
-                 arg15,                                                                                                                                                                                        \
-                 arg16,                                                                                                                                                                                        \
-                 arg17,                                                                                                                                                                                        \
-                 arg18,                                                                                                                                                                                        \
-                 arg19,                                                                                                                                                                                        \
-                 arg20,                                                                                                                                                                                        \
-                 arg21,                                                                                                                                                                                        \
-                 arg22,                                                                                                                                                                                        \
-                 arg23,                                                                                                                                                                                        \
-                 arg24,                                                                                                                                                                                        \
-                 arg25,                                                                                                                                                                                        \
-                 arg26,                                                                                                                                                                                        \
-                 arg27,                                                                                                                                                                                        \
-                 arg28,                                                                                                                                                                                        \
-                 arg29,                                                                                                                                                                                        \
-                 arg30,                                                                                                                                                                                        \
-                 arg31)                                                                                                                                                                                        \
-  case  (arg1  ? 1 << 0  : 0) \
-      | (arg2  ? 1 << 1  : 0) \
-      | (arg3  ? 1 << 2  : 0) \
-      | (arg4  ? 1 << 3  : 0) \
-      | (arg5  ? 1 << 4  : 0) \
-      | (arg6  ? 1 << 5  : 0) \
-      | (arg7  ? 1 << 6  : 0) \
-      | (arg8  ? 1 << 7  : 0) \
-      | (arg9  ? 1 << 8  : 0) \
-      | (arg10 ? 1 << 9  : 0) \
-      | (arg11 ? 1 << 10 : 0) \
-      | (arg12 ? 1 << 11 : 0) \
-      | (arg13 ? 1 << 12 : 0) \
-      | (arg14 ? 1 << 13 : 0) \
-      | (arg15 ? 1 << 14 : 0) \
-      | (arg16 ? 1 << 15 : 0) \
-      | (arg17 ? 1 << 16 : 0) \
-      | (arg18 ? 1 << 17 : 0) \
-      | (arg19 ? 1 << 18 : 0) \
-      | (arg20 ? 1 << 19 : 0) \
-      | (arg21 ? 1 << 20 : 0) \
-      | (arg22 ? 1 << 21 : 0) \
-      | (arg23 ? 1 << 22 : 0) \
-      | (arg24 ? 1 << 23 : 0) \
-      | (arg25 ? 1 << 24 : 0) \
-      | (arg26 ? 1 << 25 : 0) \
-      | (arg27 ? 1 << 26 : 0) \
-      | (arg28 ? 1 << 27 : 0) \
-      | (arg29 ? 1 << 28 : 0) \
-      | (arg30 ? 1 << 29 : 0) \
-      | (arg31 ? 1 << 30 : 0) : \
-    computeElemValuesFast<arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10,arg11,arg12,arg13,arg14,arg15,arg16,arg17,arg18,arg19,arg20,arg21,arg22,arg23,arg24,arg25,arg26,arg27,arg28,arg29,arg30,arg31>(); \
+#define FASTCASE(arg1,                                                                             \
+                 arg2,                                                                             \
+                 arg3,                                                                             \
+                 arg4,                                                                             \
+                 arg5,                                                                             \
+                 arg6,                                                                             \
+                 arg7,                                                                             \
+                 arg8,                                                                             \
+                 arg9,                                                                             \
+                 arg10,                                                                            \
+                 arg11,                                                                            \
+                 arg12,                                                                            \
+                 arg13,                                                                            \
+                 arg14,                                                                            \
+                 arg15,                                                                            \
+                 arg16,                                                                            \
+                 arg17,                                                                            \
+                 arg18,                                                                            \
+                 arg19,                                                                            \
+                 arg20,                                                                            \
+                 arg21,                                                                            \
+                 arg22,                                                                            \
+                 arg23,                                                                            \
+                 arg24,                                                                            \
+                 arg25,                                                                            \
+                 arg26,                                                                            \
+                 arg27,                                                                            \
+                 arg28,                                                                            \
+                 arg29,                                                                            \
+                 arg30,                                                                            \
+                 arg31)                                                                            \
+  case (arg1 * 1 << 0) | (arg2 * 1 << 1) | (arg3 * 1 << 2) | (arg4 * 1 << 3) | (arg5 * 1 << 4) |   \
+      (arg6 * 1 << 5) | (arg7 * 1 << 6) | (arg8 * 1 << 7) | (arg9 * 1 << 8) | (arg10 * 1 << 9) |   \
+      (arg11 * 1 << 10) | (arg12 * 1 << 11) | (arg13 * 1 << 12) | (arg14 * 1 << 13) |              \
+      (arg15 * 1 << 14) | (arg16 * 1 << 15) | (arg17 * 1 << 16) | (arg18 * 1 << 17) |              \
+      (arg19 * 1 << 18) | (arg20 * 1 << 19) | (arg21 * 1 << 20) | (arg22 * 1 << 21) |              \
+      (arg23 * 1 << 22) | (arg24 * 1 << 23) | (arg25 * 1 << 24) | (arg26 * 1 << 25) |              \
+      (arg27 * 1 << 26) | (arg28 * 1 << 27) | (arg29 * 1 << 28) | (arg30 * 1 << 29) |              \
+      (arg31 * 1 << 30):                                                                           \
+    computeElemValuesFast<arg1,                                                                    \
+                          arg2,                                                                    \
+                          arg3,                                                                    \
+                          arg4,                                                                    \
+                          arg5,                                                                    \
+                          arg6,                                                                    \
+                          arg7,                                                                    \
+                          arg8,                                                                    \
+                          arg9,                                                                    \
+                          arg10,                                                                   \
+                          arg11,                                                                   \
+                          arg12,                                                                   \
+                          arg13,                                                                   \
+                          arg14,                                                                   \
+                          arg15,                                                                   \
+                          arg16,                                                                   \
+                          arg17,                                                                   \
+                          arg18,                                                                   \
+                          arg19,                                                                   \
+                          arg20,                                                                   \
+                          arg21,                                                                   \
+                          arg22,                                                                   \
+                          arg23,                                                                   \
+                          arg24,                                                                   \
+                          arg25,                                                                   \
+                          arg26,                                                                   \
+                          arg27,                                                                   \
+                          arg28,                                                                   \
+                          arg29,                                                                   \
+                          arg30,                                                                   \
+                          arg31>();                                                                \
     return true
 
 bool
@@ -2518,7 +2447,147 @@ MooseVariable::tryFast()
              false,
              false,
              false);
+    FASTCASE(true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
+    FASTCASE(true,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
     default:
       return false;
   }
+}
+
+unsigned int
+MooseVariable::fastMask()
+{
+  unsigned int mask = 0;
+
+  if (_subproblem.isTransient())
+    mask |= 1 << 0;
+
+  if (_need_u_old)
+    mask |= 1 << 1;
+  if (_need_u_older)
+    mask |= 1 << 2;
+  if (_need_u_previous_nl)
+    mask |= 1 << 3;
+
+  if (_need_grad_old)
+    mask |= 1 << 4;
+  if (_need_grad_older)
+    mask |= 1 << 5;
+  if (_need_grad_previous_nl)
+    mask |= 1 << 6;
+
+  if (_need_second)
+    mask |= 1 << 7;
+  if (_need_second_old)
+    mask |= 1 << 8;
+  if (_need_second_older)
+    mask |= 1 << 9;
+  if (_need_second_previous_nl)
+    mask |= 1 << 10;
+
+  if (_need_u_old_neighbor)
+    mask |= 1 << 11;
+  if (_need_u_older_neighbor)
+    mask |= 1 << 12;
+  if (_need_u_previous_nl_neighbor)
+    mask |= 1 << 13;
+
+  if (_need_grad_old_neighbor)
+    mask |= 1 << 14;
+  if (_need_grad_older_neighbor)
+    mask |= 1 << 15;
+  if (_need_grad_previous_nl_neighbor)
+    mask |= 1 << 16;
+
+  if (_need_second_neighbor)
+    mask |= 1 << 17;
+  if (_need_second_old_neighbor)
+    mask |= 1 << 18;
+  if (_need_second_older_neighbor)
+    mask |= 1 << 19;
+  if (_need_second_previous_nl_neighbor)
+    mask |= 1 << 20;
+
+  if (_need_nodal_u)
+    mask |= 1 << 21;
+  if (_need_nodal_u_old)
+    mask |= 1 << 22;
+  if (_need_nodal_u_older)
+    mask |= 1 << 23;
+  if (_need_nodal_u_previous_nl)
+    mask |= 1 << 24;
+  if (_need_nodal_u_dot)
+    mask |= 1 << 25;
+
+  if (_need_nodal_u_neighbor)
+    mask |= 1 << 26;
+  if (_need_nodal_u_old_neighbor)
+    mask |= 1 << 27;
+  if (_need_nodal_u_older_neighbor)
+    mask |= 1 << 28;
+  if (_need_nodal_u_previous_nl_neighbor)
+    mask |= 1 << 29;
+  if (_need_nodal_u_dot_neighbor)
+    mask |= 1 << 30;
+  return mask;
 }
