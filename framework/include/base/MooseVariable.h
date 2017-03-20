@@ -589,28 +589,41 @@ protected:
 
 private:
   void resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs);
-  MooseVariable * primeFasts();
+  bool tryFast();
   unsigned int fastMask();
 
-  int _count_need_second = 0;
-  int _count_u_previous_nl = 0;
-  int _count_grad_u_previous_nl = 0;
-  int _count_second_u_previous_nl = 0;
-  int _count_is_transient = 0;
-  int _count_u_old = 0;
-  int _count_u_older = 0;
-  int _count_grad_u_old = 0;
-  int _count_grad_u_older = 0;
-  int _count_second_u_old = 0;
-  int _count_second_u_older = 0;
-  int _count_nodal_u_old = 0;
-  int _count_nodal_u_older = 0;
-  int _count_nodal_u_dot = 0;
-  int _count_nodal_u = 0;
-  int _count_nodal_u_previous_nl = 0;
-  std::string _varname;
-
-  std::map<unsigned int, MooseVariable *> _fasts;
+  template <bool is_transient,
+            bool need_u_old,
+            bool need_u_older,
+            bool need_u_previous_nl,
+            bool need_grad_old,
+            bool need_grad_older,
+            bool need_grad_previous_nl,
+            bool need_second,
+            bool need_second_old,
+            bool need_second_older,
+            bool need_second_previous_nl,
+            bool need_u_old_neighbor,
+            bool need_u_older_neighbor,
+            bool need_u_previous_nl_neighbor,
+            bool need_grad_old_neighbor,
+            bool need_grad_older_neighbor,
+            bool need_grad_previous_nl_neighbor,
+            bool need_second_neighbor,
+            bool need_second_old_neighbor,
+            bool need_second_older_neighbor,
+            bool need_second_previous_nl_neighbor,
+            bool need_nodal_u,
+            bool need_nodal_u_old,
+            bool need_nodal_u_older,
+            bool need_nodal_u_previous_nl,
+            bool need_nodal_u_dot,
+            bool need_nodal_u_neighbor,
+            bool need_nodal_u_old_neighbor,
+            bool need_nodal_u_older_neighbor,
+            bool need_nodal_u_previous_nl_neighbor,
+            bool need_nodal_u_dot_neighbor>
+  void computeElemValuesFast();
 };
 
 #endif /* MOOSEVARIABLE_H */
