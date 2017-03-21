@@ -846,6 +846,95 @@ MooseVariable::restoreUnperturbedElemValues()
 }
 
 void
+MooseVariable::resizeAllNeighbor(unsigned int nqp, bool is_transient, unsigned int num_dofs)
+{
+  _u_neighbor.resize(nqp);
+  _grad_u_neighbor.resize(nqp);
+
+  if (_need_second_neighbor)
+    _second_u_neighbor.resize(nqp);
+  if (_need_u_previous_nl_neighbor)
+    _u_previous_nl_neighbor.resize(nqp);
+  if (_need_grad_previous_nl_neighbor)
+    _grad_u_previous_nl_neighbor.resize(nqp);
+  if (_need_second_previous_nl_neighbor)
+    _second_u_previous_nl_neighbor.resize(nqp);
+
+  if (is_transient)
+  {
+    _u_dot_neighbor.resize(nqp);
+    _du_dot_du_neighbor.resize(nqp);
+
+    if (_need_u_old_neighbor)
+      _u_old_neighbor.resize(nqp);
+    if (_need_u_older_neighbor)
+      _u_older_neighbor.resize(nqp);
+    if (_need_grad_old_neighbor)
+      _grad_u_old_neighbor.resize(nqp);
+    if (_need_grad_older_neighbor)
+      _grad_u_older_neighbor.resize(nqp);
+    if (_need_second_old_neighbor)
+      _second_u_old_neighbor.resize(nqp);
+    if (_need_second_older_neighbor)
+      _second_u_older_neighbor.resize(nqp);
+
+    if (_need_nodal_u_old_neighbor)
+      _nodal_u_old_neighbor.resize(num_dofs);
+    if (_need_nodal_u_older_neighbor)
+      _nodal_u_older_neighbor.resize(num_dofs);
+    if (_need_nodal_u_dot_neighbor)
+      _nodal_u_dot_neighbor.resize(num_dofs);
+  }
+
+  if (_need_nodal_u_neighbor)
+    _nodal_u_neighbor.resize(num_dofs);
+  if (_need_nodal_u_previous_nl_neighbor)
+    _nodal_u_previous_nl_neighbor.resize(num_dofs);
+
+  for (unsigned int i = 0; i < nqp; ++i)
+  {
+    _u_neighbor[i] = 0;
+    _grad_u_neighbor[i] = 0;
+
+    if (_need_second)
+      _second_u_neighbor[i] = 0;
+
+    if (_need_u_previous_nl_neighbor)
+      _u_previous_nl_neighbor[i] = 0;
+
+    if (_need_grad_previous_nl_neighbor)
+      _grad_u_previous_nl_neighbor[i] = 0;
+
+    if (_need_second_previous_nl_neighbor)
+      _second_u_previous_nl_neighbor[i] = 0;
+
+    if (is_transient)
+    {
+      _u_dot_neighbor[i] = 0;
+      _du_dot_du_neighbor[i] = 0;
+
+      if (_need_u_old_neighbor)
+        _u_old_neighbor[i] = 0;
+
+      if (_need_u_older_neighbor)
+        _u_older_neighbor[i] = 0;
+
+      if (_need_grad_old_neighbor)
+        _grad_u_old_neighbor[i] = 0;
+
+      if (_need_grad_older_neighbor)
+        _grad_u_older_neighbor[i] = 0;
+
+      if (_need_second_old_neighbor)
+        _second_u_old_neighbor[i] = 0;
+
+      if (_need_second_older_neighbor)
+        _second_u_older_neighbor[i] = 0;
+    }
+  }
+}
+
+void
 MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs)
 {
   _u.resize(nqp);
@@ -976,7 +1065,6 @@ MooseVariable::computeElemValues()
   RealTensor * second_u_old_qp = NULL;
   RealTensor * second_u_older_qp = NULL;
   RealTensor * second_u_previous_nl_qp = NULL;
-  std::cout << "num_dofs=" << num_dofs << ", nqp=" << nqp << "\n";
 
   for (unsigned int i = 0; i < num_dofs; i++)
   {
@@ -1095,6 +1183,11 @@ MooseVariable::computeElemValues()
 void
 MooseVariable::computeElemValuesFace()
 {
+  if (tryFastFace())
+    return;
+  // std::bitset<32> mask = fastMask();
+  // std::c o ut << "mask=" << mask << "\n";
+
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
   unsigned int num_dofs = _dof_indices.size();
@@ -1205,8 +1298,8 @@ MooseVariable::computeNeighborValuesFace()
 {
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
-  unsigned int num_dofs = _dof_indices.size();
-  resizeAll(nqp, is_transient, num_dofs);
+  unsigned int num_dofs = _dof_indices_neighbor.size();
+  resizeAllNeighbor(nqp, is_transient, num_dofs);
 
   const NumericVector<Real> & current_solution = *_sys.currentSolution();
   const NumericVector<Real> & solution_old = _sys.solutionOld();
@@ -1293,8 +1386,8 @@ MooseVariable::computeNeighborValues()
 {
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
-  unsigned int num_dofs = _dof_indices.size();
-  resizeAll(nqp, is_transient, num_dofs);
+  unsigned int num_dofs = _dof_indices_neighbor.size();
+  resizeAllNeighbor(nqp, is_transient, num_dofs);
 
   const NumericVector<Real> & current_solution = *_sys.currentSolution();
   const NumericVector<Real> & solution_old = _sys.solutionOld();
@@ -1691,6 +1784,144 @@ template <bool is_transient,
           bool need_nodal_u_previous_nl_neighbor,
           bool need_nodal_u_dot_neighbor>
 void
+MooseVariable::computeElemValuesFaceFast()
+{
+  unsigned int nqp = _qrule->n_points();
+  unsigned int num_dofs = _dof_indices.size();
+  resizeAll(nqp, is_transient, num_dofs);
+
+  const NumericVector<Real> & current_solution = *_sys.currentSolution();
+  const NumericVector<Real> & solution_old = _sys.solutionOld();
+  const NumericVector<Real> & solution_older = _sys.solutionOlder();
+  const NumericVector<Real> * solution_prev_nl = _sys.solutionPreviousNewton();
+  const NumericVector<Real> & u_dot = _sys.solutionUDot();
+  const Real & du_dot_du = _sys.duDotDu();
+
+  dof_id_type idx;
+  Real soln_local;
+  Real soln_old_local = 0;
+  Real soln_older_local = 0;
+  Real soln_previous_nl_local = 0;
+  Real u_dot_local = 0;
+
+  Real phi_local;
+  RealGradient dphi_local;
+  RealTensor d2phi_local;
+
+  for (unsigned int i = 0; i < num_dofs; ++i)
+  {
+    idx = _dof_indices[i];
+    soln_local = current_solution(idx);
+
+    if (need_nodal_u)
+      _nodal_u[i] = soln_local;
+
+    if (need_u_previous_nl || need_grad_previous_nl || need_second_previous_nl ||
+        need_nodal_u_previous_nl)
+      soln_previous_nl_local = (*solution_prev_nl)(idx);
+    if (need_nodal_u_previous_nl)
+      _nodal_u_previous_nl[i] = soln_previous_nl_local;
+
+    if (is_transient)
+    {
+      if (need_u_old || need_grad_old || need_second_old || need_nodal_u_old)
+        soln_old_local = solution_old(idx);
+
+      if (need_u_older || need_grad_older || need_second_older || need_nodal_u_older)
+        soln_older_local = solution_older(idx);
+
+      if (need_nodal_u_old)
+        _nodal_u_old[i] = soln_old_local;
+      if (need_nodal_u_older)
+        _nodal_u_older[i] = soln_older_local;
+
+      u_dot_local = u_dot(idx);
+      if (need_nodal_u_dot)
+        _nodal_u_dot[i] = u_dot_local;
+    }
+
+    for (unsigned int qp = 0; qp < nqp; ++qp)
+    {
+      phi_local = _phi_face[i][qp];
+      dphi_local = _grad_phi_face[i][qp];
+
+      if (need_second || need_second_old || need_second_older || need_second_previous_nl)
+        d2phi_local = (*_second_phi_face)[i][qp];
+
+      _u[qp] += phi_local * soln_local;
+      _grad_u[qp] += dphi_local * soln_local;
+
+      if (need_second)
+        _second_u[qp] += d2phi_local * soln_local;
+
+      if (need_u_previous_nl)
+        _u_previous_nl[qp] += phi_local * soln_previous_nl_local;
+
+      if (need_grad_previous_nl)
+        _grad_u_previous_nl[qp] += dphi_local * soln_previous_nl_local;
+
+      if (need_second_previous_nl)
+        _second_u_previous_nl[qp] += d2phi_local * soln_previous_nl_local;
+
+      if (is_transient)
+      {
+        _u_dot[qp] += phi_local * u_dot_local;
+        _du_dot_du[qp] = du_dot_du;
+
+        if (need_u_old)
+          _u_old[qp] += phi_local * soln_old_local;
+
+        if (need_u_older)
+          _u_older[qp] += phi_local * soln_older_local;
+
+        if (need_grad_old)
+          _grad_u_old[qp] += dphi_local * soln_old_local;
+
+        if (need_grad_older)
+          _grad_u_older[qp] += dphi_local * soln_older_local;
+
+        if (need_second_old)
+          _second_u_old[qp] += d2phi_local * soln_old_local;
+
+        if (need_second_older)
+          _second_u_older[qp] += d2phi_local * soln_older_local;
+      }
+    }
+  }
+}
+
+template <bool is_transient,
+          bool need_u_old,
+          bool need_u_older,
+          bool need_u_previous_nl,
+          bool need_grad_old,
+          bool need_grad_older,
+          bool need_grad_previous_nl,
+          bool need_second,
+          bool need_second_old,
+          bool need_second_older,
+          bool need_second_previous_nl,
+          bool need_u_old_neighbor,
+          bool need_u_older_neighbor,
+          bool need_u_previous_nl_neighbor,
+          bool need_grad_old_neighbor,
+          bool need_grad_older_neighbor,
+          bool need_grad_previous_nl_neighbor,
+          bool need_second_neighbor,
+          bool need_second_old_neighbor,
+          bool need_second_older_neighbor,
+          bool need_second_previous_nl_neighbor,
+          bool need_nodal_u,
+          bool need_nodal_u_old,
+          bool need_nodal_u_older,
+          bool need_nodal_u_previous_nl,
+          bool need_nodal_u_dot,
+          bool need_nodal_u_neighbor,
+          bool need_nodal_u_old_neighbor,
+          bool need_nodal_u_older_neighbor,
+          bool need_nodal_u_previous_nl_neighbor,
+          bool need_nodal_u_dot_neighbor>
+void
 MooseVariable::computeElemValuesFast()
 {
   unsigned int nqp = _qrule->n_points();
@@ -1938,7 +2169,8 @@ MooseVariable::computeElemValuesFast()
   }
 }
 
-#define FASTCASE(arg1,                                                                             \
+#define FASTCASE(func,                                                                             \
+                 arg1,                                                                             \
                  arg2,                                                                             \
                  arg3,                                                                             \
                  arg4,                                                                             \
@@ -1977,37 +2209,37 @@ MooseVariable::computeElemValuesFast()
       (arg23 * 1 << 22) | (arg24 * 1 << 23) | (arg25 * 1 << 24) | (arg26 * 1 << 25) |              \
       (arg27 * 1 << 26) | (arg28 * 1 << 27) | (arg29 * 1 << 28) | (arg30 * 1 << 29) |              \
       (arg31 * 1 << 30):                                                                           \
-    computeElemValuesFast<arg1,                                                                    \
-                          arg2,                                                                    \
-                          arg3,                                                                    \
-                          arg4,                                                                    \
-                          arg5,                                                                    \
-                          arg6,                                                                    \
-                          arg7,                                                                    \
-                          arg8,                                                                    \
-                          arg9,                                                                    \
-                          arg10,                                                                   \
-                          arg11,                                                                   \
-                          arg12,                                                                   \
-                          arg13,                                                                   \
-                          arg14,                                                                   \
-                          arg15,                                                                   \
-                          arg16,                                                                   \
-                          arg17,                                                                   \
-                          arg18,                                                                   \
-                          arg19,                                                                   \
-                          arg20,                                                                   \
-                          arg21,                                                                   \
-                          arg22,                                                                   \
-                          arg23,                                                                   \
-                          arg24,                                                                   \
-                          arg25,                                                                   \
-                          arg26,                                                                   \
-                          arg27,                                                                   \
-                          arg28,                                                                   \
-                          arg29,                                                                   \
-                          arg30,                                                                   \
-                          arg31>();                                                                \
+    func<arg1,                                                                                     \
+         arg2,                                                                                     \
+         arg3,                                                                                     \
+         arg4,                                                                                     \
+         arg5,                                                                                     \
+         arg6,                                                                                     \
+         arg7,                                                                                     \
+         arg8,                                                                                     \
+         arg9,                                                                                     \
+         arg10,                                                                                    \
+         arg11,                                                                                    \
+         arg12,                                                                                    \
+         arg13,                                                                                    \
+         arg14,                                                                                    \
+         arg15,                                                                                    \
+         arg16,                                                                                    \
+         arg17,                                                                                    \
+         arg18,                                                                                    \
+         arg19,                                                                                    \
+         arg20,                                                                                    \
+         arg21,                                                                                    \
+         arg22,                                                                                    \
+         arg23,                                                                                    \
+         arg24,                                                                                    \
+         arg25,                                                                                    \
+         arg26,                                                                                    \
+         arg27,                                                                                    \
+         arg28,                                                                                    \
+         arg29,                                                                                    \
+         arg30,                                                                                    \
+         arg31>();                                                                                 \
     return true
 
 bool
@@ -2015,7 +2247,8 @@ MooseVariable::tryFast()
 {
   switch (fastMask())
   {
-    FASTCASE(true,
+    FASTCASE(computeElemValuesFast,
+             true,
              true,
              true,
              false,
@@ -2046,7 +2279,8 @@ MooseVariable::tryFast()
              false,
              false,
              false);
-    FASTCASE(true,
+    FASTCASE(computeElemValuesFast,
+             true,
              false,
              false,
              false,
@@ -2077,7 +2311,8 @@ MooseVariable::tryFast()
              false,
              false,
              false);
-    FASTCASE(true,
+    FASTCASE(computeElemValuesFast,
+             true,
              false,
              false,
              false,
@@ -2108,7 +2343,146 @@ MooseVariable::tryFast()
              false,
              false,
              false);
-    FASTCASE(true,
+    FASTCASE(computeElemValuesFast,
+             true,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
+    default:
+      return false;
+  }
+}
+
+bool
+MooseVariable::tryFastFace()
+{
+  switch (fastMask())
+  {
+    FASTCASE(computeElemValuesFaceFast,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
+    FASTCASE(computeElemValuesFaceFast,
+             true,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
+    FASTCASE(computeElemValuesFaceFast,
+             true,
+             true,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
+    FASTCASE(computeElemValuesFaceFast,
+             true,
              true,
              false,
              false,
