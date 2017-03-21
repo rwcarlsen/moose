@@ -160,7 +160,7 @@
   nl_rel_tol = 1e-10 # Absolute tolerance for nonlienar solves
 
   start_time = 0.0
-  end_time = 4000
+  end_time = 110
 
   [./TimeStepper]
     type = IterationAdaptiveDT
