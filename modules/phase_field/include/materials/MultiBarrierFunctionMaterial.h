@@ -42,8 +42,9 @@ protected:
   std::vector<const VariableValue *> _eta;
 
   /// Barrier functions and their drivatives
-  MaterialProperty<Real> & _prop_g;
-  std::vector<MaterialProperty<Real> *> _prop_dg, _prop_d2g;
+  Real computeProp(const Location & loc);
+  Real computePropd1(const Location & loc, unsigned int i);
+  Real computePropd2(const Location & loc, unsigned int i);
 };
 
 #endif // MULTIBARRIERFUNCTION_H

@@ -48,15 +48,15 @@ protected:
   std::vector<std::vector<Real>> _kappa_gamma;
   std::vector<std::vector<Real>> _a_g2;
 
-  MaterialProperty<Real> & _kappa;
-  MaterialProperty<Real> & _gamma;
-  MaterialProperty<Real> & _L;
-  MaterialProperty<Real> & _mu;
+  Real & _kappa;
+  Real & _gamma;
+  Real & _L;
+  Real & _mu;
 
-  MaterialProperty<Real> & _molar_volume;
-  MaterialProperty<Real> & _entropy_diff;
-  MaterialProperty<Real> & _act_wGB;
-  MaterialProperty<Real> & _tgrad_corr_mult;
+  Real & _molar_volume;
+  Real & _entropy_diff;
+  Real & _act_wGB;
+  Real & _tgrad_corr_mult;
 
   const Real _kb;
   const Real _JtoeV;

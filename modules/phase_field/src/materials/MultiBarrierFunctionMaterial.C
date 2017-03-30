@@ -32,46 +32,47 @@ MultiBarrierFunctionMaterial::MultiBarrierFunctionMaterial(const InputParameters
     _well_only(getParam<bool>("well_only")),
     _num_eta(coupledComponents("etas")),
     _eta(_num_eta),
-    _prop_g(declareProperty<Real>(_function_name)),
-    _prop_dg(_num_eta),
-    _prop_d2g(_num_eta)
 {
   // declare derivative properties, fetch eta values
+  bind_mat_prop(_function_name, computeProp);
+
   for (unsigned int i = 0; i < _num_eta; ++i)
   {
-    const VariableName & eta_name = getVar("etas", i)->name();
-    _prop_dg[i] = &declarePropertyDerivative<Real>(_function_name, eta_name);
-    _prop_d2g[i] = &declarePropertyDerivative<Real>(_function_name, eta_name, eta_name);
-    _eta[i] = &coupledValue("etas", i);
+    auto eta_name = getVar("etas", i)->name();
+    addPropFunc(derivProp(_function_name, eta_name),
+                [this, i](const Location & loc) { return computePropd1(loc, i); });
+    addPropFunc(derivProp(_function_name, eta_name, eta_name),
+                [this, i](const Location & loc) { return computePropd2(loc, i); });
   }
 }
 
-void
-MultiBarrierFunctionMaterial::computeQpProperties()
+Real
+MultiBarrierFunctionMaterial::computeProp(const Location & loc)
 {
   Real g = 0.0;
-
   for (unsigned int i = 0; i < _num_eta; ++i)
   {
-    const Real n = (*_eta[i])[_qp];
-
-    if (_well_only && n >= 0.0 && n <= 1.0)
-    {
-      _prop_g[_qp] = 0.0;
-      (*_prop_dg[i])[_qp] = 0.0;
-      (*_prop_d2g[i])[_qp] = 0.0;
-      continue;
-    }
-
-    switch (_g_order)
-    {
-      case 0: // SIMPLE
-        g += n * n * (1.0 - n) * (1.0 - n);
-        (*_prop_dg[i])[_qp] = 2.0 * n * (n - 1.0) * (2.0 * n - 1.0);
-        (*_prop_d2g[i])[_qp] = 12.0 * (n * n - n) + 2.0;
-        break;
-    }
+    const Real n = (*_eta[i])[loc.qp()];
+    if (!(_well_only && n >= 0.0 && n <= 1.0) && _g_order == 0)
+      g += n * n * (1.0 - n) * (1.0 - n);
   }
+  return g;
+}
 
-  _prop_g[_qp] = g;
+Real
+MultiBarrierFunctionMaterial::computePropd1(const Location & loc, unsigned int i)
+{
+  const Real n = (*_eta[i])[loc.qp()];
+  if (_g_order != 0 || (_well_only && n >= 0.0 && n <= 1.0))
+    return 0;
+  return 2.0 * n * (n - 1.0) * (2.0 * n - 1.0);
+}
+
+Real
+MultiBarrierFunctionMaterial::computePropd2(const Location & loc, unsigned int i)
+{
+  const Real n = (*_eta[i])[loc.qp()];
+  if (_g_order != 0 || (_well_only && n >= 0.0 && n <= 1.0))
+    return 0;
+  return 12.0 * (n * n - n) + 2.0;
 }

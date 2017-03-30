@@ -44,14 +44,6 @@ GBAnisotropyBase::GBAnisotropyBase(const InputParameters & parameters)
     _Anisotropic_GB_file_name(getParam<FileName>("Anisotropic_GB_file_name")),
     _inclination_anisotropy(getParam<bool>("inclination_anisotropy")),
     _T(coupledValue("T")),
-    _kappa(declareProperty<Real>("kappa_op")),
-    _gamma(declareProperty<Real>("gamma_asymm")),
-    _L(declareProperty<Real>("L")),
-    _mu(declareProperty<Real>("mu")),
-    _molar_volume(declareProperty<Real>("molar_volume")),
-    _entropy_diff(declareProperty<Real>("entropy_diff")),
-    _act_wGB(declareProperty<Real>("act_wGB")),
-    _tgrad_corr_mult(declareProperty<Real>("tgrad_corr_mult")),
     _kb(8.617343e-5),      // Boltzmann constant in eV/K
     _JtoeV(6.24150974e18), // Joule to eV conversion
     _mu_qp(0.0),
@@ -59,6 +51,15 @@ GBAnisotropyBase::GBAnisotropyBase(const InputParameters & parameters)
     _vals(_op_num),
     _grad_vals(_op_num)
 {
+  bind_prop_func_var("kappa_op", computeAll, _kappa);
+  bind_prop_func_var("gamma_asymm", computeAll, _gamma);
+  bind_prop_func_var("L", computeAll, _L);
+  bind_prop_func_var("mu", computeAll, _mu);
+  bind_prop_func_var("molar_volume", computeAll, _molar_volume);
+  bind_prop_func_var("entropy_diff", computeAll, _entropy_diff);
+  bind_prop_func_var("act_wGB", computeAll, _act_wGB);
+  bind_prop_func_var("tgrad_corr_mult", computeAll, _tgrad_corr_mult);
+
   // reshape vectors
   _sigma.resize(_op_num);
   _mob.resize(_op_num);
@@ -112,7 +113,7 @@ GBAnisotropyBase::GBAnisotropyBase(const InputParameters & parameters)
 }
 
 void
-GBAnisotropyBase::computeQpProperties()
+GBAnisotropyBase::computeAll(const Location & loc)
 {
   Real sum_kappa = 0.0;
   Real sum_gamma = 0.0;
@@ -138,8 +139,8 @@ GBAnisotropyBase::computeQpProperties()
         Real sin_phi = std::sin(2.0 * phi_ave);
         Real cos_phi = std::cos(2.0 * phi_ave);
 
-        Real a = (*_grad_vals[m])[_qp](0) - (*_grad_vals[n])[_qp](0);
-        Real b = (*_grad_vals[m])[_qp](1) - (*_grad_vals[n])[_qp](1);
+        Real a = (*_grad_vals[m])[loc.qp](0) - (*_grad_vals[n])[loc.qp](0);
+        Real b = (*_grad_vals[m])[loc.qp](1) - (*_grad_vals[n])[loc.qp](1);
         Real ab = a * a + b * b + 1.0e-7; // for the sake of numerical convergence, the smaller the
                                           // more accurate, but more difficult to converge
 
@@ -155,26 +156,26 @@ GBAnisotropyBase::computeQpProperties()
         gamma_value = 1.0 / y;
       }
 
-      Val = (100000.0 * ((*_vals[m])[_qp]) * ((*_vals[m])[_qp]) + 0.01) *
-            (100000.0 * ((*_vals[n])[_qp]) * ((*_vals[n])[_qp]) + 0.01);
+      Val = (100000.0 * ((*_vals[m])[loc.qp]) * ((*_vals[m])[loc.qp]) + 0.01) *
+            (100000.0 * ((*_vals[n])[loc.qp]) * ((*_vals[n])[loc.qp]) + 0.01);
 
       sum_val += Val;
       sum_kappa += _kappa_gamma[m][n] * f_sigma * Val;
       sum_gamma += gamma_value * Val;
       // Following comes from substituting Eq. (36c) from the paper into (36b)
-      sum_L += Val * _mob[m][n] * std::exp(-_Q[m][n] / (_kb * _T[_qp])) * f_mob * _mu_qp *
+      sum_L += Val * _mob[m][n] * std::exp(-_Q[m][n] / (_kb * _T[loc.qp])) * f_mob * _muloc.qp *
                _a_g2[n][m] / _sigma[m][n];
     }
   }
 
-  _kappa[_qp] = sum_kappa / sum_val;
-  _gamma[_qp] = sum_gamma / sum_val;
-  _L[_qp] = sum_L / sum_val;
-  _mu[_qp] = _mu_qp;
+  _kappa = sum_kappa / sum_val;
+  _gamma = sum_gamma / sum_val;
+  _L = sum_L / sum_val;
+  _mu = _muloc.qp;
 
-  _molar_volume[_qp] =
+  _molar_volume =
       _M_V / (_length_scale * _length_scale * _length_scale); // m^3/mol converted to ls^3/mol
-  _entropy_diff[_qp] = 9.5 * _JtoeV;                          // J/(K mol) converted to eV(K mol)
-  _act_wGB[_qp] = 0.5e-9 / _length_scale;                     // 0.5 nm
-  _tgrad_corr_mult[_qp] = _mu[_qp] * 9.0 / 8.0;
+  _entropy_diff = 9.5 * _JtoeV;                               // J/(K mol) converted to eV(K mol)
+  _act_wGB = 0.5e-9 / _length_scale;                          // 0.5 nm
+  _tgrad_corr_mult = _mu * 9.0 / 8.0;
 }
