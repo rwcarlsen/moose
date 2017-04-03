@@ -1186,7 +1186,7 @@ MooseVariable::computeElemValuesFace()
   if (tryFastFace())
     return;
   // std::bitset<32> mask = fastMask();
-  // std::c o ut << "mask=" << mask << "\n";
+  // std::c o ut << "facemask=" << mask << "\n";
 
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
@@ -2359,6 +2359,38 @@ MooseVariable::tryFast()
              false,
              false,
              false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false);
+    FASTCASE(computeElemValuesFast,
+             true,
+             false,
+             false,
+             false,
+             true,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             false,
+             true,
              false,
              false,
              false,
