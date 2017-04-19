@@ -30,6 +30,11 @@ dataLoad(std::istream & stream, ElasticityTensorR4 & et, void * context)
   dataLoad(stream, et._vals, context);
 }
 
+inline int r4i(unsigned int i, unsigned int j, unsigned int k, unsigned int l)
+{
+  return ((i*LIBMESH_DIM+j)*LIBMESH_DIM+k)*LIBMESH_DIM+l;
+}
+
 ElasticityTensorR4::ElasticityTensorR4(const RankFourTensor & a) : RankFourTensor(a)
 {
   mooseDeprecated("Use RankFourTensor instead of ElasticityTensorR4. See "
@@ -47,7 +52,7 @@ ElasticityTensorR4::elasticJacobian(const unsigned int i,
   Real the_sum = 0.0;
   for (unsigned int j = 0; j < N; ++j)
     for (unsigned int l = 0; l < N; ++l)
-      the_sum += _vals[i][j][k][l] * grad_phi(l) * grad_test(j);
+      the_sum += _vals[r4i(i,j,k,l)] * grad_phi(l) * grad_test(j);
   return the_sum;
 }
 
@@ -62,7 +67,7 @@ ElasticityTensorR4::elasticJacobianwc(const unsigned int i,
   for (unsigned int j = 0; j < N; ++j)
     for (unsigned int m = 0; m < N; ++m)
       for (unsigned int n = 0; n < N; ++n)
-        the_sum += _vals[i][j][m][n] * PermutationTensor::eps(m, n, k) * grad_test(j);
+        the_sum += _vals[r4i(i,j,m,n)] * PermutationTensor::eps(m, n, k) * grad_test(j);
   return the_sum * phi;
 }
 
@@ -78,7 +83,7 @@ ElasticityTensorR4::momentJacobian(const unsigned int i,
   for (unsigned int j = 0; j < N; ++j)
     for (unsigned int m = 0; m < N; ++m)
       for (unsigned int n = 0; n < N; ++n)
-        the_sum += PermutationTensor::eps(i, j, m) * _vals[j][m][k][n] * grad_phi(n);
+        the_sum += PermutationTensor::eps(i, j, m) * _vals[r4i(j,m,k,n)] * grad_phi(n);
   return test * the_sum;
 }
 
@@ -96,6 +101,6 @@ ElasticityTensorR4::momentJacobianwc(const unsigned int i,
       for (unsigned int m = 0; m < N; ++m)
         for (unsigned int n = 0; n < N; ++n)
           the_sum +=
-              PermutationTensor::eps(i, j, m) * _vals[j][m][l][n] * PermutationTensor::eps(l, n, k);
+              PermutationTensor::eps(i, j, m) * _vals[r4i(j,m,l,n)] * PermutationTensor::eps(l, n, k);
   return test * phi * the_sum;
 }

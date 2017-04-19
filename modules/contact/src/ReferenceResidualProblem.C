@@ -60,12 +60,12 @@ ReferenceResidualProblem::initialSetup()
   System & s = nonlinear_sys.system();
   TransientExplicitSystem & as = aux_sys.sys();
 
-  if (_solnVarNames.size() > 0 && _solnVarNames.size() != s.n_vars())
-    mooseError("In ReferenceResidualProblem, size of solution_variables (",
-               _solnVarNames.size(),
-               ") != number of variables in system (",
-               s.n_vars(),
-               ")");
+  //if (_solnVarNames.size() > 0 && _solnVarNames.size() != s.n_vars())
+  //  mooseError("In ReferenceResidualProblem, size of solution_variables (",
+  //             _solnVarNames.size(),
+  //             ") != number of variables in system (",
+  //             s.n_vars(),
+  //             ")");
 
   _solnVars.clear();
   for (unsigned int i = 0; i < _solnVarNames.size(); ++i)

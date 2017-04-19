@@ -223,9 +223,10 @@ public:
 protected:
   /// Dimensionality of rank-four tensor
   static const unsigned int N = LIBMESH_DIM;
+  static const unsigned int N4 = N*N*N*N;
 
   /// The values of the rank-four tensor
-  Real _vals[N][N][N][N];
+  Real _vals[N4];
 
   /**
   * fillSymmetricFromInputVector takes either 21 (all=true) or 9 (all=false) inputs to fill in
@@ -330,19 +331,21 @@ RankFourTensor::rotate(const T & R)
 {
   RankFourTensor old = *this;
 
+  int index = 0;
   for (unsigned int i = 0; i < N; ++i)
     for (unsigned int j = 0; j < N; ++j)
       for (unsigned int k = 0; k < N; ++k)
         for (unsigned int l = 0; l < N; ++l)
         {
           Real sum = 0.0;
+          int index2 = 0;
           for (unsigned int m = 0; m < N; ++m)
             for (unsigned int n = 0; n < N; ++n)
               for (unsigned int o = 0; o < N; ++o)
                 for (unsigned int p = 0; p < N; ++p)
-                  sum += R(i, m) * R(j, n) * R(k, o) * R(l, p) * old(m, n, o, p);
+                  sum += R(i, m) * R(j, n) * R(k, o) * R(l, p) * old._vals[index2++];
 
-          _vals[i][j][k][l] = sum;
+          _vals[index++] = sum;
         }
 }
 
