@@ -17,6 +17,7 @@
 #include "SystemBase.h"
 #include "Assembly.h"
 #include "MooseMesh.h"
+#include <bitset>
 
 // libMesh
 #include "libmesh/numeric_vector.h"
@@ -38,44 +39,6 @@ MooseVariable::MooseVariable(unsigned int var_num,
     _elem(_assembly.elem()),
     _current_side(_assembly.side()),
     _neighbor(_assembly.neighbor()),
-
-    _need_u_old(false),
-    _need_u_older(false),
-    _need_u_previous_nl(false),
-
-    _need_grad_old(false),
-    _need_grad_older(false),
-    _need_grad_previous_nl(false),
-
-    _need_second(false),
-    _need_second_old(false),
-    _need_second_older(false),
-    _need_second_previous_nl(false),
-
-    _need_u_old_neighbor(false),
-    _need_u_older_neighbor(false),
-    _need_u_previous_nl_neighbor(false),
-
-    _need_grad_old_neighbor(false),
-    _need_grad_older_neighbor(false),
-    _need_grad_previous_nl_neighbor(false),
-
-    _need_second_neighbor(false),
-    _need_second_old_neighbor(false),
-    _need_second_older_neighbor(false),
-    _need_second_previous_nl_neighbor(false),
-
-    _need_nodal_u(false),
-    _need_nodal_u_old(false),
-    _need_nodal_u_older(false),
-    _need_nodal_u_previous_nl(false),
-    _need_nodal_u_dot(false),
-
-    _need_nodal_u_neighbor(false),
-    _need_nodal_u_old_neighbor(false),
-    _need_nodal_u_older_neighbor(false),
-    _need_nodal_u_previous_nl_neighbor(false),
-    _need_nodal_u_dot_neighbor(false),
 
     _phi(_assembly.fePhi(_fe_type)),
     _grad_phi(_assembly.feGradPhi(_fe_type)),
@@ -99,6 +62,9 @@ MooseVariable::MooseVariable(unsigned int var_num,
     _is_defined_neighbor(false),
     _node_neighbor(_assembly.nodeNeighbor())
 {
+  if (_subproblem.isTransient())
+    need(Need::is_transient);
+
   _assembly.buildFE(feType());
 
   // FIXME: continuity of FE type seems equivalent with the definition of nodal variables.
@@ -468,7 +434,7 @@ MooseVariable::nodalValue()
 {
   if (isNodal())
   {
-    _need_nodal_u = true;
+    need(Need::nodal_u);
     return _nodal_u;
   }
   else
@@ -482,7 +448,7 @@ MooseVariable::nodalValueOld()
 {
   if (isNodal())
   {
-    _need_nodal_u_old = true;
+    need(Need::nodal_u_old);
     return _nodal_u_old;
   }
   else
@@ -496,7 +462,7 @@ MooseVariable::nodalValueOlder()
 {
   if (isNodal())
   {
-    _need_nodal_u_older = true;
+    need(Need::nodal_u_older);
     return _nodal_u_older;
   }
   else
@@ -510,7 +476,7 @@ MooseVariable::nodalValuePreviousNL()
 {
   if (isNodal())
   {
-    _need_nodal_u_previous_nl = true;
+    need(Need::nodal_u_previous_nl);
     return _nodal_u_previous_nl;
   }
   else
@@ -524,7 +490,7 @@ MooseVariable::nodalValueDot()
 {
   if (isNodal())
   {
-    _need_nodal_u_dot = true;
+    need(Need::nodal_u_dot);
     return _nodal_u_dot;
   }
   else
@@ -538,7 +504,7 @@ MooseVariable::nodalValueNeighbor()
 {
   if (isNodal())
   {
-    _need_nodal_u_neighbor = true;
+    need(Need::nodal_u_neighbor);
     return _nodal_u_neighbor;
   }
   else
@@ -552,7 +518,7 @@ MooseVariable::nodalValueOldNeighbor()
 {
   if (isNodal())
   {
-    _need_nodal_u_old_neighbor = true;
+    need(Need::nodal_u_old_neighbor);
     return _nodal_u_old_neighbor;
   }
   else
@@ -566,7 +532,7 @@ MooseVariable::nodalValueOlderNeighbor()
 {
   if (isNodal())
   {
-    _need_nodal_u_older_neighbor = true;
+    need(Need::nodal_u_older_neighbor);
     return _nodal_u_older_neighbor;
   }
   else
@@ -580,7 +546,7 @@ MooseVariable::nodalValuePreviousNLNeighbor()
 {
   if (isNodal())
   {
-    _need_nodal_u_previous_nl_neighbor = true;
+    need(Need::nodal_u_previous_nl_neighbor);
     return _nodal_u_previous_nl_neighbor;
   }
   else
@@ -594,7 +560,7 @@ MooseVariable::nodalValueDotNeighbor()
 {
   if (isNodal())
   {
-    _need_nodal_u_dot_neighbor = true;
+    need(Need::nodal_u_dot_neighbor);
     return _nodal_u_dot_neighbor;
   }
   else
@@ -619,7 +585,7 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
   _u.resize(nqp);
   _grad_u.resize(nqp);
 
-  if (_need_second)
+  if (haveNeed(Need::second))
     _second_u_bak = _second_u;
   _second_u.resize(nqp);
 
@@ -630,27 +596,27 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
     _du_dot_du_bak = _du_dot_du;
     _du_dot_du.resize(nqp);
 
-    if (_need_u_old)
+    if (haveNeed(Need::u_old))
       _u_old_bak = _u_old;
     _u_old.resize(nqp);
 
-    if (_need_u_older)
+    if (haveNeed(Need::u_older))
       _u_older_bak = _u_older;
     _u_older.resize(nqp);
 
-    if (_need_grad_old)
+    if (haveNeed(Need::grad_old))
       _grad_u_old_bak = _grad_u_old;
     _grad_u_old.resize(nqp);
 
-    if (_need_grad_older)
+    if (haveNeed(Need::grad_older))
       _grad_u_older_bak = _grad_u_older;
     _grad_u_older.resize(nqp);
 
-    if (_need_second_old)
+    if (haveNeed(Need::second_old))
       _second_u_old_bak = _second_u_old;
     _second_u_old.resize(nqp);
 
-    if (_need_second_older)
+    if (haveNeed(Need::second_older))
       _second_u_older_bak = _second_u_older;
     _second_u_older.resize(nqp);
   }
@@ -660,7 +626,7 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
     _u[i] = 0;
     _grad_u[i] = 0;
 
-    if (_need_second)
+    if (haveNeed(Need::second))
       _second_u[i] = 0;
 
     if (is_transient)
@@ -668,22 +634,22 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
       _u_dot[i] = 0;
       _du_dot_du[i] = 0;
 
-      if (_need_u_old)
+      if (haveNeed(Need::u_old))
         _u_old[i] = 0;
 
-      if (_need_u_older)
+      if (haveNeed(Need::u_older))
         _u_older[i] = 0;
 
-      if (_need_grad_old)
+      if (haveNeed(Need::grad_old))
         _grad_u_old[i] = 0;
 
-      if (_need_grad_older)
+      if (haveNeed(Need::grad_older))
         _grad_u_older[i] = 0;
 
-      if (_need_second_old)
+      if (haveNeed(Need::second_old))
         _second_u_old[i] = 0;
 
-      if (_need_second_older)
+      if (haveNeed(Need::second_older))
         _second_u_older[i] = 0;
     }
   }
@@ -736,10 +702,10 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
     }
     if (is_transient)
     {
-      if (_need_u_old || _need_grad_old || _need_second_old)
+      if (haveNeed(Need::u_old) || haveNeed(Need::grad_old) || haveNeed(Need::second_old))
         soln_old_local = solution_old(idx);
 
-      if (_need_u_older || _need_grad_older || _need_second_older)
+      if (haveNeed(Need::u_older) || haveNeed(Need::grad_older) || haveNeed(Need::second_older))
         soln_older_local = solution_older(idx);
 
       u_dot_local = u_dot(idx);
@@ -754,18 +720,18 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
 
       if (is_transient)
       {
-        if (_need_grad_old)
+        if (haveNeed(Need::grad_old))
           grad_u_old_qp = &_grad_u_old[qp];
 
-        if (_need_grad_older)
+        if (haveNeed(Need::grad_older))
           grad_u_older_qp = &_grad_u_older[qp];
       }
 
-      if (_need_second || _need_second_old || _need_second_older)
+      if (haveNeed(Need::second) || haveNeed(Need::second_old) || haveNeed(Need::second_older))
       {
         d2phi_local = &(*_second_phi)[i][qp];
 
-        if (_need_second)
+        if (haveNeed(Need::second))
         {
           second_u_qp = &_second_u[qp];
           second_u_qp->add_scaled(*d2phi_local, soln_local);
@@ -773,10 +739,10 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
 
         if (is_transient)
         {
-          if (_need_second_old)
+          if (haveNeed(Need::second_old))
             second_u_old_qp = &_second_u_old[qp];
 
-          if (_need_second_older)
+          if (haveNeed(Need::second_older))
             second_u_older_qp = &_second_u_older[qp];
         }
       }
@@ -790,22 +756,22 @@ MooseVariable::computePerturbedElemValues(unsigned int perturbation_idx,
         _u_dot[qp] += phi_local * u_dot_local;
         _du_dot_du[qp] = du_dot_du;
 
-        if (_need_u_old)
+        if (haveNeed(Need::u_old))
           _u_old[qp] += phi_local * soln_old_local;
 
-        if (_need_u_older)
+        if (haveNeed(Need::u_older))
           _u_older[qp] += phi_local * soln_older_local;
 
-        if (_need_grad_old)
+        if (haveNeed(Need::grad_old))
           grad_u_old_qp->add_scaled(*dphi_qp, soln_old_local);
 
-        if (_need_grad_older)
+        if (haveNeed(Need::grad_older))
           grad_u_older_qp->add_scaled(*dphi_qp, soln_older_local);
 
-        if (_need_second_old)
+        if (haveNeed(Need::second_old))
           second_u_old_qp->add_scaled(*d2phi_local, soln_old_local);
 
-        if (_need_second_older)
+        if (haveNeed(Need::second_older))
           second_u_older_qp->add_scaled(*d2phi_local, soln_older_local);
       }
     }
@@ -817,7 +783,7 @@ MooseVariable::restoreUnperturbedElemValues()
 {
   _u = _u_bak;
   _grad_u = _grad_u_bak;
-  if (_need_second)
+  if (haveNeed(Need::second))
     _second_u = _second_u_bak;
 
   if (_subproblem.isTransient())
@@ -825,22 +791,22 @@ MooseVariable::restoreUnperturbedElemValues()
     _u_dot = _u_dot_bak;
     _du_dot_du = _du_dot_du_bak;
 
-    if (_need_u_old)
+    if (haveNeed(Need::u_old))
       _u_old = _u_old_bak;
 
-    if (_need_u_older)
+    if (haveNeed(Need::u_older))
       _u_older = _u_older_bak;
 
-    if (_need_grad_old)
+    if (haveNeed(Need::grad_old))
       _grad_u_old = _grad_u_old_bak;
 
-    if (_need_grad_older)
+    if (haveNeed(Need::grad_older))
       _grad_u_older = _grad_u_older_bak;
 
-    if (_need_second_old)
+    if (haveNeed(Need::second_old))
       _second_u_old = _second_u_old_bak;
 
-    if (_need_second_older)
+    if (haveNeed(Need::second_older))
       _second_u_older = _second_u_older_bak;
   }
 }
@@ -851,13 +817,13 @@ MooseVariable::resizeAllNeighbor(unsigned int nqp, bool is_transient, unsigned i
   _u_neighbor.resize(nqp);
   _grad_u_neighbor.resize(nqp);
 
-  if (_need_second_neighbor)
+  if (haveNeed(Need::second_neighbor))
     _second_u_neighbor.resize(nqp);
-  if (_need_u_previous_nl_neighbor)
+  if (haveNeed(Need::u_previous_nl_neighbor))
     _u_previous_nl_neighbor.resize(nqp);
-  if (_need_grad_previous_nl_neighbor)
+  if (haveNeed(Need::grad_previous_nl_neighbor))
     _grad_u_previous_nl_neighbor.resize(nqp);
-  if (_need_second_previous_nl_neighbor)
+  if (haveNeed(Need::second_previous_nl_neighbor))
     _second_u_previous_nl_neighbor.resize(nqp);
 
   if (is_transient)
@@ -865,30 +831,30 @@ MooseVariable::resizeAllNeighbor(unsigned int nqp, bool is_transient, unsigned i
     _u_dot_neighbor.resize(nqp);
     _du_dot_du_neighbor.resize(nqp);
 
-    if (_need_u_old_neighbor)
+    if (haveNeed(Need::u_old_neighbor))
       _u_old_neighbor.resize(nqp);
-    if (_need_u_older_neighbor)
+    if (haveNeed(Need::u_older_neighbor))
       _u_older_neighbor.resize(nqp);
-    if (_need_grad_old_neighbor)
+    if (haveNeed(Need::grad_old_neighbor))
       _grad_u_old_neighbor.resize(nqp);
-    if (_need_grad_older_neighbor)
+    if (haveNeed(Need::grad_older_neighbor))
       _grad_u_older_neighbor.resize(nqp);
-    if (_need_second_old_neighbor)
+    if (haveNeed(Need::second_old_neighbor))
       _second_u_old_neighbor.resize(nqp);
-    if (_need_second_older_neighbor)
+    if (haveNeed(Need::second_older_neighbor))
       _second_u_older_neighbor.resize(nqp);
 
-    if (_need_nodal_u_old_neighbor)
+    if (haveNeed(Need::nodal_u_old_neighbor))
       _nodal_u_old_neighbor.resize(num_dofs);
-    if (_need_nodal_u_older_neighbor)
+    if (haveNeed(Need::nodal_u_older_neighbor))
       _nodal_u_older_neighbor.resize(num_dofs);
-    if (_need_nodal_u_dot_neighbor)
+    if (haveNeed(Need::nodal_u_dot_neighbor))
       _nodal_u_dot_neighbor.resize(num_dofs);
   }
 
-  if (_need_nodal_u_neighbor)
+  if (haveNeed(Need::nodal_u_neighbor))
     _nodal_u_neighbor.resize(num_dofs);
-  if (_need_nodal_u_previous_nl_neighbor)
+  if (haveNeed(Need::nodal_u_previous_nl_neighbor))
     _nodal_u_previous_nl_neighbor.resize(num_dofs);
 
   for (unsigned int i = 0; i < nqp; ++i)
@@ -896,16 +862,16 @@ MooseVariable::resizeAllNeighbor(unsigned int nqp, bool is_transient, unsigned i
     _u_neighbor[i] = 0;
     _grad_u_neighbor[i] = 0;
 
-    if (_need_second)
+    if (haveNeed(Need::second))
       _second_u_neighbor[i] = 0;
 
-    if (_need_u_previous_nl_neighbor)
+    if (haveNeed(Need::u_previous_nl_neighbor))
       _u_previous_nl_neighbor[i] = 0;
 
-    if (_need_grad_previous_nl_neighbor)
+    if (haveNeed(Need::grad_previous_nl_neighbor))
       _grad_u_previous_nl_neighbor[i] = 0;
 
-    if (_need_second_previous_nl_neighbor)
+    if (haveNeed(Need::second_previous_nl_neighbor))
       _second_u_previous_nl_neighbor[i] = 0;
 
     if (is_transient)
@@ -913,22 +879,22 @@ MooseVariable::resizeAllNeighbor(unsigned int nqp, bool is_transient, unsigned i
       _u_dot_neighbor[i] = 0;
       _du_dot_du_neighbor[i] = 0;
 
-      if (_need_u_old_neighbor)
+      if (haveNeed(Need::u_old_neighbor))
         _u_old_neighbor[i] = 0;
 
-      if (_need_u_older_neighbor)
+      if (haveNeed(Need::u_older_neighbor))
         _u_older_neighbor[i] = 0;
 
-      if (_need_grad_old_neighbor)
+      if (haveNeed(Need::grad_old_neighbor))
         _grad_u_old_neighbor[i] = 0;
 
-      if (_need_grad_older_neighbor)
+      if (haveNeed(Need::grad_older_neighbor))
         _grad_u_older_neighbor[i] = 0;
 
-      if (_need_second_old_neighbor)
+      if (haveNeed(Need::second_old_neighbor))
         _second_u_old_neighbor[i] = 0;
 
-      if (_need_second_older_neighbor)
+      if (haveNeed(Need::second_older_neighbor))
         _second_u_older_neighbor[i] = 0;
     }
   }
@@ -940,13 +906,13 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
   _u.resize(nqp);
   _grad_u.resize(nqp);
 
-  if (_need_second)
+  if (haveNeed(Need::second))
     _second_u.resize(nqp);
-  if (_need_u_previous_nl)
+  if (haveNeed(Need::u_previous_nl))
     _u_previous_nl.resize(nqp);
-  if (_need_grad_previous_nl)
+  if (haveNeed(Need::grad_previous_nl))
     _grad_u_previous_nl.resize(nqp);
-  if (_need_second_previous_nl)
+  if (haveNeed(Need::second_previous_nl))
     _second_u_previous_nl.resize(nqp);
 
   if (is_transient)
@@ -954,30 +920,30 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
     _u_dot.resize(nqp);
     _du_dot_du.resize(nqp);
 
-    if (_need_u_old)
+    if (haveNeed(Need::u_old))
       _u_old.resize(nqp);
-    if (_need_u_older)
+    if (haveNeed(Need::u_older))
       _u_older.resize(nqp);
-    if (_need_grad_old)
+    if (haveNeed(Need::grad_old))
       _grad_u_old.resize(nqp);
-    if (_need_grad_older)
+    if (haveNeed(Need::grad_older))
       _grad_u_older.resize(nqp);
-    if (_need_second_old)
+    if (haveNeed(Need::second_old))
       _second_u_old.resize(nqp);
-    if (_need_second_older)
+    if (haveNeed(Need::second_older))
       _second_u_older.resize(nqp);
 
-    if (_need_nodal_u_old)
+    if (haveNeed(Need::nodal_u_old))
       _nodal_u_old.resize(num_dofs);
-    if (_need_nodal_u_older)
+    if (haveNeed(Need::nodal_u_older))
       _nodal_u_older.resize(num_dofs);
-    if (_need_nodal_u_dot)
+    if (haveNeed(Need::nodal_u_dot))
       _nodal_u_dot.resize(num_dofs);
   }
 
-  if (_need_nodal_u)
+  if (haveNeed(Need::nodal_u))
     _nodal_u.resize(num_dofs);
-  if (_need_nodal_u_previous_nl)
+  if (haveNeed(Need::nodal_u_previous_nl))
     _nodal_u_previous_nl.resize(num_dofs);
 
   for (unsigned int i = 0; i < nqp; ++i)
@@ -985,16 +951,16 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
     _u[i] = 0;
     _grad_u[i] = 0;
 
-    if (_need_second)
+    if (haveNeed(Need::second))
       _second_u[i] = 0;
 
-    if (_need_u_previous_nl)
+    if (haveNeed(Need::u_previous_nl))
       _u_previous_nl[i] = 0;
 
-    if (_need_grad_previous_nl)
+    if (haveNeed(Need::grad_previous_nl))
       _grad_u_previous_nl[i] = 0;
 
-    if (_need_second_previous_nl)
+    if (haveNeed(Need::second_previous_nl))
       _second_u_previous_nl[i] = 0;
 
     if (is_transient)
@@ -1002,22 +968,22 @@ MooseVariable::resizeAll(unsigned int nqp, bool is_transient, unsigned int num_d
       _u_dot[i] = 0;
       _du_dot_du[i] = 0;
 
-      if (_need_u_old)
+      if (haveNeed(Need::u_old))
         _u_old[i] = 0;
 
-      if (_need_u_older)
+      if (haveNeed(Need::u_older))
         _u_older[i] = 0;
 
-      if (_need_grad_old)
+      if (haveNeed(Need::grad_old))
         _grad_u_old[i] = 0;
 
-      if (_need_grad_older)
+      if (haveNeed(Need::grad_older))
         _grad_u_older[i] = 0;
 
-      if (_need_second_old)
+      if (haveNeed(Need::second_old))
         _second_u_old[i] = 0;
 
-      if (_need_second_older)
+      if (haveNeed(Need::second_older))
         _second_u_older[i] = 0;
     }
   }
@@ -1028,8 +994,8 @@ MooseVariable::computeElemValues()
 {
   if (tryFast())
     return;
-  // std::bitset<32> mask = fastMask();
-  // std::c o ut << "mask=" << mask << "\n";
+  //std::bitset<32> mask = _needs;
+  //std::c o ut << "mask=" << mask << "\n";
 
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
@@ -1071,31 +1037,31 @@ MooseVariable::computeElemValues()
     idx = _dof_indices[i];
     soln_local = current_solution(idx);
 
-    if (_need_nodal_u)
+    if (haveNeed(Need::nodal_u))
       _nodal_u[i] = soln_local;
 
-    if (_need_u_previous_nl || _need_grad_previous_nl || _need_second_previous_nl ||
-        _need_nodal_u_previous_nl)
+    if (haveNeed(Need::u_previous_nl) || haveNeed(Need::grad_previous_nl) || haveNeed(Need::second_previous_nl) ||
+        haveNeed(Need::nodal_u_previous_nl))
       soln_previous_nl_local = (*solution_prev_nl)(idx);
 
-    if (_need_nodal_u_previous_nl)
+    if (haveNeed(Need::nodal_u_previous_nl))
       _nodal_u_previous_nl[i] = soln_previous_nl_local;
 
     if (is_transient)
     {
-      if (_need_u_old || _need_grad_old || _need_second_old || _need_nodal_u_old)
+      if (haveNeed(Need::u_old) || haveNeed(Need::grad_old) || haveNeed(Need::second_old) || haveNeed(Need::nodal_u_old))
         soln_old_local = solution_old(idx);
 
-      if (_need_u_older || _need_grad_older || _need_second_older || _need_nodal_u_older)
+      if (haveNeed(Need::u_older) || haveNeed(Need::grad_older) || haveNeed(Need::second_older) || haveNeed(Need::nodal_u_older))
         soln_older_local = solution_older(idx);
 
-      if (_need_nodal_u_old)
+      if (haveNeed(Need::nodal_u_old))
         _nodal_u_old[i] = soln_old_local;
-      if (_need_nodal_u_older)
+      if (haveNeed(Need::nodal_u_older))
         _nodal_u_older[i] = soln_older_local;
 
       u_dot_local = u_dot(idx);
-      if (_need_nodal_u_dot)
+      if (haveNeed(Need::nodal_u_dot))
         _nodal_u_dot[i] = u_dot_local;
     }
 
@@ -1106,29 +1072,29 @@ MooseVariable::computeElemValues()
 
       grad_u_qp = &_grad_u[qp];
 
-      if (_need_grad_previous_nl)
+      if (haveNeed(Need::grad_previous_nl))
         grad_u_previous_nl_qp = &_grad_u_previous_nl[qp];
 
       if (is_transient)
       {
-        if (_need_grad_old)
+        if (haveNeed(Need::grad_old))
           grad_u_old_qp = &_grad_u_old[qp];
 
-        if (_need_grad_older)
+        if (haveNeed(Need::grad_older))
           grad_u_older_qp = &_grad_u_older[qp];
       }
 
-      if (_need_second || _need_second_old || _need_second_older || _need_second_previous_nl)
+      if (haveNeed(Need::second) || haveNeed(Need::second_old) || haveNeed(Need::second_older) || haveNeed(Need::second_previous_nl))
       {
         d2phi_local = &(*_second_phi)[i][qp];
 
-        if (_need_second)
+        if (haveNeed(Need::second))
         {
           second_u_qp = &_second_u[qp];
           second_u_qp->add_scaled(*d2phi_local, soln_local);
         }
 
-        if (_need_second_previous_nl)
+        if (haveNeed(Need::second_previous_nl))
         {
           second_u_previous_nl_qp = &_second_u_previous_nl[qp];
           second_u_previous_nl_qp->add_scaled(*d2phi_local, soln_previous_nl_local);
@@ -1136,10 +1102,10 @@ MooseVariable::computeElemValues()
 
         if (is_transient)
         {
-          if (_need_second_old)
+          if (haveNeed(Need::second_old))
             second_u_old_qp = &_second_u_old[qp];
 
-          if (_need_second_older)
+          if (haveNeed(Need::second_older))
             second_u_older_qp = &_second_u_older[qp];
         }
       }
@@ -1148,9 +1114,9 @@ MooseVariable::computeElemValues()
 
       grad_u_qp->add_scaled(*dphi_qp, soln_local);
 
-      if (_need_u_previous_nl)
+      if (haveNeed(Need::u_previous_nl))
         _u_previous_nl[qp] += phi_local * soln_previous_nl_local;
-      if (_need_grad_previous_nl)
+      if (haveNeed(Need::grad_previous_nl))
         grad_u_previous_nl_qp->add_scaled(*dphi_qp, soln_previous_nl_local);
 
       if (is_transient)
@@ -1158,22 +1124,22 @@ MooseVariable::computeElemValues()
         _u_dot[qp] += phi_local * u_dot_local;
         _du_dot_du[qp] = du_dot_du;
 
-        if (_need_u_old)
+        if (haveNeed(Need::u_old))
           _u_old[qp] += phi_local * soln_old_local;
 
-        if (_need_u_older)
+        if (haveNeed(Need::u_older))
           _u_older[qp] += phi_local * soln_older_local;
 
-        if (_need_grad_old)
+        if (haveNeed(Need::grad_old))
           grad_u_old_qp->add_scaled(*dphi_qp, soln_old_local);
 
-        if (_need_grad_older)
+        if (haveNeed(Need::grad_older))
           grad_u_older_qp->add_scaled(*dphi_qp, soln_older_local);
 
-        if (_need_second_old)
+        if (haveNeed(Need::second_old))
           second_u_old_qp->add_scaled(*d2phi_local, soln_old_local);
 
-        if (_need_second_older)
+        if (haveNeed(Need::second_older))
           second_u_older_qp->add_scaled(*d2phi_local, soln_older_local);
       }
     }
@@ -1185,8 +1151,8 @@ MooseVariable::computeElemValuesFace()
 {
   if (tryFastFace())
     return;
-  // std::bitset<32> mask = fastMask();
-  // std::c o ut << "facemask=" << mask << "\n";
+  //std::bitset<32> mask = _needs;
+  //std::c o ut << "facemask=" << mask << "\n";
 
   bool is_transient = _subproblem.isTransient();
   unsigned int nqp = _qrule->n_points();
@@ -1216,30 +1182,30 @@ MooseVariable::computeElemValuesFace()
     idx = _dof_indices[i];
     soln_local = current_solution(idx);
 
-    if (_need_nodal_u)
+    if (haveNeed(Need::nodal_u))
       _nodal_u[i] = soln_local;
 
-    if (_need_u_previous_nl || _need_grad_previous_nl || _need_second_previous_nl ||
-        _need_nodal_u_previous_nl)
+    if (haveNeed(Need::u_previous_nl) || haveNeed(Need::grad_previous_nl) || haveNeed(Need::second_previous_nl) ||
+        haveNeed(Need::nodal_u_previous_nl))
       soln_previous_nl_local = (*solution_prev_nl)(idx);
-    if (_need_nodal_u_previous_nl)
+    if (haveNeed(Need::nodal_u_previous_nl))
       _nodal_u_previous_nl[i] = soln_previous_nl_local;
 
     if (is_transient)
     {
-      if (_need_u_old || _need_grad_old || _need_second_old || _need_nodal_u_old)
+      if (haveNeed(Need::u_old) || haveNeed(Need::grad_old) || haveNeed(Need::second_old) || haveNeed(Need::nodal_u_old))
         soln_old_local = solution_old(idx);
 
-      if (_need_u_older || _need_grad_older || _need_second_older || _need_nodal_u_older)
+      if (haveNeed(Need::u_older) || haveNeed(Need::grad_older) || haveNeed(Need::second_older) || haveNeed(Need::nodal_u_older))
         soln_older_local = solution_older(idx);
 
-      if (_need_nodal_u_old)
+      if (haveNeed(Need::nodal_u_old))
         _nodal_u_old[i] = soln_old_local;
-      if (_need_nodal_u_older)
+      if (haveNeed(Need::nodal_u_older))
         _nodal_u_older[i] = soln_older_local;
 
       u_dot_local = u_dot(idx);
-      if (_need_nodal_u_dot)
+      if (haveNeed(Need::nodal_u_dot))
         _nodal_u_dot[i] = u_dot_local;
     }
 
@@ -1248,22 +1214,22 @@ MooseVariable::computeElemValuesFace()
       phi_local = _phi_face[i][qp];
       dphi_local = _grad_phi_face[i][qp];
 
-      if (_need_second || _need_second_old || _need_second_older || _need_second_previous_nl)
+      if (haveNeed(Need::second) || haveNeed(Need::second_old) || haveNeed(Need::second_older) || haveNeed(Need::second_previous_nl))
         d2phi_local = (*_second_phi_face)[i][qp];
 
       _u[qp] += phi_local * soln_local;
       _grad_u[qp] += dphi_local * soln_local;
 
-      if (_need_second)
+      if (haveNeed(Need::second))
         _second_u[qp] += d2phi_local * soln_local;
 
-      if (_need_u_previous_nl)
+      if (haveNeed(Need::u_previous_nl))
         _u_previous_nl[qp] += phi_local * soln_previous_nl_local;
 
-      if (_need_grad_previous_nl)
+      if (haveNeed(Need::grad_previous_nl))
         _grad_u_previous_nl[qp] += dphi_local * soln_previous_nl_local;
 
-      if (_need_second_previous_nl)
+      if (haveNeed(Need::second_previous_nl))
         _second_u_previous_nl[qp] += d2phi_local * soln_previous_nl_local;
 
       if (is_transient)
@@ -1271,22 +1237,22 @@ MooseVariable::computeElemValuesFace()
         _u_dot[qp] += phi_local * u_dot_local;
         _du_dot_du[qp] = du_dot_du;
 
-        if (_need_u_old)
+        if (haveNeed(Need::u_old))
           _u_old[qp] += phi_local * soln_old_local;
 
-        if (_need_u_older)
+        if (haveNeed(Need::u_older))
           _u_older[qp] += phi_local * soln_older_local;
 
-        if (_need_grad_old)
+        if (haveNeed(Need::grad_old))
           _grad_u_old[qp] += dphi_local * soln_old_local;
 
-        if (_need_grad_older)
+        if (haveNeed(Need::grad_older))
           _grad_u_older[qp] += dphi_local * soln_older_local;
 
-        if (_need_second_old)
+        if (haveNeed(Need::second_old))
           _second_u_old[qp] += d2phi_local * soln_old_local;
 
-        if (_need_second_older)
+        if (haveNeed(Need::second_older))
           _second_u_older[qp] += d2phi_local * soln_older_local;
       }
     }
@@ -1324,19 +1290,19 @@ MooseVariable::computeNeighborValuesFace()
 
     if (is_transient)
     {
-      if (_need_u_old_neighbor || _need_grad_old_neighbor || _need_second_old_neighbor)
+      if (haveNeed(Need::u_old_neighbor) || haveNeed(Need::grad_old_neighbor) || haveNeed(Need::second_old_neighbor))
         soln_old_local = solution_old(idx);
 
-      if (_need_u_older_neighbor || _need_grad_older_neighbor || _need_second_older_neighbor)
+      if (haveNeed(Need::u_older_neighbor) || haveNeed(Need::grad_older_neighbor) || haveNeed(Need::second_older_neighbor))
         soln_older_local = solution_older(idx);
 
-      if (_need_nodal_u_old_neighbor)
+      if (haveNeed(Need::nodal_u_old_neighbor))
         _nodal_u_old_neighbor[i] = soln_old_local;
-      if (_need_nodal_u_older_neighbor)
+      if (haveNeed(Need::nodal_u_older_neighbor))
         _nodal_u_older_neighbor[i] = soln_older_local;
 
       u_dot_local = u_dot(idx);
-      if (_need_nodal_u_dot_neighbor)
+      if (haveNeed(Need::nodal_u_dot_neighbor))
         _nodal_u_dot_neighbor[i] = u_dot_local;
     }
 
@@ -1345,13 +1311,13 @@ MooseVariable::computeNeighborValuesFace()
       phi_local = _phi_face_neighbor[i][qp];
       dphi_local = _grad_phi_face_neighbor[i][qp];
 
-      if (_need_second_neighbor || _need_second_old_neighbor || _need_second_older_neighbor)
+      if (haveNeed(Need::second_neighbor) || haveNeed(Need::second_old_neighbor) || haveNeed(Need::second_older_neighbor))
         d2phi_local = (*_second_phi_face_neighbor)[i][qp];
 
       _u_neighbor[qp] += phi_local * soln_local;
       _grad_u_neighbor[qp] += dphi_local * soln_local;
 
-      if (_need_second_neighbor)
+      if (haveNeed(Need::second_neighbor))
         _second_u_neighbor[qp] += d2phi_local * soln_local;
 
       if (is_transient)
@@ -1359,22 +1325,22 @@ MooseVariable::computeNeighborValuesFace()
         _u_dot_neighbor[qp] += phi_local * u_dot_local;
         _du_dot_du_neighbor[qp] = du_dot_du;
 
-        if (_need_u_old_neighbor)
+        if (haveNeed(Need::u_old_neighbor))
           _u_old_neighbor[qp] += phi_local * soln_old_local;
 
-        if (_need_u_older_neighbor)
+        if (haveNeed(Need::u_older_neighbor))
           _u_older_neighbor[qp] += phi_local * soln_older_local;
 
-        if (_need_grad_old_neighbor)
+        if (haveNeed(Need::grad_old_neighbor))
           _grad_u_old_neighbor[qp] += dphi_local * soln_old_local;
 
-        if (_need_grad_older_neighbor)
+        if (haveNeed(Need::grad_older_neighbor))
           _grad_u_older_neighbor[qp] += dphi_local * soln_older_local;
 
-        if (_need_second_old_neighbor)
+        if (haveNeed(Need::second_old_neighbor))
           _second_u_old_neighbor[qp] += d2phi_local * soln_old_local;
 
-        if (_need_second_older_neighbor)
+        if (haveNeed(Need::second_older_neighbor))
           _second_u_older_neighbor[qp] += d2phi_local * soln_older_local;
       }
     }
@@ -1411,19 +1377,19 @@ MooseVariable::computeNeighborValues()
 
     if (is_transient)
     {
-      if (_need_u_old_neighbor)
+      if (haveNeed(Need::u_old_neighbor))
         soln_old_local = solution_old(idx);
 
-      if (_need_u_older_neighbor)
+      if (haveNeed(Need::u_older_neighbor))
         soln_older_local = solution_older(idx);
 
-      if (_need_nodal_u_old_neighbor)
+      if (haveNeed(Need::nodal_u_old_neighbor))
         _nodal_u_old_neighbor[i] = soln_old_local;
-      if (_need_nodal_u_older_neighbor)
+      if (haveNeed(Need::nodal_u_older_neighbor))
         _nodal_u_older_neighbor[i] = soln_older_local;
 
       u_dot_local = u_dot(idx);
-      if (_need_nodal_u_dot_neighbor)
+      if (haveNeed(Need::nodal_u_dot_neighbor))
         _nodal_u_dot_neighbor[i] = u_dot_local;
     }
 
@@ -1432,33 +1398,33 @@ MooseVariable::computeNeighborValues()
       phi_local = _phi_neighbor[i][qp];
       dphi_local = _grad_phi_neighbor[i][qp];
 
-      if (_need_second_neighbor || _need_second_old_neighbor || _need_second_older_neighbor)
+      if (haveNeed(Need::second_neighbor) || haveNeed(Need::second_old_neighbor) || haveNeed(Need::second_older_neighbor))
         d2phi_local = (*_second_phi_neighbor)[i][qp];
 
       _u_neighbor[qp] += phi_local * soln_local;
       _grad_u_neighbor[qp] += dphi_local * soln_local;
 
-      if (_need_second_neighbor)
+      if (haveNeed(Need::second_neighbor))
         _second_u_neighbor[qp] += d2phi_local * soln_local;
 
       if (is_transient)
       {
-        if (_need_u_old_neighbor)
+        if (haveNeed(Need::u_old_neighbor))
           _u_old_neighbor[qp] += phi_local * soln_old_local;
 
-        if (_need_u_older_neighbor)
+        if (haveNeed(Need::u_older_neighbor))
           _u_older_neighbor[qp] += phi_local * soln_older_local;
 
-        if (_need_grad_old_neighbor)
+        if (haveNeed(Need::grad_old_neighbor))
           _grad_u_old_neighbor[qp] += dphi_local * soln_old_local;
 
-        if (_need_grad_older_neighbor)
+        if (haveNeed(Need::grad_older_neighbor))
           _grad_u_older_neighbor[qp] += dphi_local * soln_older_local;
 
-        if (_need_second_old_neighbor)
+        if (haveNeed(Need::second_old_neighbor))
           _second_u_old_neighbor[qp] += d2phi_local * soln_old_local;
 
-        if (_need_second_older_neighbor)
+        if (haveNeed(Need::second_older_neighbor))
           _second_u_older_neighbor[qp] += d2phi_local * soln_older_local;
       }
     }
@@ -1475,7 +1441,7 @@ MooseVariable::computeNodalValues()
     _nodal_u.resize(n);
     _sys.currentSolution()->get(_dof_indices, &_nodal_u[0]);
 
-    if (_need_nodal_u_previous_nl)
+    if (haveNeed(Need::nodal_u_previous_nl))
     {
       _nodal_u_previous_nl.resize(n);
       _sys.solutionPreviousNewton()->get(_dof_indices, &_nodal_u_previous_nl[0]);
@@ -1500,7 +1466,7 @@ MooseVariable::computeNodalValues()
   else
   {
     _nodal_u.resize(0);
-    if (_need_nodal_u_previous_nl)
+    if (haveNeed(Need::nodal_u_previous_nl))
       _nodal_u_previous_nl.resize(0);
     if (_subproblem.isTransient())
     {
@@ -1752,43 +1718,110 @@ MooseVariable::getElementalValue(const Elem * elem, unsigned int idx) const
   return (*_sys.currentSolution())(dof_indices[idx]);
 }
 
-template <bool is_transient,
-          bool need_u_old,
-          bool need_u_older,
-          bool need_u_previous_nl,
-          bool need_grad_old,
-          bool need_grad_older,
-          bool need_grad_previous_nl,
-          bool need_second,
-          bool need_second_old,
-          bool need_second_older,
-          bool need_second_previous_nl,
-          bool need_u_old_neighbor,
-          bool need_u_older_neighbor,
-          bool need_u_previous_nl_neighbor,
-          bool need_grad_old_neighbor,
-          bool need_grad_older_neighbor,
-          bool need_grad_previous_nl_neighbor,
-          bool need_second_neighbor,
-          bool need_second_old_neighbor,
-          bool need_second_older_neighbor,
-          bool need_second_previous_nl_neighbor,
-          bool need_nodal_u,
-          bool need_nodal_u_old,
-          bool need_nodal_u_older,
-          bool need_nodal_u_previous_nl,
-          bool need_nodal_u_dot,
-          bool need_nodal_u_neighbor,
-          bool need_nodal_u_old_neighbor,
-          bool need_nodal_u_older_neighbor,
-          bool need_nodal_u_previous_nl_neighbor,
-          bool need_nodal_u_dot_neighbor>
+template <int needs>
 void
 MooseVariable::computeElemValuesFaceFast()
 {
   unsigned int nqp = _qrule->n_points();
   unsigned int num_dofs = _dof_indices.size();
-  resizeAll(nqp, is_transient, num_dofs);
+
+  _u.resize(nqp);
+  _grad_u.resize(nqp);
+
+  if (needs & Need::second)
+    _second_u.resize(nqp);
+
+  if (needs & Need::u_previous_nl)
+    _u_previous_nl.resize(nqp);
+
+  if (needs & Need::grad_previous_nl)
+    _grad_u_previous_nl.resize(nqp);
+
+  if (needs & Need::second_previous_nl)
+    _second_u_previous_nl.resize(nqp);
+
+  if (needs & Need::is_transient)
+  {
+    _u_dot.resize(nqp);
+    _du_dot_du.resize(nqp);
+
+    if (needs & Need::u_old)
+      _u_old.resize(nqp);
+
+    if (needs & Need::u_older)
+      _u_older.resize(nqp);
+
+    if (needs & Need::grad_old)
+      _grad_u_old.resize(nqp);
+
+    if (needs & Need::grad_older)
+      _grad_u_older.resize(nqp);
+
+    if (needs & Need::second_old)
+      _second_u_old.resize(nqp);
+
+    if (needs & Need::second_older)
+      _second_u_older.resize(nqp);
+  }
+
+  for (unsigned int i = 0; i < nqp; ++i)
+  {
+    _u[i] = 0;
+    _grad_u[i] = 0;
+
+    if (needs & Need::second)
+      _second_u[i] = 0;
+
+    if (needs & Need::u_previous_nl)
+      _u_previous_nl[i] = 0;
+
+    if (needs & Need::grad_previous_nl)
+      _grad_u_previous_nl[i] = 0;
+
+    if (needs & Need::second_previous_nl)
+      _second_u_previous_nl[i] = 0;
+
+    if (needs & Need::is_transient)
+    {
+      _u_dot[i] = 0;
+      _du_dot_du[i] = 0;
+
+      if (needs & Need::u_old)
+        _u_old[i] = 0;
+
+      if (needs & Need::u_older)
+        _u_older[i] = 0;
+
+      if (needs & Need::grad_old)
+        _grad_u_old[i] = 0;
+
+      if (needs & Need::grad_older)
+        _grad_u_older[i] = 0;
+
+      if (needs & Need::second_old)
+        _second_u_old[i] = 0;
+
+      if (needs & Need::second_older)
+        _second_u_older[i] = 0;
+    }
+  }
+
+  if (needs & Need::nodal_u)
+    _nodal_u.resize(num_dofs);
+
+  if (needs & Need::nodal_u_previous_nl)
+    _nodal_u_previous_nl.resize(num_dofs);
+
+  if (needs & Need::is_transient)
+  {
+    if (needs & Need::nodal_u_old)
+      _nodal_u_old.resize(num_dofs);
+    if (needs & Need::nodal_u_older)
+      _nodal_u_older.resize(num_dofs);
+    if (needs & Need::nodal_u_dot)
+      _nodal_u_dot.resize(num_dofs);
+  }
+
 
   const NumericVector<Real> & current_solution = *_sys.currentSolution();
   const NumericVector<Real> & solution_old = _sys.solutionOld();
@@ -1813,30 +1846,30 @@ MooseVariable::computeElemValuesFaceFast()
     idx = _dof_indices[i];
     soln_local = current_solution(idx);
 
-    if (need_nodal_u)
+    if (needs & Need::nodal_u)
       _nodal_u[i] = soln_local;
 
-    if (need_u_previous_nl || need_grad_previous_nl || need_second_previous_nl ||
-        need_nodal_u_previous_nl)
+    if (needs & Need::u_previous_nl || needs & Need::grad_previous_nl || needs & Need::second_previous_nl ||
+        needs & Need::nodal_u_previous_nl)
       soln_previous_nl_local = (*solution_prev_nl)(idx);
-    if (need_nodal_u_previous_nl)
+    if (needs & Need::nodal_u_previous_nl)
       _nodal_u_previous_nl[i] = soln_previous_nl_local;
 
-    if (is_transient)
+    if (needs & Need::is_transient)
     {
-      if (need_u_old || need_grad_old || need_second_old || need_nodal_u_old)
+      if (needs & Need::u_old || needs & Need::grad_old || needs & Need::second_old || needs & Need::nodal_u_old)
         soln_old_local = solution_old(idx);
 
-      if (need_u_older || need_grad_older || need_second_older || need_nodal_u_older)
+      if (needs & Need::u_older || needs & Need::grad_older || needs & Need::second_older || needs & Need::nodal_u_older)
         soln_older_local = solution_older(idx);
 
-      if (need_nodal_u_old)
+      if (needs & Need::nodal_u_old)
         _nodal_u_old[i] = soln_old_local;
-      if (need_nodal_u_older)
+      if (needs & Need::nodal_u_older)
         _nodal_u_older[i] = soln_older_local;
 
       u_dot_local = u_dot(idx);
-      if (need_nodal_u_dot)
+      if (needs & Need::nodal_u_dot)
         _nodal_u_dot[i] = u_dot_local;
     }
 
@@ -1845,82 +1878,52 @@ MooseVariable::computeElemValuesFaceFast()
       phi_local = _phi_face[i][qp];
       dphi_local = _grad_phi_face[i][qp];
 
-      if (need_second || need_second_old || need_second_older || need_second_previous_nl)
+      if (needs & Need::second || needs & Need::second_old || needs & Need::second_older || needs & Need::second_previous_nl)
         d2phi_local = (*_second_phi_face)[i][qp];
 
       _u[qp] += phi_local * soln_local;
       _grad_u[qp] += dphi_local * soln_local;
 
-      if (need_second)
+      if (needs & Need::second)
         _second_u[qp] += d2phi_local * soln_local;
 
-      if (need_u_previous_nl)
+      if (needs & Need::u_previous_nl)
         _u_previous_nl[qp] += phi_local * soln_previous_nl_local;
 
-      if (need_grad_previous_nl)
+      if (needs & Need::grad_previous_nl)
         _grad_u_previous_nl[qp] += dphi_local * soln_previous_nl_local;
 
-      if (need_second_previous_nl)
+      if (needs & Need::second_previous_nl)
         _second_u_previous_nl[qp] += d2phi_local * soln_previous_nl_local;
 
-      if (is_transient)
+      if (needs & Need::is_transient)
       {
         _u_dot[qp] += phi_local * u_dot_local;
         _du_dot_du[qp] = du_dot_du;
 
-        if (need_u_old)
+        if (needs & Need::u_old)
           _u_old[qp] += phi_local * soln_old_local;
 
-        if (need_u_older)
+        if (needs & Need::u_older)
           _u_older[qp] += phi_local * soln_older_local;
 
-        if (need_grad_old)
+        if (needs & Need::grad_old)
           _grad_u_old[qp] += dphi_local * soln_old_local;
 
-        if (need_grad_older)
+        if (needs & Need::grad_older)
           _grad_u_older[qp] += dphi_local * soln_older_local;
 
-        if (need_second_old)
+        if (needs & Need::second_old)
           _second_u_old[qp] += d2phi_local * soln_old_local;
 
-        if (need_second_older)
+        if (needs & Need::second_older)
           _second_u_older[qp] += d2phi_local * soln_older_local;
       }
     }
   }
 }
 
-template <bool is_transient,
-          bool need_u_old,
-          bool need_u_older,
-          bool need_u_previous_nl,
-          bool need_grad_old,
-          bool need_grad_older,
-          bool need_grad_previous_nl,
-          bool need_second,
-          bool need_second_old,
-          bool need_second_older,
-          bool need_second_previous_nl,
-          bool need_u_old_neighbor,
-          bool need_u_older_neighbor,
-          bool need_u_previous_nl_neighbor,
-          bool need_grad_old_neighbor,
-          bool need_grad_older_neighbor,
-          bool need_grad_previous_nl_neighbor,
-          bool need_second_neighbor,
-          bool need_second_old_neighbor,
-          bool need_second_older_neighbor,
-          bool need_second_previous_nl_neighbor,
-          bool need_nodal_u,
-          bool need_nodal_u_old,
-          bool need_nodal_u_older,
-          bool need_nodal_u_previous_nl,
-          bool need_nodal_u_dot,
-          bool need_nodal_u_neighbor,
-          bool need_nodal_u_old_neighbor,
-          bool need_nodal_u_older_neighbor,
-          bool need_nodal_u_previous_nl_neighbor,
-          bool need_nodal_u_dot_neighbor>
+template <int needs>
 void
 MooseVariable::computeElemValuesFast()
 {
@@ -1929,39 +1932,39 @@ MooseVariable::computeElemValuesFast()
   _u.resize(nqp);
   _grad_u.resize(nqp);
 
-  if (need_second)
+  if (needs & Need::second)
     _second_u.resize(nqp);
 
-  if (need_u_previous_nl)
+  if (needs & Need::u_previous_nl)
     _u_previous_nl.resize(nqp);
 
-  if (need_grad_previous_nl)
+  if (needs & Need::grad_previous_nl)
     _grad_u_previous_nl.resize(nqp);
 
-  if (need_second_previous_nl)
+  if (needs & Need::second_previous_nl)
     _second_u_previous_nl.resize(nqp);
 
-  if (is_transient)
+  if (needs & Need::is_transient)
   {
     _u_dot.resize(nqp);
     _du_dot_du.resize(nqp);
 
-    if (need_u_old)
+    if (needs & Need::u_old)
       _u_old.resize(nqp);
 
-    if (need_u_older)
+    if (needs & Need::u_older)
       _u_older.resize(nqp);
 
-    if (need_grad_old)
+    if (needs & Need::grad_old)
       _grad_u_old.resize(nqp);
 
-    if (need_grad_older)
+    if (needs & Need::grad_older)
       _grad_u_older.resize(nqp);
 
-    if (need_second_old)
+    if (needs & Need::second_old)
       _second_u_old.resize(nqp);
 
-    if (need_second_older)
+    if (needs & Need::second_older)
       _second_u_older.resize(nqp);
   }
 
@@ -1970,58 +1973,58 @@ MooseVariable::computeElemValuesFast()
     _u[i] = 0;
     _grad_u[i] = 0;
 
-    if (need_second)
+    if (needs & Need::second)
       _second_u[i] = 0;
 
-    if (need_u_previous_nl)
+    if (needs & Need::u_previous_nl)
       _u_previous_nl[i] = 0;
 
-    if (need_grad_previous_nl)
+    if (needs & Need::grad_previous_nl)
       _grad_u_previous_nl[i] = 0;
 
-    if (need_second_previous_nl)
+    if (needs & Need::second_previous_nl)
       _second_u_previous_nl[i] = 0;
 
-    if (is_transient)
+    if (needs & Need::is_transient)
     {
       _u_dot[i] = 0;
       _du_dot_du[i] = 0;
 
-      if (need_u_old)
+      if (needs & Need::u_old)
         _u_old[i] = 0;
 
-      if (need_u_older)
+      if (needs & Need::u_older)
         _u_older[i] = 0;
 
-      if (need_grad_old)
+      if (needs & Need::grad_old)
         _grad_u_old[i] = 0;
 
-      if (need_grad_older)
+      if (needs & Need::grad_older)
         _grad_u_older[i] = 0;
 
-      if (need_second_old)
+      if (needs & Need::second_old)
         _second_u_old[i] = 0;
 
-      if (need_second_older)
+      if (needs & Need::second_older)
         _second_u_older[i] = 0;
     }
   }
 
   unsigned int num_dofs = _dof_indices.size();
 
-  if (need_nodal_u)
+  if (needs & Need::nodal_u)
     _nodal_u.resize(num_dofs);
 
-  if (need_nodal_u_previous_nl)
+  if (needs & Need::nodal_u_previous_nl)
     _nodal_u_previous_nl.resize(num_dofs);
 
-  if (is_transient)
+  if (needs & Need::is_transient)
   {
-    if (need_nodal_u_old)
+    if (needs & Need::nodal_u_old)
       _nodal_u_old.resize(num_dofs);
-    if (need_nodal_u_older)
+    if (needs & Need::nodal_u_older)
       _nodal_u_older.resize(num_dofs);
-    if (need_nodal_u_dot)
+    if (needs & Need::nodal_u_dot)
       _nodal_u_dot.resize(num_dofs);
   }
 
@@ -2060,31 +2063,31 @@ MooseVariable::computeElemValuesFast()
     idx = _dof_indices[i];
     soln_local = current_solution(idx);
 
-    if (need_nodal_u)
+    if (needs & Need::nodal_u)
       _nodal_u[i] = soln_local;
 
-    if (need_u_previous_nl || need_grad_previous_nl || need_second_previous_nl ||
-        need_nodal_u_previous_nl)
+    if (needs & Need::u_previous_nl || needs & Need::grad_previous_nl || needs & Need::second_previous_nl ||
+        needs & Need::nodal_u_previous_nl)
       soln_previous_nl_local = (*solution_prev_nl)(idx);
 
-    if (need_nodal_u_previous_nl)
+    if (needs & Need::nodal_u_previous_nl)
       _nodal_u_previous_nl[i] = soln_previous_nl_local;
 
-    if (is_transient)
+    if (needs & Need::is_transient)
     {
-      if (need_u_old || need_grad_old || need_second_old || need_nodal_u_old)
+      if (needs & Need::u_old || needs & Need::grad_old || needs & Need::second_old || needs & Need::nodal_u_old)
         soln_old_local = solution_old(idx);
 
-      if (need_u_older || need_grad_older || need_second_older || need_nodal_u_older)
+      if (needs & Need::u_older || needs & Need::grad_older || needs & Need::second_older || needs & Need::nodal_u_older)
         soln_older_local = solution_older(idx);
 
-      if (need_nodal_u_old)
+      if (needs & Need::nodal_u_old)
         _nodal_u_old[i] = soln_old_local;
-      if (need_nodal_u_older)
+      if (needs & Need::nodal_u_older)
         _nodal_u_older[i] = soln_older_local;
 
       u_dot_local = u_dot(idx);
-      if (need_nodal_u_dot)
+      if (needs & Need::nodal_u_dot)
         _nodal_u_dot[i] = u_dot_local;
     }
 
@@ -2095,40 +2098,40 @@ MooseVariable::computeElemValuesFast()
 
       grad_u_qp = &_grad_u[qp];
 
-      if (need_grad_previous_nl)
+      if (needs & Need::grad_previous_nl)
         grad_u_previous_nl_qp = &_grad_u_previous_nl[qp];
 
-      if (is_transient)
+      if (needs & Need::is_transient)
       {
-        if (need_grad_old)
+        if (needs & Need::grad_old)
           grad_u_old_qp = &_grad_u_old[qp];
 
-        if (need_grad_older)
+        if (needs & Need::grad_older)
           grad_u_older_qp = &_grad_u_older[qp];
       }
 
-      if (need_second || need_second_old || need_second_older || need_second_previous_nl)
+      if (needs & Need::second || needs & Need::second_old || needs & Need::second_older || needs & Need::second_previous_nl)
       {
         d2phi_local = &(*_second_phi)[i][qp];
 
-        if (need_second)
+        if (needs & Need::second)
         {
           second_u_qp = &_second_u[qp];
           second_u_qp->add_scaled(*d2phi_local, soln_local);
         }
 
-        if (need_second_previous_nl)
+        if (needs & Need::second_previous_nl)
         {
           second_u_previous_nl_qp = &_second_u_previous_nl[qp];
           second_u_previous_nl_qp->add_scaled(*d2phi_local, soln_previous_nl_local);
         }
 
-        if (is_transient)
+        if (needs & Need::is_transient)
         {
-          if (need_second_old)
+          if (needs & Need::second_old)
             second_u_old_qp = &_second_u_old[qp];
 
-          if (need_second_older)
+          if (needs & Need::second_older)
             second_u_older_qp = &_second_u_older[qp];
         }
       }
@@ -2137,276 +2140,56 @@ MooseVariable::computeElemValuesFast()
 
       grad_u_qp->add_scaled(*dphi_qp, soln_local);
 
-      if (need_u_previous_nl)
+      if (needs & Need::u_previous_nl)
         _u_previous_nl[qp] += phi_local * soln_previous_nl_local;
-      if (need_grad_previous_nl)
+      if (needs & Need::grad_previous_nl)
         grad_u_previous_nl_qp->add_scaled(*dphi_qp, soln_previous_nl_local);
 
-      if (is_transient)
+      if (needs & Need::is_transient)
       {
         _u_dot[qp] += phi_local * u_dot_local;
         _du_dot_du[qp] = du_dot_du;
 
-        if (need_u_old)
+        if (needs & Need::u_old)
           _u_old[qp] += phi_local * soln_old_local;
 
-        if (need_u_older)
+        if (needs & Need::u_older)
           _u_older[qp] += phi_local * soln_older_local;
 
-        if (need_grad_old)
+        if (needs & Need::grad_old)
           grad_u_old_qp->add_scaled(*dphi_qp, soln_old_local);
 
-        if (need_grad_older)
+        if (needs & Need::grad_older)
           grad_u_older_qp->add_scaled(*dphi_qp, soln_older_local);
 
-        if (need_second_old)
+        if (needs & Need::second_old)
           second_u_old_qp->add_scaled(*d2phi_local, soln_old_local);
 
-        if (need_second_older)
+        if (needs & Need::second_older)
           second_u_older_qp->add_scaled(*d2phi_local, soln_older_local);
       }
     }
   }
 }
 
-#define FASTCASE(func,                                                                             \
-                 arg1,                                                                             \
-                 arg2,                                                                             \
-                 arg3,                                                                             \
-                 arg4,                                                                             \
-                 arg5,                                                                             \
-                 arg6,                                                                             \
-                 arg7,                                                                             \
-                 arg8,                                                                             \
-                 arg9,                                                                             \
-                 arg10,                                                                            \
-                 arg11,                                                                            \
-                 arg12,                                                                            \
-                 arg13,                                                                            \
-                 arg14,                                                                            \
-                 arg15,                                                                            \
-                 arg16,                                                                            \
-                 arg17,                                                                            \
-                 arg18,                                                                            \
-                 arg19,                                                                            \
-                 arg20,                                                                            \
-                 arg21,                                                                            \
-                 arg22,                                                                            \
-                 arg23,                                                                            \
-                 arg24,                                                                            \
-                 arg25,                                                                            \
-                 arg26,                                                                            \
-                 arg27,                                                                            \
-                 arg28,                                                                            \
-                 arg29,                                                                            \
-                 arg30,                                                                            \
-                 arg31)                                                                            \
-  case (arg1 * 1 << 0) | (arg2 * 1 << 1) | (arg3 * 1 << 2) | (arg4 * 1 << 3) | (arg5 * 1 << 4) |   \
-      (arg6 * 1 << 5) | (arg7 * 1 << 6) | (arg8 * 1 << 7) | (arg9 * 1 << 8) | (arg10 * 1 << 9) |   \
-      (arg11 * 1 << 10) | (arg12 * 1 << 11) | (arg13 * 1 << 12) | (arg14 * 1 << 13) |              \
-      (arg15 * 1 << 14) | (arg16 * 1 << 15) | (arg17 * 1 << 16) | (arg18 * 1 << 17) |              \
-      (arg19 * 1 << 18) | (arg20 * 1 << 19) | (arg21 * 1 << 20) | (arg22 * 1 << 21) |              \
-      (arg23 * 1 << 22) | (arg24 * 1 << 23) | (arg25 * 1 << 24) | (arg26 * 1 << 25) |              \
-      (arg27 * 1 << 26) | (arg28 * 1 << 27) | (arg29 * 1 << 28) | (arg30 * 1 << 29) |              \
-      (arg31 * 1 << 30):                                                                           \
-    func<arg1,                                                                                     \
-         arg2,                                                                                     \
-         arg3,                                                                                     \
-         arg4,                                                                                     \
-         arg5,                                                                                     \
-         arg6,                                                                                     \
-         arg7,                                                                                     \
-         arg8,                                                                                     \
-         arg9,                                                                                     \
-         arg10,                                                                                    \
-         arg11,                                                                                    \
-         arg12,                                                                                    \
-         arg13,                                                                                    \
-         arg14,                                                                                    \
-         arg15,                                                                                    \
-         arg16,                                                                                    \
-         arg17,                                                                                    \
-         arg18,                                                                                    \
-         arg19,                                                                                    \
-         arg20,                                                                                    \
-         arg21,                                                                                    \
-         arg22,                                                                                    \
-         arg23,                                                                                    \
-         arg24,                                                                                    \
-         arg25,                                                                                    \
-         arg26,                                                                                    \
-         arg27,                                                                                    \
-         arg28,                                                                                    \
-         arg29,                                                                                    \
-         arg30,                                                                                    \
-         arg31>();                                                                                 \
+// clang-format off
+
+#define FASTCASE(func, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, arg19, arg20, arg21, arg22, arg23, arg24, arg25, arg26, arg27, arg28, arg29, arg30, arg31) \
+  case   (arg1 * 1 << 0) | (arg2 * 1 << 1) | (arg3 * 1 << 2) | (arg4 * 1 << 3) | (arg5 * 1 << 4) | (arg6 * 1 << 5) | (arg7 * 1 << 6) | (arg8 * 1 << 7) | (arg9 * 1 << 8) | (arg10 * 1 << 9) | (arg11 * 1 << 10) | (arg12 * 1 << 11) | (arg13 * 1 << 12) | (arg14 * 1 << 13) | (arg15 * 1 << 14) | (arg16 * 1 << 15) | (arg17 * 1 << 16) | (arg18 * 1 << 17) | (arg19 * 1 << 18) | (arg20 * 1 << 19) | (arg21 * 1 << 20) | (arg22 * 1 << 21) | (arg23 * 1 << 22) | (arg24 * 1 << 23) | (arg25 * 1 << 24) | (arg26 * 1 << 25) | (arg27 * 1 << 26) | (arg28 * 1 << 27) | (arg29 * 1 << 28) | (arg30 * 1 << 29) | (arg31 * 1 << 30): \
+    func<(arg1 * 1 << 0) | (arg2 * 1 << 1) | (arg3 * 1 << 2) | (arg4 * 1 << 3) | (arg5 * 1 << 4) | (arg6 * 1 << 5) | (arg7 * 1 << 6) | (arg8 * 1 << 7) | (arg9 * 1 << 8) | (arg10 * 1 << 9) | (arg11 * 1 << 10) | (arg12 * 1 << 11) | (arg13 * 1 << 12) | (arg14 * 1 << 13) | (arg15 * 1 << 14) | (arg16 * 1 << 15) | (arg17 * 1 << 16) | (arg18 * 1 << 17) | (arg19 * 1 << 18) | (arg20 * 1 << 19) | (arg21 * 1 << 20) | (arg22 * 1 << 21) | (arg23 * 1 << 22) | (arg24 * 1 << 23) | (arg25 * 1 << 24) | (arg26 * 1 << 25) | (arg27 * 1 << 26) | (arg28 * 1 << 27) | (arg29 * 1 << 28) | (arg30 * 1 << 29) | (arg31 * 1 << 30)>(); \
     return true
 
 bool
 MooseVariable::tryFast()
 {
-  switch (fastMask())
+  switch (_needs)
   {
-    FASTCASE(computeElemValuesFast,
-             true,
-             true,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFast,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFast,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFast,
-             true,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFast,
-             true,
-             false,
-             false,
-             false,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
+    FASTCASE(computeElemValuesFast, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFast, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFast, true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFast, true, true, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFast, true, false, false, false, true, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFast, true, true, false, false, true, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
     default:
       return false;
   }
@@ -2415,215 +2198,16 @@ MooseVariable::tryFast()
 bool
 MooseVariable::tryFastFace()
 {
-  switch (fastMask())
+  switch (_needs)
   {
-    FASTCASE(computeElemValuesFaceFast,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFaceFast,
-             true,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFaceFast,
-             true,
-             true,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
-    FASTCASE(computeElemValuesFaceFast,
-             true,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             true,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false,
-             false);
+    FASTCASE(computeElemValuesFaceFast, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFaceFast, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFaceFast, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFaceFast, true, true, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
+    FASTCASE(computeElemValuesFaceFast, true, true, false, false, true, false, false, false, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false);
     default:
       return false;
   }
 }
 
-unsigned int
-MooseVariable::fastMask()
-{
-  unsigned int mask = 0;
-
-  if (_subproblem.isTransient())
-    mask |= 1 << 0;
-
-  if (_need_u_old)
-    mask |= 1 << 1;
-  if (_need_u_older)
-    mask |= 1 << 2;
-  if (_need_u_previous_nl)
-    mask |= 1 << 3;
-
-  if (_need_grad_old)
-    mask |= 1 << 4;
-  if (_need_grad_older)
-    mask |= 1 << 5;
-  if (_need_grad_previous_nl)
-    mask |= 1 << 6;
-
-  if (_need_second)
-    mask |= 1 << 7;
-  if (_need_second_old)
-    mask |= 1 << 8;
-  if (_need_second_older)
-    mask |= 1 << 9;
-  if (_need_second_previous_nl)
-    mask |= 1 << 10;
-
-  if (_need_u_old_neighbor)
-    mask |= 1 << 11;
-  if (_need_u_older_neighbor)
-    mask |= 1 << 12;
-  if (_need_u_previous_nl_neighbor)
-    mask |= 1 << 13;
-
-  if (_need_grad_old_neighbor)
-    mask |= 1 << 14;
-  if (_need_grad_older_neighbor)
-    mask |= 1 << 15;
-  if (_need_grad_previous_nl_neighbor)
-    mask |= 1 << 16;
-
-  if (_need_second_neighbor)
-    mask |= 1 << 17;
-  if (_need_second_old_neighbor)
-    mask |= 1 << 18;
-  if (_need_second_older_neighbor)
-    mask |= 1 << 19;
-  if (_need_second_previous_nl_neighbor)
-    mask |= 1 << 20;
-
-  if (_need_nodal_u)
-    mask |= 1 << 21;
-  if (_need_nodal_u_old)
-    mask |= 1 << 22;
-  if (_need_nodal_u_older)
-    mask |= 1 << 23;
-  if (_need_nodal_u_previous_nl)
-    mask |= 1 << 24;
-  if (_need_nodal_u_dot)
-    mask |= 1 << 25;
-
-  if (_need_nodal_u_neighbor)
-    mask |= 1 << 26;
-  if (_need_nodal_u_old_neighbor)
-    mask |= 1 << 27;
-  if (_need_nodal_u_older_neighbor)
-    mask |= 1 << 28;
-  if (_need_nodal_u_previous_nl_neighbor)
-    mask |= 1 << 29;
-  if (_need_nodal_u_dot_neighbor)
-    mask |= 1 << 30;
-  return mask;
-}
+// clang-format on

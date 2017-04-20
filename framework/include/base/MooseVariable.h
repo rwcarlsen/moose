@@ -105,7 +105,7 @@ public:
    */
   bool computingSecond()
   {
-    return _need_second || _need_second_old || _need_second_older || _need_second_previous_nl;
+    return haveNeed(Need::second) || haveNeed(Need::second_old) || haveNeed(Need::second_older) || haveNeed(Need::second_previous_nl);
   }
 
   const VariablePhiValue & phi();
@@ -132,59 +132,59 @@ public:
   const VariableValue & sln() { return _u; }
   const VariableValue & slnOld()
   {
-    _need_u_old = true;
+    need(Need::u_old);
     return _u_old;
   }
   const VariableValue & slnOlder()
   {
-    _need_u_older = true;
+    need(Need::u_older);
     return _u_older;
   }
   const VariableValue & slnPreviousNL()
   {
-    _need_u_previous_nl = true;
+    need(Need::u_previous_nl);
     return _u_previous_nl;
   }
   const VariableGradient & gradSln() { return _grad_u; }
   const VariableGradient & gradSlnOld()
   {
-    _need_grad_old = true;
+    need(Need::grad_old);
     return _grad_u_old;
   }
   const VariableGradient & gradSlnOlder()
   {
-    _need_grad_older = true;
+    need(Need::grad_older);
     return _grad_u_older;
   }
   const VariableGradient & gradSlnPreviousNL()
   {
-    _need_grad_previous_nl = true;
+    need(Need::grad_previous_nl);
     return _grad_u_previous_nl;
   }
   const VariableSecond & secondSln()
   {
-    _need_second = true;
+    need(Need::second);
     secondPhi();
     secondPhiFace();
     return _second_u;
   }
   const VariableSecond & secondSlnOld()
   {
-    _need_second_old = true;
+    need(Need::second_old);
     secondPhi();
     secondPhiFace();
     return _second_u_old;
   }
   const VariableSecond & secondSlnOlder()
   {
-    _need_second_older = true;
+    need(Need::second_older);
     secondPhi();
     secondPhiFace();
     return _second_u_older;
   }
   const VariableSecond & secondSlnPreviousNL()
   {
-    _need_second_previous_nl = true;
+    need(Need::second_previous_nl);
     secondPhi();
     secondPhiFace();
     return _second_u_previous_nl;
@@ -201,7 +201,7 @@ public:
   const VariableValue & nodalSlnOlder() { return _nodal_u_older; }
   const VariableValue & nodalSlnPreviousNL()
   {
-    _need_nodal_u_previous_nl = true;
+    need(Need::nodal_u_previous_nl);
     return _nodal_u_previous_nl;
   }
   const VariableValue & nodalSlnDot() { return _nodal_u_dot; }
@@ -222,56 +222,56 @@ public:
   const VariableValue & slnNeighbor() { return _u_neighbor; }
   const VariableValue & slnOldNeighbor()
   {
-    _need_u_old_neighbor = true;
+    need(Need::u_old_neighbor);
     return _u_old_neighbor;
   }
   const VariableValue & slnOlderNeighbor()
   {
-    _need_u_older_neighbor = true;
+    need(Need::u_older_neighbor);
     return _u_older_neighbor;
   }
   const VariableValue & slnPreviousNLNeighbor()
   {
-    _need_u_previous_nl_neighbor = true;
+    need(Need::u_previous_nl_neighbor);
     return _u_previous_nl_neighbor;
   }
   const VariableGradient & gradSlnNeighbor() { return _grad_u_neighbor; }
   const VariableGradient & gradSlnOldNeighbor()
   {
-    _need_grad_old_neighbor = true;
+    need(Need::grad_old_neighbor);
     return _grad_u_old_neighbor;
   }
   const VariableGradient & gradSlnOlderNeighbor()
   {
-    _need_grad_older_neighbor = true;
+    need(Need::grad_older_neighbor);
     return _grad_u_older_neighbor;
   }
   const VariableGradient & gradSlnPreviousNLNeighbor()
   {
-    _need_grad_previous_nl_neighbor = true;
+    need(Need::grad_previous_nl_neighbor);
     return _grad_u_previous_nl_neighbor;
   }
   const VariableSecond & secondSlnNeighbor()
   {
-    _need_second_neighbor = true;
+    need(Need::second_neighbor);
     secondPhiFaceNeighbor();
     return _second_u_neighbor;
   }
   const VariableSecond & secondSlnOldNeighbor()
   {
-    _need_second_old_neighbor = true;
+    need(Need::second_old_neighbor);
     secondPhiFaceNeighbor();
     return _second_u_old_neighbor;
   }
   const VariableSecond & secondSlnOlderNeighbor()
   {
-    _need_second_older_neighbor = true;
+    need(Need::second_older_neighbor);
     secondPhiFaceNeighbor();
     return _second_u_older_neighbor;
   }
   const VariableSecond & secondSlnPreviousNLNeighbor()
   {
-    _need_second_previous_nl_neighbor = true;
+    need(Need::second_previous_nl_neighbor);
     secondPhiFaceNeighbor();
     return _second_u_previous_nl_neighbor;
   }
@@ -287,7 +287,7 @@ public:
   const VariableValue & nodalSlnOlderNeighbor() { return _nodal_u_older_neighbor; }
   const VariableValue & nodalSlnPreviousNLNeighbor()
   {
-    _need_nodal_u_previous_nl_neighbor = true;
+    need(Need::nodal_u_previous_nl_neighbor);
     return _nodal_u_previous_nl_neighbor;
   }
   const VariableValue & nodalSlnDotNeighbor() { return _nodal_u_dot_neighbor; }
@@ -418,7 +418,7 @@ public:
   /**
    * Whether or not this variable is actually using the shape function second derivative.
    */
-  bool usesSecondPhi() { return _need_second || _need_second_old || _need_second_older; }
+  bool usesSecondPhi() { return haveNeed(Need::second) || haveNeed(Need::second_old) || haveNeed(Need::second_older); }
 
 protected:
   /**
@@ -449,44 +449,6 @@ protected:
 
   /// DOF indices (neighbor)
   std::vector<dof_id_type> _dof_indices_neighbor;
-
-  bool _need_u_old;
-  bool _need_u_older;
-  bool _need_u_previous_nl;
-
-  bool _need_grad_old;
-  bool _need_grad_older;
-  bool _need_grad_previous_nl;
-
-  bool _need_second;
-  bool _need_second_old;
-  bool _need_second_older;
-  bool _need_second_previous_nl;
-
-  bool _need_u_old_neighbor;
-  bool _need_u_older_neighbor;
-  bool _need_u_previous_nl_neighbor;
-
-  bool _need_grad_old_neighbor;
-  bool _need_grad_older_neighbor;
-  bool _need_grad_previous_nl_neighbor;
-
-  bool _need_second_neighbor;
-  bool _need_second_old_neighbor;
-  bool _need_second_older_neighbor;
-  bool _need_second_previous_nl_neighbor;
-
-  bool _need_nodal_u;
-  bool _need_nodal_u_old;
-  bool _need_nodal_u_older;
-  bool _need_nodal_u_previous_nl;
-  bool _need_nodal_u_dot;
-
-  bool _need_nodal_u_neighbor;
-  bool _need_nodal_u_old_neighbor;
-  bool _need_nodal_u_older_neighbor;
-  bool _need_nodal_u_previous_nl_neighbor;
-  bool _need_nodal_u_dot_neighbor;
 
   // Shape function values, gradients. second derivatives
   const VariablePhiValue & _phi;
@@ -588,77 +550,56 @@ protected:
   friend class ValueRangeMarker;
 
 private:
+  enum Need {
+    none = 0,
+    is_transient = 1 << 0,
+    u_old = 1 << 1,
+    u_older = 1 << 2,
+    u_previous_nl = 1 << 3,
+    grad_old = 1 << 4,
+    grad_older = 1 << 5,
+    grad_previous_nl = 1 << 6,
+    second = 1 << 7,
+    second_old = 1 << 8,
+    second_older = 1 << 9,
+    second_previous_nl = 1 << 10,
+    u_old_neighbor = 1 << 11,
+    u_older_neighbor = 1 << 12,
+    u_previous_nl_neighbor = 1 << 13,
+    grad_old_neighbor = 1 << 14,
+    grad_older_neighbor = 1 << 15,
+    grad_previous_nl_neighbor = 1 << 16,
+    second_neighbor = 1 << 17,
+    second_old_neighbor = 1 << 18,
+    second_older_neighbor = 1 << 19,
+    second_previous_nl_neighbor = 1 << 20,
+    nodal_u = 1 << 21,
+    nodal_u_old = 1 << 22,
+    nodal_u_older = 1 << 23,
+    nodal_u_previous_nl = 1 << 24,
+    nodal_u_dot = 1 << 25,
+    nodal_u_neighbor = 1 << 26,
+    nodal_u_old_neighbor = 1 << 27,
+    nodal_u_older_neighbor = 1 << 28,
+    nodal_u_previous_nl_neighbor = 1 << 29,
+    nodal_u_dot_neighbor = 1 << 30,
+  };
+
   void resizeAll(unsigned int nqp, bool is_transient, unsigned int num_dofs);
   void resizeAllNeighbor(unsigned int nqp, bool is_transient, unsigned int num_dofs);
   bool tryFast();
   bool tryFastFace();
-  unsigned int fastMask();
 
-  template <bool is_transient,
-            bool need_u_old,
-            bool need_u_older,
-            bool need_u_previous_nl,
-            bool need_grad_old,
-            bool need_grad_older,
-            bool need_grad_previous_nl,
-            bool need_second,
-            bool need_second_old,
-            bool need_second_older,
-            bool need_second_previous_nl,
-            bool need_u_old_neighbor,
-            bool need_u_older_neighbor,
-            bool need_u_previous_nl_neighbor,
-            bool need_grad_old_neighbor,
-            bool need_grad_older_neighbor,
-            bool need_grad_previous_nl_neighbor,
-            bool need_second_neighbor,
-            bool need_second_old_neighbor,
-            bool need_second_older_neighbor,
-            bool need_second_previous_nl_neighbor,
-            bool need_nodal_u,
-            bool need_nodal_u_old,
-            bool need_nodal_u_older,
-            bool need_nodal_u_previous_nl,
-            bool need_nodal_u_dot,
-            bool need_nodal_u_neighbor,
-            bool need_nodal_u_old_neighbor,
-            bool need_nodal_u_older_neighbor,
-            bool need_nodal_u_previous_nl_neighbor,
-            bool need_nodal_u_dot_neighbor>
+  inline bool haveNeed(Need n) const { return _needs & n; }
+  void need(Need n) { _needs = static_cast<Need>(_needs | n); }
+
+  template <int needs>
   void computeElemValuesFast();
 
-  template <bool is_transient,
-            bool need_u_old,
-            bool need_u_older,
-            bool need_u_previous_nl,
-            bool need_grad_old,
-            bool need_grad_older,
-            bool need_grad_previous_nl,
-            bool need_second,
-            bool need_second_old,
-            bool need_second_older,
-            bool need_second_previous_nl,
-            bool need_u_old_neighbor,
-            bool need_u_older_neighbor,
-            bool need_u_previous_nl_neighbor,
-            bool need_grad_old_neighbor,
-            bool need_grad_older_neighbor,
-            bool need_grad_previous_nl_neighbor,
-            bool need_second_neighbor,
-            bool need_second_old_neighbor,
-            bool need_second_older_neighbor,
-            bool need_second_previous_nl_neighbor,
-            bool need_nodal_u,
-            bool need_nodal_u_old,
-            bool need_nodal_u_older,
-            bool need_nodal_u_previous_nl,
-            bool need_nodal_u_dot,
-            bool need_nodal_u_neighbor,
-            bool need_nodal_u_old_neighbor,
-            bool need_nodal_u_older_neighbor,
-            bool need_nodal_u_previous_nl_neighbor,
-            bool need_nodal_u_dot_neighbor>
+  template <int needs>
   void computeElemValuesFaceFast();
+
+  Need _needs = Need::none;
 };
 
 #endif /* MOOSEVARIABLE_H */
