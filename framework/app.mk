@@ -184,6 +184,8 @@ $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object)
 	$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=link --quiet \
 		$(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(app_LIBS) $(libmesh_LIBS) $(libmesh_LDFLAGS) $(EXTERNAL_FLAGS) $(ADDITIONAL_LIBS)
 
+	  #$(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(app_LIBS) $(libmesh_LIBS) $(libmesh_LDFLAGS) $(EXTERNAL_FLAGS) $(ADDITIONAL_LIBS) -l:libtcmalloc.so.4 -l:libprofiler.so.0
+
 # Clang static analyzer
 sa:: $(app_analyzer)
 
