@@ -1212,7 +1212,6 @@ public:
   /**
    * Call compute methods on UserObjects.
    */
-  virtual void computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group);
   template <typename T>
   void initializeUserObjects(const MooseObjectWarehouse<T> & warehouse);
   template <typename T>
@@ -1268,6 +1267,8 @@ public:
    * a -> b (a depends on b)
    */
   void reportMooseObjectDependency(MooseObject * a, MooseObject * b);
+
+  void executeAKandUO(const ExecFlagType & exec_type);
 
 protected:
   ///@{
@@ -1502,6 +1503,9 @@ private:
   bool _error_on_jacobian_nonzero_reallocation;
   bool _force_restart;
   bool _fail_next_linear_convergence_check;
+
+  void prepareForEverything(const ExecFlagType & type, const Moose::AuxGroup & group);
+  void finishAfterEverything(const ExecFlagType & type, const Moose::AuxGroup & group);
 
   /// Whether or not the system is currently computing the Jacobian matrix
   bool _currently_computing_jacobian;

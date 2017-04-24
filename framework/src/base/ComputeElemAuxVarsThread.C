@@ -80,6 +80,7 @@ ComputeElemAuxVarsThread::subdomainChanged()
 void
 ComputeElemAuxVarsThread::onElement(const Elem * elem)
 {
+  return; // uncomment
   if (_aux_kernels.hasActiveBlockObjects(_subdomain, _tid))
   {
     const std::vector<std::shared_ptr<AuxKernel>> & kernels =

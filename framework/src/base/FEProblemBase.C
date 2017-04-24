@@ -672,15 +672,9 @@ FEProblemBase::initialSetup()
     // Yak is currently relying on doing this after initial Transfers
     Moose::setup_perf_log.push("computeUserObjects()", "Setup");
 
-    // TODO: user object evaluation could fail.
-    computeUserObjects(EXEC_INITIAL, Moose::PRE_AUX);
-
     Moose::setup_perf_log.push("computeAux()", "Setup");
-    _aux->compute(EXEC_INITIAL);
+    executeAKandUO(EXEC_INITIAL);
     Moose::setup_perf_log.pop("computeAux()", "Setup");
-
-    // The only user objects that should be computed here are the initial UOs
-    computeUserObjects(EXEC_INITIAL, Moose::POST_AUX);
 
     Moose::setup_perf_log.pop("computeUserObjects()", "Setup");
 
@@ -2672,6 +2666,16 @@ FEProblemBase::getCurrentExecuteOnFlag() const
 }
 
 void
+FEProblemBase::executeAKandUO(const ExecFlagType & exec_type)
+{
+  prepareForEverything(exec_type, Moose::PRE_AUX);
+  prepareForEverything(exec_type, Moose::POST_AUX);
+  computeAuxiliaryKernels(exec_type);
+  finishAfterEverything(exec_type, Moose::PRE_AUX);
+  finishAfterEverything(exec_type, Moose::POST_AUX);
+}
+
+void
 FEProblemBase::execute(const ExecFlagType & exec_type)
 {
   // Set the current flag
@@ -2679,14 +2683,7 @@ FEProblemBase::execute(const ExecFlagType & exec_type)
   if (exec_type == EXEC_NONLINEAR)
     _currently_computing_jacobian = true;
 
-  // Pre-aux UserObjects
-  computeUserObjects(exec_type, Moose::PRE_AUX);
-
-  // AuxKernels
-  computeAuxiliaryKernels(exec_type);
-
-  // Post-aux UserObjects
-  computeUserObjects(exec_type, Moose::POST_AUX);
+  executeAKandUO(exec_type);
 
   // Controls
   executeControls(exec_type);
@@ -2703,19 +2700,15 @@ FEProblemBase::computeAuxiliaryKernels(const ExecFlagType & type)
 }
 
 void
-FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
+FEProblemBase::prepareForEverything(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
-  // Get convenience reference to active warehouse
   const MooseObjectWarehouse<ElementUserObject> & elemental = _elemental_user_objects[group][type];
   const MooseObjectWarehouse<SideUserObject> & side = _side_user_objects[group][type];
   const MooseObjectWarehouse<InternalSideUserObject> & internal_side =
       _internal_side_user_objects[group][type];
   const MooseObjectWarehouse<NodalUserObject> & nodal = _nodal_user_objects[group][type];
   const MooseObjectWarehouse<GeneralUserObject> & general = _general_user_objects[group][type];
-
-  if (!elemental.hasActiveObjects() && !side.hasActiveObjects() &&
-      !internal_side.hasActiveObjects() && !nodal.hasActiveObjects() && !general.hasActiveObjects())
-    // Nothing to do, return early
+  if (!elemental.hasActiveObjects() && !side.hasActiveObjects() && !internal_side.hasActiveObjects() && !nodal.hasActiveObjects() && !general.hasActiveObjects())
     return;
 
   // Start the timer here since we have at least one active user object
@@ -2746,30 +2739,26 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
       }
       general.jacobianSetup();
       break;
-
     default:
       break;
   }
 
-  // Initialize Elemental/Side/InternalSideUserObjects
   initializeUserObjects<ElementUserObject>(elemental);
   initializeUserObjects<SideUserObject>(side);
   initializeUserObjects<InternalSideUserObject>(internal_side);
-
-  // Execute Elemental/Side/InternalSideUserObjects
-  if (elemental.hasActiveObjects() || side.hasActiveObjects() || internal_side.hasActiveObjects())
-  {
-    ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase(), elemental, side, internal_side);
-    Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cppt);
-  }
-
-  // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
-  finalizeUserObjects<SideUserObject>(side);
-  finalizeUserObjects<InternalSideUserObject>(internal_side);
-  finalizeUserObjects<ElementUserObject>(elemental);
-
-  // Initialize Nodal
   initializeUserObjects<NodalUserObject>(nodal);
+}
+void
+FEProblemBase::finishAfterEverything(const ExecFlagType & type, const Moose::AuxGroup & group)
+{
+  const MooseObjectWarehouse<ElementUserObject> & elemental = _elemental_user_objects[group][type];
+  const MooseObjectWarehouse<SideUserObject> & side = _side_user_objects[group][type];
+  const MooseObjectWarehouse<InternalSideUserObject> & internal_side =
+      _internal_side_user_objects[group][type];
+  const MooseObjectWarehouse<NodalUserObject> & nodal = _nodal_user_objects[group][type];
+  const MooseObjectWarehouse<GeneralUserObject> & general = _general_user_objects[group][type];
+  if (!elemental.hasActiveObjects() && !side.hasActiveObjects() && !internal_side.hasActiveObjects() && !nodal.hasActiveObjects() && !general.hasActiveObjects())
+    return;
 
   // Execute NodalUserObjects
   if (nodal.hasActiveObjects())
@@ -2778,7 +2767,9 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cnppt);
   }
 
-  // Finalize, threadJoin, and update PP values of Nodal
+  finalizeUserObjects<ElementUserObject>(elemental);
+  finalizeUserObjects<SideUserObject>(side);
+  finalizeUserObjects<InternalSideUserObject>(internal_side);
   finalizeUserObjects<NodalUserObject>(nodal);
 
   // Execute GeneralUserObjects
@@ -2796,7 +2787,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
         _pps_data.storeValue(obj->name(), pp->getValue());
     }
   }
-
+  std::string compute_uo_tag = "computeUserObjects(" + Moose::stringify(type) + ")";
   Moose::perf_log.pop(compute_uo_tag, "Execution");
 }
 
@@ -3855,8 +3846,6 @@ FEProblemBase::computeResidualType(const NumericVector<Number> & soln,
   for (unsigned int tid = 0; tid < n_threads; tid++)
     reinitScalars(tid);
 
-  computeUserObjects(EXEC_LINEAR, Moose::PRE_AUX);
-
   if (_displaced_problem != NULL)
     _displaced_problem->updateMesh();
 
@@ -3869,9 +3858,10 @@ FEProblemBase::computeResidualType(const NumericVector<Number> & soln,
 
   _nl->computeTimeDerivatives();
 
+
   try
   {
-    _aux->compute(EXEC_LINEAR);
+    executeAKandUO(EXEC_LINEAR);
   }
   catch (MooseException & e)
   {
@@ -3885,8 +3875,6 @@ FEProblemBase::computeResidualType(const NumericVector<Number> & soln,
     // other errors or unhandled exceptions being thrown.
     return;
   }
-
-  computeUserObjects(EXEC_LINEAR, Moose::POST_AUX);
 
   executeControls(EXEC_LINEAR);
 
@@ -3932,8 +3920,6 @@ FEProblemBase::computeJacobian(const NumericVector<Number> & soln,
     for (unsigned int tid = 0; tid < n_threads; tid++)
       reinitScalars(tid);
 
-    computeUserObjects(EXEC_NONLINEAR, Moose::PRE_AUX);
-
     if (_displaced_problem != NULL)
       _displaced_problem->updateMesh();
 
@@ -3943,11 +3929,10 @@ FEProblemBase::computeJacobian(const NumericVector<Number> & soln,
       _functions.jacobianSetup(tid);
     }
 
+
     _aux->jacobianSetup();
 
-    _aux->compute(EXEC_NONLINEAR);
-
-    computeUserObjects(EXEC_NONLINEAR, Moose::POST_AUX);
+    executeAKandUO(EXEC_NONLINEAR);
 
     executeControls(EXEC_NONLINEAR);
 

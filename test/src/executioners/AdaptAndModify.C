@@ -74,7 +74,7 @@ AdaptAndModify::endStep(Real input_time)
 
 #endif
     }
-    _problem.computeUserObjects(EXEC_CUSTOM, Moose::ALL);
+    _problem.executeAKandUO(EXEC_CUSTOM);
 
     // Set the time for the next output interval if we're at or beyond an output interval
     if (_time_interval && (_time + _timestep_tolerance >= _next_interval_output_time))

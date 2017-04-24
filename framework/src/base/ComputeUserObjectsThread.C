@@ -118,6 +118,42 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
 }
 
 void
+ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
+{
+  // Pointer to the neighbor we are currently working on.
+  const Elem * neighbor = elem->neighbor_ptr(side);
+
+  // Get the global id of the element and the neighbor
+  const dof_id_type elem_id = elem->id(), neighbor_id = neighbor->id();
+
+  if (!_internal_side_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+    return;
+  if (!((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) ||
+        (neighbor->level() < elem->level())))
+    return;
+
+  _fe_problem.prepareFace(elem, _tid);
+  _fe_problem.reinitNeighbor(elem, side, _tid);
+
+  // Set up Sentinels so that, even if one of the reinitMaterialsXXX() calls throws, we
+  // still remember to swap back during stack unwinding.
+  SwapBackSentinel face_sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
+  _fe_problem.reinitMaterialsFace(elem->subdomain_id(), _tid);
+
+  SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
+  _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
+
+  const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
+  for (const auto & uo : objects)
+  {
+    if (!uo->blockRestricted())
+      uo->execute();
+    else if (uo->hasBlocks(neighbor->subdomain_id()))
+      uo->execute();
+  }
+}
+
+void
 ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id)
 {
   if (!_side_user_objects.hasActiveBoundaryObjects(bnd_id, _tid))
@@ -160,42 +196,6 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
   }
 
   _fe_problem.setCurrentBoundaryID(Moose::INVALID_BOUNDARY_ID);
-}
-
-void
-ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
-{
-  // Pointer to the neighbor we are currently working on.
-  const Elem * neighbor = elem->neighbor_ptr(side);
-
-  // Get the global id of the element and the neighbor
-  const dof_id_type elem_id = elem->id(), neighbor_id = neighbor->id();
-
-  if (!_internal_side_user_objects.hasActiveBlockObjects(_subdomain, _tid))
-    return;
-  if (!((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) ||
-        (neighbor->level() < elem->level())))
-    return;
-
-  _fe_problem.prepareFace(elem, _tid);
-  _fe_problem.reinitNeighbor(elem, side, _tid);
-
-  // Set up Sentinels so that, even if one of the reinitMaterialsXXX() calls throws, we
-  // still remember to swap back during stack unwinding.
-  SwapBackSentinel face_sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
-  _fe_problem.reinitMaterialsFace(elem->subdomain_id(), _tid);
-
-  SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
-  _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
-
-  const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
-  for (const auto & uo : objects)
-  {
-    if (!uo->blockRestricted())
-      uo->execute();
-    else if (uo->hasBlocks(neighbor->subdomain_id()))
-      uo->execute();
-  }
 }
 
 void
