@@ -2679,14 +2679,14 @@ FEProblemBase::execute(const ExecFlagType & exec_type)
   if (exec_type == EXEC_NONLINEAR)
     _currently_computing_jacobian = true;
 
-  // Pre-aux UserObjects
+  prepareForEverything(exec_type, Moose::PRE_AUX);
+  prepareForEverything(exec_type, Moose::POST_AUX);
   computeUserObjects(exec_type, Moose::PRE_AUX);
-
   // AuxKernels
   computeAuxiliaryKernels(exec_type);
-
-  // Post-aux UserObjects
   computeUserObjects(exec_type, Moose::POST_AUX);
+  finishAfterEverything(exec_type, Moose::PRE_AUX);
+  finishAfterEverything(exec_type, Moose::POST_AUX);
 
   // Controls
   executeControls(exec_type);
@@ -2703,6 +2703,40 @@ FEProblemBase::computeAuxiliaryKernels(const ExecFlagType & type)
 }
 
 void
+FEProblemBase::prepareForEverything(const ExecFlagType & type, const Moose::AuxGroup & group)
+{
+  const MooseObjectWarehouse<ElementUserObject> & elemental = _elemental_user_objects[group][type];
+  if (!elemental.hasActiveObjects())
+    return;
+
+  // Perform Residual/Jacobian setups
+  switch (type)
+  {
+    case EXEC_LINEAR:
+      for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
+        elemental.residualSetup(tid);
+      break;
+
+    case EXEC_NONLINEAR:
+      for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
+        elemental.jacobianSetup(tid);
+      break;
+    default:
+      break;
+  }
+
+  initializeUserObjects<ElementUserObject>(elemental);
+}
+void
+FEProblemBase::finishAfterEverything(const ExecFlagType & type, const Moose::AuxGroup & group)
+{
+  const MooseObjectWarehouse<ElementUserObject> & elemental = _elemental_user_objects[group][type];
+  if (!elemental.hasActiveObjects())
+    return;
+  finalizeUserObjects<ElementUserObject>(elemental);
+}
+
+void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
   // Get convenience reference to active warehouse
@@ -2713,7 +2747,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   const MooseObjectWarehouse<NodalUserObject> & nodal = _nodal_user_objects[group][type];
   const MooseObjectWarehouse<GeneralUserObject> & general = _general_user_objects[group][type];
 
-  if (!elemental.hasActiveObjects() && !side.hasActiveObjects() &&
+  if (!side.hasActiveObjects() &&
       !internal_side.hasActiveObjects() && !nodal.hasActiveObjects() && !general.hasActiveObjects())
     // Nothing to do, return early
     return;
@@ -2728,7 +2762,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     case EXEC_LINEAR:
       for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
       {
-        elemental.residualSetup(tid);
+        elemental.residualSetup(tid); // DELETE
         side.residualSetup(tid);
         internal_side.residualSetup(tid);
         nodal.residualSetup(tid);
@@ -2739,7 +2773,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     case EXEC_NONLINEAR:
       for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
       {
-        elemental.jacobianSetup(tid);
+        elemental.jacobianSetup(tid); // DELETE
         side.jacobianSetup(tid);
         internal_side.jacobianSetup(tid);
         nodal.jacobianSetup(tid);
@@ -2752,21 +2786,21 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   // Initialize Elemental/Side/InternalSideUserObjects
-  initializeUserObjects<ElementUserObject>(elemental);
+  initializeUserObjects<ElementUserObject>(elemental); // DELETE
   initializeUserObjects<SideUserObject>(side);
   initializeUserObjects<InternalSideUserObject>(internal_side);
 
   // Execute Elemental/Side/InternalSideUserObjects
-  if (elemental.hasActiveObjects() || side.hasActiveObjects() || internal_side.hasActiveObjects())
+  if (side.hasActiveObjects() || internal_side.hasActiveObjects())
   {
     ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase(), elemental, side, internal_side);
     Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cppt);
   }
 
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
+  finalizeUserObjects<ElementUserObject>(elemental); // DELETE
   finalizeUserObjects<SideUserObject>(side);
   finalizeUserObjects<InternalSideUserObject>(internal_side);
-  finalizeUserObjects<ElementUserObject>(elemental);
 
   // Initialize Nodal
   initializeUserObjects<NodalUserObject>(nodal);

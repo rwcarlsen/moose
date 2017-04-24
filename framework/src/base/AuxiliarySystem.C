@@ -21,12 +21,14 @@
 #include "Assembly.h"
 #include "GeometricSearchData.h"
 #include "ComputeNodalAuxVarsThread.h"
+#include "ComputeEverythingThread.h"
 #include "ComputeNodalAuxBcsThread.h"
 #include "ComputeElemAuxVarsThread.h"
 #include "ComputeElemAuxBcsThread.h"
 #include "Parser.h"
 #include "TimeIntegrator.h"
 #include "Conversion.h"
+#include "NonlinearSystemBase.h"
 
 #include "libmesh/quadrature_gauss.h"
 #include "libmesh/node_range.h"
@@ -458,24 +460,26 @@ AuxiliarySystem::computeElementalVars(ExecFlagType type)
   // Reference to the Nodal AuxKernel storage
   const MooseObjectWarehouse<AuxKernel> & elemental = _elemental_aux_storage[type];
 
-  if (elemental.hasActiveBlockObjects())
+  std::string compute_aux_tag = "computeElemAux(" + Moose::stringify(type) + ")";
+  Moose::perf_log.push(compute_aux_tag, "Execution");
+
+  // Block Elemental AuxKernels
+  PARALLEL_TRY
   {
-    std::string compute_aux_tag = "computeElemAux(" + Moose::stringify(type) + ")";
-    Moose::perf_log.push(compute_aux_tag, "Execution");
+    ConstElemRange & range = *_mesh.getActiveLocalElementRange();
+    ComputeElemAuxVarsThread eavt(_fe_problem, elemental, true);
+    Threads::parallel_reduce(range, eavt);
 
-    // Block Elemental AuxKernels
-    PARALLEL_TRY
-    {
-      ConstElemRange & range = *_mesh.getActiveLocalElementRange();
-      ComputeElemAuxVarsThread eavt(_fe_problem, elemental, true);
-      Threads::parallel_reduce(range, eavt);
+    //const MooseObjectWarehouse<ElementUserObject> & pre_user_obj = _fe_problem._elemental_user_objects[Moose::PRE_AUX][type];
+    //const MooseObjectWarehouse<ElementUserObject> & post_user_obj = _fe_problem._elemental_user_objects[Moose::POST_AUX][type];
+    //ComputeEverythingThread ev(_fe_problem, _fe_problem.getNonlinearSystemBase(), elemental, pre_user_obj, post_user_obj);
+    //Threads::parallel_reduce(range, ev);
 
-      solution().close();
-      _sys.update();
-    }
-    PARALLEL_CATCH;
-    Moose::perf_log.pop(compute_aux_tag, "Execution");
+    solution().close();
+    _sys.update();
   }
+  PARALLEL_CATCH;
+  Moose::perf_log.pop(compute_aux_tag, "Execution");
 
   // Boundary Elemental AuxKernels
   if (elemental.hasActiveBoundaryObjects())

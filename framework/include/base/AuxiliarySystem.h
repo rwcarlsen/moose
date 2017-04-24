@@ -204,6 +204,7 @@ protected:
   friend class ComputeNodalAuxVarsThread;
   friend class ComputeNodalAuxBcsThread;
   friend class ComputeElemAuxVarsThread;
+  friend class ComputeEverythingThread;
   friend class ComputeElemAuxBcsThread;
   friend class ComputeIndicatorThread;
   friend class ComputeMarkerThread;

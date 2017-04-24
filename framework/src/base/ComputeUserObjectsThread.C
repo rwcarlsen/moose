@@ -56,15 +56,18 @@ void
 ComputeUserObjectsThread::subdomainChanged()
 {
   std::set<MooseVariable *> needed_moose_vars;
+  //DELETE:
   _elemental_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
   _side_user_objects.updateBoundaryVariableDependency(needed_moose_vars, _tid);
   _internal_side_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
 
   std::set<unsigned int> needed_mat_props;
+  //DELETE:
   _elemental_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
   _side_user_objects.updateBoundaryMatPropDependency(needed_mat_props, _tid);
   _internal_side_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
 
+  //DELETE:
   _elemental_user_objects.subdomainSetup(_subdomain, _tid);
   _side_user_objects.subdomainSetup(_tid);
   _internal_side_user_objects.subdomainSetup(_subdomain, _tid);
@@ -77,6 +80,8 @@ ComputeUserObjectsThread::subdomainChanged()
 void
 ComputeUserObjectsThread::onElement(const Elem * elem)
 {
+  //return; // uncomment
+
   _fe_problem.prepare(elem, _tid);
   _fe_problem.reinitElem(elem, _tid);
 
