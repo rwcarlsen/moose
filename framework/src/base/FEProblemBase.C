@@ -672,15 +672,9 @@ FEProblemBase::initialSetup()
     // Yak is currently relying on doing this after initial Transfers
     Moose::setup_perf_log.push("computeUserObjects()", "Setup");
 
-    // TODO: user object evaluation could fail.
-    computeUserObjects(EXEC_INITIAL, Moose::PRE_AUX);
-
     Moose::setup_perf_log.push("computeAux()", "Setup");
-    _aux->compute(EXEC_INITIAL);
+    executeAKandUO(EXEC_INITIAL);
     Moose::setup_perf_log.pop("computeAux()", "Setup");
-
-    // The only user objects that should be computed here are the initial UOs
-    computeUserObjects(EXEC_INITIAL, Moose::POST_AUX);
 
     Moose::setup_perf_log.pop("computeUserObjects()", "Setup");
 
@@ -2672,6 +2666,18 @@ FEProblemBase::getCurrentExecuteOnFlag() const
 }
 
 void
+FEProblemBase::executeAKandUO(const ExecFlagType & exec_type)
+{
+  prepareForEverything(exec_type, Moose::PRE_AUX);
+  prepareForEverything(exec_type, Moose::POST_AUX);
+  computeUserObjects(exec_type, Moose::PRE_AUX);
+  computeAuxiliaryKernels(exec_type);
+  computeUserObjects(exec_type, Moose::POST_AUX);
+  finishAfterEverything(exec_type, Moose::PRE_AUX);
+  finishAfterEverything(exec_type, Moose::POST_AUX);
+}
+
+void
 FEProblemBase::execute(const ExecFlagType & exec_type)
 {
   // Set the current flag
@@ -2679,14 +2685,7 @@ FEProblemBase::execute(const ExecFlagType & exec_type)
   if (exec_type == EXEC_NONLINEAR)
     _currently_computing_jacobian = true;
 
-  prepareForEverything(exec_type, Moose::PRE_AUX);
-  prepareForEverything(exec_type, Moose::POST_AUX);
-  computeUserObjects(exec_type, Moose::PRE_AUX);
-  // AuxKernels
-  computeAuxiliaryKernels(exec_type);
-  computeUserObjects(exec_type, Moose::POST_AUX);
-  finishAfterEverything(exec_type, Moose::PRE_AUX);
-  finishAfterEverything(exec_type, Moose::POST_AUX);
+  executeAKandUO(exec_type);
 
   // Controls
   executeControls(exec_type);
@@ -2762,7 +2761,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     case EXEC_LINEAR:
       for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
       {
-        elemental.residualSetup(tid); // DELETE
+        //elemental.residualSetup(tid); // DELETE
         side.residualSetup(tid);
         internal_side.residualSetup(tid);
         nodal.residualSetup(tid);
@@ -2773,7 +2772,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     case EXEC_NONLINEAR:
       for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
       {
-        elemental.jacobianSetup(tid); // DELETE
+        //elemental.jacobianSetup(tid); // DELETE
         side.jacobianSetup(tid);
         internal_side.jacobianSetup(tid);
         nodal.jacobianSetup(tid);
@@ -2786,7 +2785,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   // Initialize Elemental/Side/InternalSideUserObjects
-  initializeUserObjects<ElementUserObject>(elemental); // DELETE
+  //initializeUserObjects<ElementUserObject>(elemental); // DELETE
   initializeUserObjects<SideUserObject>(side);
   initializeUserObjects<InternalSideUserObject>(internal_side);
 
@@ -2798,9 +2797,9 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
-  finalizeUserObjects<ElementUserObject>(elemental); // DELETE
   finalizeUserObjects<SideUserObject>(side);
   finalizeUserObjects<InternalSideUserObject>(internal_side);
+  //finalizeUserObjects<ElementUserObject>(elemental); // DELETE
 
   // Initialize Nodal
   initializeUserObjects<NodalUserObject>(nodal);
@@ -3889,8 +3888,6 @@ FEProblemBase::computeResidualType(const NumericVector<Number> & soln,
   for (unsigned int tid = 0; tid < n_threads; tid++)
     reinitScalars(tid);
 
-  computeUserObjects(EXEC_LINEAR, Moose::PRE_AUX);
-
   if (_displaced_problem != NULL)
     _displaced_problem->updateMesh();
 
@@ -3903,9 +3900,10 @@ FEProblemBase::computeResidualType(const NumericVector<Number> & soln,
 
   _nl->computeTimeDerivatives();
 
+
   try
   {
-    _aux->compute(EXEC_LINEAR);
+    executeAKandUO(EXEC_LINEAR);
   }
   catch (MooseException & e)
   {
@@ -3919,8 +3917,6 @@ FEProblemBase::computeResidualType(const NumericVector<Number> & soln,
     // other errors or unhandled exceptions being thrown.
     return;
   }
-
-  computeUserObjects(EXEC_LINEAR, Moose::POST_AUX);
 
   executeControls(EXEC_LINEAR);
 

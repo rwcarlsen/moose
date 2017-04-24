@@ -33,13 +33,21 @@ ComputeEverythingThread::ComputeEverythingThread(
       SystemBase & sys,
       const MooseObjectWarehouse<AuxKernel> & storage,
       const MooseObjectWarehouse<ElementUserObject> & pre_elemental_user_objects,
-      const MooseObjectWarehouse<ElementUserObject> & post_elemental_user_objects)
+      const MooseObjectWarehouse<ElementUserObject> & post_elemental_user_objects,
+      const MooseObjectWarehouse<SideUserObject> & pre_side_user_objects,
+      const MooseObjectWarehouse<SideUserObject> & post_side_user_objects,
+      const MooseObjectWarehouse<InternalSideUserObject> & pre_internal_side_user_objects,
+      const MooseObjectWarehouse<InternalSideUserObject> & post_internal_side_user_objects)
   : ThreadedElementLoop<ConstElemRange>(problem),
     _aux_sys(problem.getAuxiliarySystem()),
     _aux_kernels(storage),
     _soln(*sys.currentSolution()),
     _pre_elemental_user_objects(pre_elemental_user_objects),
-    _post_elemental_user_objects(post_elemental_user_objects)
+    _post_elemental_user_objects(post_elemental_user_objects),
+    _pre_side_user_objects(pre_side_user_objects),
+    _post_side_user_objects(post_side_user_objects),
+    _pre_internal_side_user_objects(pre_internal_side_user_objects),
+    _post_internal_side_user_objects(post_internal_side_user_objects)
 {
 }
 
@@ -51,7 +59,11 @@ ComputeEverythingThread::ComputeEverythingThread(ComputeEverythingThread & x,
     _aux_kernels(x._aux_kernels),
     _soln(x._soln),
     _pre_elemental_user_objects(x._pre_elemental_user_objects),
-    _post_elemental_user_objects(x._post_elemental_user_objects)
+    _post_elemental_user_objects(x._post_elemental_user_objects),
+    _pre_side_user_objects(x._pre_side_user_objects),
+    _post_side_user_objects(x._post_side_user_objects),
+    _pre_internal_side_user_objects(x._pre_internal_side_user_objects),
+    _post_internal_side_user_objects(x._post_internal_side_user_objects)
 {
 }
 
@@ -91,6 +103,21 @@ ComputeEverythingThread::subdomainChanged()
   _post_elemental_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
   _post_elemental_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
   _post_elemental_user_objects.subdomainSetup(_subdomain, _tid);
+
+  _pre_side_user_objects.updateBoundaryVariableDependency(needed_moose_vars, _tid);
+  _post_side_user_objects.updateBoundaryVariableDependency(needed_moose_vars, _tid);
+  _pre_internal_side_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
+  _post_internal_side_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
+
+  _pre_side_user_objects.updateBoundaryMatPropDependency(needed_mat_props, _tid);
+  _post_side_user_objects.updateBoundaryMatPropDependency(needed_mat_props, _tid);
+  _pre_internal_side_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
+  _post_internal_side_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
+
+  _pre_side_user_objects.subdomainSetup(_tid);
+  _post_side_user_objects.subdomainSetup(_tid);
+  _pre_internal_side_user_objects.subdomainSetup(_subdomain, _tid);
+  _post_internal_side_user_objects.subdomainSetup(_subdomain, _tid);
 
   _fe_problem.setActiveElementalMooseVariables(needed_moose_vars, _tid);
   _fe_problem.setActiveMaterialProperties(needed_mat_props, _tid);
@@ -192,6 +219,121 @@ ComputeEverythingThread::onElement(const Elem * elem)
     }
   }
 }
+
+void
+ComputeEverythingThread::onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id)
+{
+  _fe_problem.reinitElemFace(elem, side, bnd_id, _tid);
+
+  // Set up Sentinel class so that, even if reinitMaterialsFace() throws, we
+  // still remember to swap back during stack unwinding.
+  SwapBackSentinel sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
+  _fe_problem.reinitMaterialsFace(_subdomain, _tid);
+  _fe_problem.reinitMaterialsBoundary(bnd_id, _tid);
+
+  _fe_problem.setCurrentBoundaryID(bnd_id);
+
+  //////////// PRE_AUX UserObjects
+  if (_pre_side_user_objects.hasActiveBoundaryObjects(bnd_id, _tid))
+  {
+    const auto & objects = _pre_side_user_objects.getActiveBoundaryObjects(bnd_id, _tid);
+    for (const auto & uo : objects)
+      uo->execute();
+
+    // UserObject Jacobians
+    if (_fe_problem.currentlyComputingJacobian())
+    {
+      // Prepare shape functions for ShapeSideUserObjects
+      std::vector<MooseVariable *> jacobian_moose_vars =
+          _fe_problem.getUserObjectJacobianVariables(_tid);
+      for (auto & jvar : jacobian_moose_vars)
+      {
+        unsigned int jvar_id = jvar->number();
+        std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
+
+        _fe_problem.prepareFaceShapes(jvar_id, _tid);
+
+        for (const auto & uo : objects)
+        {
+          auto shape_side_uo = std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
+          if (shape_side_uo)
+            shape_side_uo->executeJacobianWrapper(jvar_id, dof_indices);
+        }
+      }
+    }
+
+    _fe_problem.setCurrentBoundaryID(Moose::INVALID_BOUNDARY_ID);
+  }
+
+  //////////// POST_AUX UserObjects
+  if (_post_side_user_objects.hasActiveBoundaryObjects(bnd_id, _tid))
+  {
+    const auto & objects = _post_side_user_objects.getActiveBoundaryObjects(bnd_id, _tid);
+    for (const auto & uo : objects)
+      uo->execute();
+
+    // UserObject Jacobians
+    if (_fe_problem.currentlyComputingJacobian())
+    {
+      // Prepare shape functions for ShapeSideUserObjects
+      std::vector<MooseVariable *> jacobian_moose_vars =
+          _fe_problem.getUserObjectJacobianVariables(_tid);
+      for (auto & jvar : jacobian_moose_vars)
+      {
+        unsigned int jvar_id = jvar->number();
+        std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
+
+        _fe_problem.prepareFaceShapes(jvar_id, _tid);
+
+        for (const auto & uo : objects)
+        {
+          auto shape_side_uo = std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
+          if (shape_side_uo)
+            shape_side_uo->executeJacobianWrapper(jvar_id, dof_indices);
+        }
+      }
+    }
+
+    _fe_problem.setCurrentBoundaryID(Moose::INVALID_BOUNDARY_ID);
+  }
+}
+
+void
+ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
+{
+  // Pointer to the neighbor we are currently working on.
+  const Elem * neighbor = elem->neighbor_ptr(side);
+
+  // Get the global id of the element and the neighbor
+  const dof_id_type elem_id = elem->id(), neighbor_id = neighbor->id();
+
+  if (!_internal_side_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+    return;
+  if (!((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) ||
+        (neighbor->level() < elem->level())))
+    return;
+
+  _fe_problem.prepareFace(elem, _tid);
+  _fe_problem.reinitNeighbor(elem, side, _tid);
+
+  // Set up Sentinels so that, even if one of the reinitMaterialsXXX() calls throws, we
+  // still remember to swap back during stack unwinding.
+  SwapBackSentinel face_sentinel(_fe_problem, &FEProblem::swapBackMaterialsFace, _tid);
+  _fe_problem.reinitMaterialsFace(elem->subdomain_id(), _tid);
+
+  SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
+  _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
+
+  const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
+  for (const auto & uo : objects)
+  {
+    if (!uo->blockRestricted())
+      uo->execute();
+    else if (uo->hasBlocks(neighbor->subdomain_id()))
+      uo->execute();
+  }
+}
+
 
 void
 ComputeEverythingThread::post()

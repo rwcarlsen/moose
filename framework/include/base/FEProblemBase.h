@@ -1505,6 +1505,7 @@ private:
 
   void prepareForEverything(const ExecFlagType & type, const Moose::AuxGroup & group);
   void finishAfterEverything(const ExecFlagType & type, const Moose::AuxGroup & group);
+  void executeAKandUO(const ExecFlagType & exec_type);
 
   /// Whether or not the system is currently computing the Jacobian matrix
   bool _currently_computing_jacobian;

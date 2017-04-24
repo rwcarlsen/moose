@@ -44,7 +44,11 @@ public:
       SystemBase & sys,
       const MooseObjectWarehouse<AuxKernel> & storage,
       const MooseObjectWarehouse<ElementUserObject> & pre_elemental_user_objects,
-      const MooseObjectWarehouse<ElementUserObject> & post_elemental_user_objects);
+      const MooseObjectWarehouse<ElementUserObject> & post_elemental_user_objects,
+      const MooseObjectWarehouse<SideUserObject> & pre_side_user_objects,
+      const MooseObjectWarehouse<SideUserObject> & post_side_user_objects,
+      const MooseObjectWarehouse<InternalSideUserObject> & pre_internal_side_user_objects,
+      const MooseObjectWarehouse<InternalSideUserObject> & post_internal_side_user_objects);
   // Splitting Constructor
   ComputeEverythingThread(ComputeEverythingThread & x, Threads::split split);
 
@@ -52,6 +56,9 @@ public:
 
   virtual void subdomainChanged() override;
   virtual void onElement(const Elem * elem) override;
+  virtual void onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id) override;
+  virtual void onInternalSide(const Elem * elem, unsigned int side) override;
+
   virtual void post() override;
 
   void join(const ComputeEverythingThread & /*y*/);

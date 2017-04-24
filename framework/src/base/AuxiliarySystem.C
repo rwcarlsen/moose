@@ -467,13 +467,15 @@ AuxiliarySystem::computeElementalVars(ExecFlagType type)
   PARALLEL_TRY
   {
     ConstElemRange & range = *_mesh.getActiveLocalElementRange();
-    ComputeElemAuxVarsThread eavt(_fe_problem, elemental, true);
-    Threads::parallel_reduce(range, eavt);
+    const MooseObjectWarehouse<ElementUserObject> & pre_user_obj = _fe_problem._elemental_user_objects[Moose::PRE_AUX][type];
+    const MooseObjectWarehouse<ElementUserObject> & post_user_obj = _fe_problem._elemental_user_objects[Moose::POST_AUX][type];
+    const MooseObjectWarehouse<SideUserObject> & pre_side = _side_user_objects[Moose::PRE_AUX][type];
+    const MooseObjectWarehouse<SideUserObject> & post_side = _side_user_objects[Moose::POST_AUX][type];
+    const MooseObjectWarehouse<InternalSideUserObject> & pre_internal_side = _internal_side_user_objects[Moose::PRE_AUX][type];
+    const MooseObjectWarehouse<InternalSideUserObject> & post_internal_side = _internal_side_user_objects[Moose::POST_AUX][type];
 
-    //const MooseObjectWarehouse<ElementUserObject> & pre_user_obj = _fe_problem._elemental_user_objects[Moose::PRE_AUX][type];
-    //const MooseObjectWarehouse<ElementUserObject> & post_user_obj = _fe_problem._elemental_user_objects[Moose::POST_AUX][type];
-    //ComputeEverythingThread ev(_fe_problem, _fe_problem.getNonlinearSystemBase(), elemental, pre_user_obj, post_user_obj);
-    //Threads::parallel_reduce(range, ev);
+    ComputeEverythingThread ev(_fe_problem, _fe_problem.getNonlinearSystemBase(), elemental, pre_user_obj, post_user_obj, pre_side, post_side, pre_internal_side, post_internal_side);
+    Threads::parallel_reduce(range, ev);
 
     solution().close();
     _sys.update();
