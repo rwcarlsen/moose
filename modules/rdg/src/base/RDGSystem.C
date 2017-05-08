@@ -103,6 +103,7 @@ RDGSystem::converged()
 void
 RDGSystem::assembleMassMatrix()
 {
+
   // std::cerr << "RDGSystem::assembleMassMatrix()" << std::endl;
 
   const MeshBase & mesh = this->mesh().getMesh();
@@ -142,9 +143,10 @@ RDGSystem::assembleMassMatrix()
     // std::cerr << "Ke = " << Ke(0, 0) << std::endl;
 
     dof_id_type elem_id = elem->id();
-    _elem_JxW[elem_id] = JxW[0];
-    _elem_centroid[elem_id] = elem->centroid();
-    _dof_indices[elem_id] = dof_indices;
+    auto& elemprops = insertprop(elem_id);
+    elemprops.JxW = JxW[0];
+    elemprops.centroid = elem->centroid();
+    elemprops.dof_indices = dof_indices;
 
     _sys.matrix->add_matrix (Ke, dof_indices);
 
@@ -154,9 +156,8 @@ RDGSystem::assembleMassMatrix()
 
       fe_face->reinit(elem, side);
 
-      std::pair<dof_id_type, unsigned int> key(elem_id, side);
-      _face_point[key] = qface_point[0];
-      _normals[key] = normals[0];
+      elemprops.face_point.push_back(qface_point[0]);
+      elemprops.normals.push_back(normals[0]);
     }
   }
 }
@@ -166,8 +167,9 @@ std::vector<RealGradient>
 RDGSystem::limitElementSlope(const Elem * elem)
 {
   dof_id_type elem_id = elem->id();
+  auto& elemprops = _elemprops[elem_id];
 
-  const std::vector<dof_id_type> & dof_indices = _dof_indices[elem_id];
+  const std::vector<dof_id_type> & dof_indices = elemprops.dof_indices;
   // _dof_map.dof_indices(elem, dof_indices);
 
 
@@ -192,15 +194,17 @@ RDGSystem::limitElementSlope(const Elem * elem)
 
   // vector for the gradients of primitive variables
   std::vector<RealGradient> ugrad(nvars, RealGradient(0., 0., 0.));
+  return ugrad;
 
   // array to store center coordinates of this cell and its neighbor cells
   std::vector<Real> xc(nsten, 0.);
 
   // the first always stores the current cell
-  xc[0] = _elem_centroid[elem_id](0);
+  xc[0] = elemprops.centroid(0);
 
   // array for the cell-average values in the current cell and its neighbors
-  std::vector <std::vector<Real> > ucell(nsten, std::vector<Real>(nvars, 0.));
+  //std::vector <std::vector<Real> > ucell(nsten, std::vector<Real>(nvars, 0.));
+  std::vector<Real> ucell(nsten*nvars, 0.0);
 
   // central slope:
   //                  u_{i+1} - u {i-1}
@@ -217,11 +221,8 @@ RDGSystem::limitElementSlope(const Elem * elem)
   //                  ---------------
   //                  x_{i+1} - x_{i}
 
-  // array to store the central and one-sided slopes, where the first should be central slope
-  std::vector <std::vector<Real> > sigma(nsten, std::vector<Real>(nvars, 0.));
-
   // get the cell-average variable in the central cell
-  ucell[0][0] = (*_sys.solution)(dof_indices[0]);
+  ucell[0] = (*_sys.solution)(dof_indices[0]);
   // std::cerr << "ucell[0][0] = " << ucell[0][0] << std::endl;
 
   // a flag to indicate the boundary side of the current cell
@@ -232,27 +233,24 @@ RDGSystem::limitElementSlope(const Elem * elem)
 
   for (is = 0; is < nside; is++)
   {
-    in = is + 1;
+    //in = is + 1;
+    in = is;
 
     // when the current element is an internal cell
     if (elem->neighbor(is) != NULL)
     {
       const Elem * neig = elem->neighbor(is);
+      auto& neighborprops = _elemprops[neig->id()];
 
       // _dof_map.dof_indices(neig, neig_dof_indices);
-      const std::vector<dof_id_type> & neig_dof_indices = _dof_indices[neig->id()];
+      const std::vector<dof_id_type> & neig_dof_indices = neighborprops.dof_indices;
 
       // if (this->hasBlocks(neig->subdomain_id()))
       {
-        xc[in] = _elem_centroid[neig->id()](0);
+        xc[in] = neighborprops.centroid(0);
 
         // get the cell-average variable in this neighbor cell
-        ucell[in][0] = (*_sys.solution)(neig_dof_indices[0]);
-
-        // calculate the one-sided slopes of primitive variables
-
-        for (iv = 0; iv < nvars; iv++)
-          sigma[in][iv] = (ucell[0][iv] - ucell[in][iv]) / (xc[0] - xc[in]);
+        ucell[in*nsten] = (*_sys.solution)(neig_dof_indices[0]);
       }
       // else
       //   bflag = in;
@@ -285,7 +283,8 @@ RDGSystem::slopeReconstruction()
 
     // slope limiting
     dof_id_type elem_id = elem->id();
-    _lslope[elem_id] = limitElementSlope(elem);
+    auto& elemprops = _elemprops[elem_id];
+    elemprops.lslope = limitElementSlope(elem);
     // std::cerr << "e=" << elem_id << ", slope = " << _lslope[elem_id][0] << std::endl;
   }
 }
@@ -325,18 +324,19 @@ RDGSystem::assembleRHS()
   {
     const Elem * elem = *el;
     const dof_id_type & elem_id = elem->id();
+    auto& elemprops = _elemprops[elem_id];
 
     // fe->reinit(elem);
 
-    _centroid = _elem_centroid[elem_id];
+    _centroid = elemprops.centroid;
 
     // _dof_map.dof_indices(elem, dof_indices);
-    const std::vector<dof_id_type> & dof_indices = _dof_indices[elem_id];
+    const std::vector<dof_id_type> & dof_indices = elemprops.dof_indices;
     _dofs[0] = dof_indices[0];
 
     const Real & u_old = _sys.old_solution(dof_indices[0]);
 
-    _rhs(0) = _elem_JxW[elem_id] * (u_old / _dt);
+    _rhs(0) = elemprops.JxW * (u_old / _dt);
     // std::cerr << "u_old / dt = " << _rhs(0) << std::endl;
     // _sys.rhs->add_vector(_rhs, dof_indices);
     _sys.rhs->add(dof_indices[0], _rhs(0));
@@ -346,16 +346,14 @@ RDGSystem::assembleRHS()
 
     // std::vector<RealGradient> ugrad(nvars, RealGradient(0., 0., 0.));
     const Real & uc = (*_sys.solution)(dof_indices[0]);
-    const std::vector<RealGradient> & ugrad = _lslope[elem_id];
+    const std::vector<RealGradient> & ugrad = elemprops.lslope;
 
     for (unsigned int side = 0; side < elem->n_sides(); side++)
     {
       // fe_face->reinit(elem, side);
 
-      std::pair<dof_id_type, unsigned int> key(elem_id, side);
-
-      const Point & dwave = _normals[key];
-      const Point & face_point = _face_point[key];
+      const Point & dwave = elemprops.normals[side];
+      const Point & face_point = elemprops.face_point[side];
 
       // unsigned int nvars = 1;
 
@@ -411,12 +409,13 @@ RDGSystem::assembleRHS()
 
         // Get the global id of the element and the neighbor
         const dof_id_type & neighbor_id = neighbor->id();
+        auto& neighborprops = _elemprops[neighbor_id];
 
         // if ((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) || (neighbor->level() < elem->level()))
         if (elem_id < neighbor_id)
         {
           // _dof_map.dof_indices(neighbor, neig_dof_indices);
-          const std::vector<dof_id_type> & neig_dof_indices = _dof_indices[neighbor_id];
+          const std::vector<dof_id_type> & neig_dof_indices = neighborprops.dof_indices;
           _dofs[1] = neig_dof_indices[0];
 
           // unsigned int nvars = 1;
@@ -433,8 +432,8 @@ RDGSystem::assembleRHS()
           // Real uvec1 = uc + ugrad[0] * dvec;
 
           // neighbor
-          const std::vector<RealGradient> & neig_ugrad = _lslope[neighbor_id];
-          _dvec = face_point - _elem_centroid[neighbor->id()];
+          const std::vector<RealGradient> & neig_ugrad = neighborprops.lslope;
+          _dvec = face_point - neighborprops.centroid;
           un = (*_sys.solution)(neig_dof_indices[0]);
           Real uvec2 = un + neig_ugrad[0] * _dvec;
 

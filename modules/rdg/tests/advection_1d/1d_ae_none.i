@@ -126,7 +126,7 @@
     execute_on = 'initial final'
   [../]
   print_perf_log = true
-  #console = false
+  console = false
   [./console]
     type = Console
     outlier_variable_norms = false

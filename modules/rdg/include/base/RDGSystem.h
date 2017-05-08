@@ -8,6 +8,8 @@
 #ifndef RDGSYSTEM_H
 #define RDGSYSTEM_H
 
+#include <unordered_map>
+
 #include "SystemBase.h"
 #include "NonlinearSystemBase.h"
 #include "SlopeReconstructionBase.h"
@@ -91,17 +93,21 @@ protected:
   MooseObjectWarehouse<BoundaryFluxBase> _boundary_flux_objects;
   MooseObjectWarehouse<InternalSideFluxBase> _internal_side_flux_objects;
 
-  /// Stored JxW per element
-  std::map<dof_id_type, Real> _elem_JxW;
-  /// Stored element centroids
-  std::map<dof_id_type, Point> _elem_centroid;
-  std::map<dof_id_type, std::vector<dof_id_type> > _dof_indices;
-
-  std::map<std::pair<dof_id_type, unsigned int>, Point> _face_point;
-  std::map<std::pair<dof_id_type, unsigned int>, Point> _normals;
-
-  /// store the updated slopes into this map indexed by element ID
-  std::map<dof_id_type, std::vector<RealGradient> > _lslope;
+  struct elemprops {
+    Real JxW;
+    Point centroid;
+    std::vector<dof_id_type> dof_indices;
+    std::vector<Point> face_point;
+    std::vector<Point> normals;
+    std::vector<RealGradient> lslope;
+  };
+  std::vector<elemprops> _elemprops;
+  elemprops& insertprop(dof_id_type elem_id)
+  {
+    if (_elemprops.size() <= elem_id)
+      _elemprops.resize(elem_id+1, elemprops{});
+    return _elemprops[elem_id];
+  }
 
   DenseVector<Number> _rhs;
   std::vector<dof_id_type> _dofs;
