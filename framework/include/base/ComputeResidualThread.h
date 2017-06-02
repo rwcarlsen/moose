@@ -16,6 +16,7 @@
 #define COMPUTERESIDUALTHREAD_H
 
 #include "ThreadedElementLoop.h"
+#include "ResidualBufer.h"
 
 // libMesh includes
 #include "libmesh/elem_range.h"
@@ -53,6 +54,7 @@ protected:
   NonlinearSystemBase & _nl;
   Moose::KernelType _kernel_type;
   unsigned int _num_cached;
+  ResidualBuffer _buff;
 
   /// Reference to BC storage structures
   const MooseObjectWarehouse<IntegratedBC> & _integrated_bcs;

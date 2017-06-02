@@ -48,19 +48,22 @@ public:
 
   virtual bool keepGoing() override { return !_fe_problem.hasException(); }
 protected:
+  ResidualBuffer _residual_buf;
   FEProblemBase & _fe_problem;
 };
 
 template <typename RangeType>
 ThreadedElementLoop<RangeType>::ThreadedElementLoop(FEProblemBase & fe_problem)
-  : ThreadedElementLoopBase<RangeType>(fe_problem.mesh()), _fe_problem(fe_problem)
+  : ThreadedElementLoopBase<RangeType>(fe_problem.mesh()),
+    _fe_problem(fe_problem),
+    _residual_buf(fe_problem)
 {
 }
 
 template <typename RangeType>
 ThreadedElementLoop<RangeType>::ThreadedElementLoop(ThreadedElementLoop & x,
                                                     Threads::split /*split*/)
-  : ThreadedElementLoopBase<RangeType>(x), _fe_problem(x._fe_problem)
+  : ThreadedElementLoopBase<RangeType>(x), _fe_problem(x._fe_problem), _residual_buf(x._fe_problem)
 {
 }
 
