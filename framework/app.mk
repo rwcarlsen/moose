@@ -295,7 +295,7 @@ endif
 $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object) $(app_test_LIB) $(depend_test_libs) $(ADDITIONAL_DEPEND_LIBS)
 	@echo "Linking Executable "$@"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=link --quiet \
-	  $(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(app_test_LIB) $(app_LIBS) $(depend_test_libs) $(libmesh_LIBS) $(libmesh_LDFLAGS) $(depend_test_libs_flags) $(EXTERNAL_FLAGS) $(ADDITIONAL_LIBS)
+	  $(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(app_test_LIB) $(app_LIBS) $(depend_test_libs) $(libmesh_LIBS) $(libmesh_LDFLAGS) $(depend_test_libs_flags) $(EXTERNAL_FLAGS) $(ADDITIONAL_LIBS) -l:libtcmalloc.so.4 -l:libprofiler.so.0
 
 # Clang static analyzer
 sa:: $(app_analyzer)
