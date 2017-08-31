@@ -175,6 +175,8 @@ public:
   /// given relative path if any or nullptr otherwise.
   Node * find(const std::string & path);
 
+  void index();
+
   /// param searches for the node at the given path (empty path indicates *this* node) and returns
   /// the value stored at that node in the form of the given type T.  The node at the given path
   /// must hold a value (i.e. be a Field node) otherwise an exception is thrown.  If the node holds
@@ -213,6 +215,7 @@ private:
     throw Error("unsupported c++ type '" + std::string(typeid(T).name()) + "'");
   }
 
+  std::map<std::string, Node *> _index;
   std::vector<Token> _toks;
   Node * _parent = nullptr;
   std::vector<Node *> _children;

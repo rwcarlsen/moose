@@ -1,6 +1,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <sstream>
 #include <set>
@@ -283,24 +284,56 @@ Node::fullpath()
 {
   if (_parent == nullptr)
     return "";
-  return pathNorm(pathJoin({_parent->fullpath(), path()}));
+
+  auto ppath = _parent->fullpath();
+  if (ppath.empty())
+    return path();
+  return _parent->fullpath() + "/" + path();
 }
 
 void
 Node::walk(Walker * w, NodeType t)
 {
-  if (_type == t)
+  if (_type == t || t == NodeType::All)
     w->walk(fullpath(), pathNorm(path()), this);
   for (auto child : _children)
     child->walk(w, t);
 }
 
+class IndexWalker : public Walker
+{
+public:
+  IndexWalker(std::map<std::string, Node *> & index) : _index(index) {}
+  void walk(const std::string & fullpath, const std::string & /*nodepath*/, Node * n)
+  {
+    if (_index.count(fullpath) == 0)
+      _index[fullpath] = n;
+  }
+
+private:
+  std::map<std::string, Node *> & _index;
+};
+
+void
+Node::index()
+{
+  _index.clear();
+  IndexWalker w(_index);
+  walk(&w, NodeType::All);
+}
+
 Node *
 Node::find(const std::string & path)
 {
+  auto normpath = pathNorm(path);
+  if (_index.size() == 0)
+    index();
+
+  if (_index.count(normpath) > 0)
+    return _index[normpath];
   if (path == "" && fullpath() == "")
     return this;
-  return findInner(pathNorm(path), "");
+  return findInner(normpath, "");
 }
 
 std::vector<Token> &
@@ -318,9 +351,16 @@ Node::findInner(const std::string & path, const std::string & prefix)
     if (t != NodeType::Section && t != NodeType::Field)
       continue;
 
-    auto fullpath = pathJoin({prefix, child->path()});
+    std::string fullpath;
+    if (prefix.size() == 0)
+      fullpath = child->path();
+    else
+      fullpath = prefix + "/" + child->path();
+
     if (fullpath == path)
       return child;
+    else if (path.find(fullpath) == std::string::npos)
+      continue;
 
     if (child->type() == NodeType::Section)
     {
@@ -351,12 +391,12 @@ Comment::clone()
   return new Comment(_text, _isinline);
 }
 
-Section::Section(const std::string & path) : Node(NodeType::Section), _path(path) {}
+Section::Section(const std::string & path) : Node(NodeType::Section), _path(pathNorm(path)) {}
 
 std::string
 Section::path()
 {
-  return pathNorm(_path);
+  return _path;
 }
 
 std::string
@@ -761,6 +801,7 @@ parse(const std::string & fname, const std::string & input)
   Parser parser(fname, input, tokens);
   std::unique_ptr<Node> root(new Section(""));
   parseSectionBody(&parser, root.get());
+  root->index();
   return root.release();
 }
 
