@@ -57,6 +57,15 @@ validParams<CreateProblemAction>()
                                        "<path>/<filebase> or <path>/LATEST to "
                                        "grab the latest file available)");
 
+#ifdef LIBMESH_HAVE_PETSC
+  // put in empty arrays for PETSc options
+  params.addParam<MultiMooseEnum>("petsc_options", MultiMooseEnum("", "", true), "petsc options");
+  params.addParam<std::vector<std::string>>(
+      "petsc_inames", std::vector<std::string>(), "petsc inames");
+  params.addParam<std::vector<std::string>>(
+      "petsc_values", std::vector<std::string>(), "petsc values");
+#endif
+
   return params;
 }
 
