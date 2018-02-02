@@ -118,7 +118,9 @@ FileMesh::buildMesh()
         getMesh().allow_renumbering(false);
       }
 
-      MooseUtils::checkFileReadable(_file_name);
+      if (_file_name.find(".cpr") == std::string::npos ||
+          _file_name.find(".cpa") == std::string::npos)
+        MooseUtils::checkFileReadable(_file_name);
       getMesh().read(_file_name);
 
       if (restarting)
