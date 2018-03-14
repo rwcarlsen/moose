@@ -26,22 +26,42 @@ class InputParameters;
  * Macros
  */
 #define stringifyName(name) #name
-#define registerObject(name) factory.reg<name>(stringifyName(name), __FILE__, __LINE__)
+#define registerObject(name)                                                                       \
+  do                                                                                               \
+  {                                                                                                \
+    mooseDeprecated("use the registerMooseObject macro instead");                                  \
+    factory.reg<name>(stringifyName(name), __FILE__, __LINE__);                                    \
+  } while (0)
+
 #define registerNamedObject(obj, name)                                                             \
   do                                                                                               \
   {                                                                                                \
+    mooseDeprecated("use the registerMooseObjectAliased macro instead");                           \
     factory.reg<obj>(name, __FILE__, __LINE__);                                                    \
     factory.associateNameToClass(name, stringifyName(obj));                                        \
   } while (0)
 
 #define registerDeprecatedObject(name, time)                                                       \
-  factory.regDeprecated<name>(stringifyName(name), time, __FILE__, __LINE__)
+  do                                                                                               \
+  {                                                                                                \
+    mooseDeprecated("use the registerMooseObjectDeprecated macro instead");                        \
+    factory.regDeprecated<name>(stringifyName(name), time, __FILE__, __LINE__);                    \
+  } while (0)
 
 #define registerDeprecatedObjectWithReplacement(dep_obj, replacement_name, time)                   \
-  factory.regReplaced<dep_obj>(stringifyName(dep_obj), replacement_name, time, __FILE__, __LINE__)
+  do                                                                                               \
+  {                                                                                                \
+    mooseDeprecated("use the registerMooseObjectReplaced macro instead");                          \
+    factory.regReplaced<dep_obj>(                                                                  \
+        stringifyName(dep_obj), replacement_name, time, __FILE__, __LINE__);                       \
+  } while (0)
 
 #define registerRenamedObject(orig_name, new_obj, time)                                            \
-  factory.renameObject<new_obj>(orig_name, stringifyName(new_obj), time, __FILE__, __LINE__)
+  do                                                                                               \
+  {                                                                                                \
+    mooseDeprecated("use the registerMooseObjectRenamed macro instead");                           \
+    factory.renameObject<new_obj>(orig_name, stringifyName(new_obj), time, __FILE__, __LINE__);    \
+  } while (0)
 
 // for backward compatibility
 #define registerKernel(name) registerObject(name)
