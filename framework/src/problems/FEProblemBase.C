@@ -480,6 +480,17 @@ FEProblemBase::initialSetup()
 {
   TIME_SECTION(_initial_setup_timer);
 
+  auto nelemmin = mesh().getMesh().n_active_local_elem();
+  auto nelemmax = mesh().getMesh().n_active_local_elem();
+  auto nelemsum = mesh().getMesh().n_active_local_elem();
+  comm().min(nelemmin);
+  comm().max(nelemmax);
+  comm().sum(nelemsum);
+  std::cout << "avg number elements: " << ((double)nelemsum / (double)comm().size()) << "\n";
+  std::cout << "min number elements: " << nelemmin << "\n";
+  std::cout << "max number elements: " << nelemmax << "\n";
+  std::cout.flush();
+
   // set state flag indicating that we are in or beyond initialSetup.
   // This can be used to throw errors in methods that _must_ be called at construction time.
   _started_initial_setup = true;
