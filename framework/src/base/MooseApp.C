@@ -7,6 +7,8 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
+#include "gperftools/profiler.h"
+
 // MOOSE includes
 #include "MooseApp.h"
 #include "MooseRevision.h"
@@ -305,6 +307,8 @@ MooseApp::MooseApp(InputParameters parameters)
 {
   Registry::addKnownLabel(_type);
 
+  static std::string fname = std::string("cpu") + std::to_string(_comm->rank()) + ".prof";
+  ProfilerStart(fname.c_str());
   if (isParamValid("_argc") && isParamValid("_argv"))
   {
     int argc = getParam<int>("_argc");
@@ -387,6 +391,7 @@ MooseApp::checkRegistryLabels()
 
 MooseApp::~MooseApp()
 {
+  ProfilerStop();
   _action_warehouse.clear();
   _executioner.reset();
 
