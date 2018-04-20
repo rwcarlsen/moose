@@ -96,6 +96,12 @@ validParams<MooseApp>()
       false,
       "Ignore input file and build a minimal application with Transient executioner.");
 
+  params.addCommandLineParam<bool>(
+      "format", "--format", "auto-format the given input file and exit");
+  params.addCommandLineParam<bool>(
+      "warn_format",
+      "--warn-format",
+      "warn if the input file is not formatted in the canonical moose format");
   params.addCommandLineParam<std::string>(
       "definition", "--definition", "Shows a SON style input definition dump for input validation");
   params.addCommandLineParam<std::string>(
@@ -396,6 +402,42 @@ MooseApp::getPrintableVersion() const
   return getPrintableName() + " Version: " + getVersion();
 }
 
+std::string
+formatHit(const std::string & fname, const std::string & hit_text)
+{
+  MooseUtils::checkFileReadable(fname);
+
+  // find style file
+  std::string stylefile;
+  std::string currpath;
+  char tmp[PATH_MAX + 1];
+  if (getcwd(tmp, PATH_MAX))
+    currpath = std::string(tmp);
+
+  while (currpath != "//..")
+  {
+    realpath(currpath.c_str(), tmp);
+    currpath = std::string(tmp);
+
+    if (MooseUtils::checkFileReadable(currpath + "/hit.fmt", false, false))
+    {
+      stylefile = currpath + "/hit.fmt";
+      break;
+    }
+    currpath += "/..";
+  }
+
+  hit::Formatter fmter;
+  if (stylefile != "")
+  {
+    std::ifstream f(stylefile);
+    std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    hit::Formatter fmter(stylefile, input);
+  }
+
+  return fmter.format(fname, hit_text);
+}
+
 void
 MooseApp::setupOptions()
 {
@@ -417,6 +459,17 @@ MooseApp::setupOptions()
     setCheckUnusedFlag(true);
   else if (getParam<bool>("warn_unused"))
     setCheckUnusedFlag(false);
+  if (isParamValid("warn_format") && getParam<bool>("warn_format"))
+  {
+    auto fname = getParam<std::string>("input_file");
+    MooseUtils::checkFileReadable(fname);
+    std::ifstream f(fname);
+    std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+    auto fmted = formatHit(fname, input);
+    if (input != fmted)
+      mooseWarning("input file '", fname, "' does not comply with the canonical HIT moose format");
+  }
 
   if (getParam<bool>("error_override"))
     setErrorOverridden();
@@ -629,6 +682,18 @@ MooseApp::setupOptions()
     else
       _parser.buildFullTree(yaml_following_arg);
 
+    _ready_to_exit = true;
+  }
+  else if (isParamValid("format"))
+  {
+    auto fname = getParam<std::string>("input_file");
+    MooseUtils::checkFileReadable(fname);
+    std::ifstream f(fname);
+    std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+    auto fmted = formatHit(fname, input);
+    std::ofstream outfile(fname);
+    outfile << fmted;
     _ready_to_exit = true;
   }
   else if (isParamValid("json"))
