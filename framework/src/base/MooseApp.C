@@ -285,6 +285,25 @@ MooseApp::MooseApp(InputParameters parameters)
     _multiapp_number(
         isParamValid("_multiapp_number") ? parameters.get<unsigned int>("_multiapp_number") : 0)
 {
+
+  // int * x = new int(0); // memory leak
+  // std::cout << x;
+
+  // auto y = new int(0);
+  // delete y;
+  // std::cout << *y; // use after free
+  // delete y; // double free
+
+  // int * z;
+  // std::cout << *z; // use of uninitialized
+
+  int * foo = nullptr;
+  {
+    int x;
+    foo = &x;
+  }
+  std::cout << *foo; // use after stack free
+
   Registry::addKnownLabel(_type);
 
   if (isParamValid("_argc") && isParamValid("_argv"))
