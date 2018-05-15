@@ -27,9 +27,12 @@ enum class AttributeId
 {
   None,
   Thread,
+  Type,
+  Name,
   System,
   Enabled,
-  Tag,       // multiple
+  VectorTag, // multiple
+  MatrixTag, // multiple
   Boundary,  // multiple
   Subdomain, // multiple
   ExecOn,    // multiple
