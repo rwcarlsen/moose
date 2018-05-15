@@ -31,7 +31,8 @@ private:
     std::vector<int> boundaries;
     std::vector<int> subdomains;
     std::vector<int> execute_ons;
-    std::vector<std::string> tags;
+    std::vector<int> vector_tags;
+    std::vector<int> matrix_tags;
   };
 
 public:
@@ -60,6 +61,12 @@ public:
           case AttributeId::Thread:
             passes = cond.value == d.thread;
             break;
+          case AttributeId::Type:
+            passes = cond.value == d.type;
+            break;
+          case AttributeId::Name:
+            passes = cond.value == d.name;
+            break;
           case AttributeId::System:
             passes = cond.strvalue == d.system;
             break;
@@ -69,7 +76,8 @@ public:
           case AttributeId::Boundary:
             passes = false;
             for (auto val : d.boundaries)
-              if (cond.value == val)
+              if (cond.value == Moose::ANY_BOUNDARY_ID || val == Moose::ANY_BOUNDARY_ID ||
+                  cond.value == val)
               {
                 passes = true;
                 break;
@@ -78,7 +86,8 @@ public:
           case AttributeId::Subdomain:
             passes = false;
             for (auto val : d.subdomains)
-              if (cond.value == val)
+              if (cond.value == Moose::ANY_BLOCK_ID || val == Moose::ANY_BLOCK_ID ||
+                  cond.value == val)
               {
                 passes = true;
                 break;
@@ -93,10 +102,19 @@ public:
                 break;
               }
             break;
-          case AttributeId::Tag:
+          case AttributeId::VectorTag:
             passes = false;
-            for (auto val : d.tags)
-              if (cond.strvalue == val)
+            for (auto val : d.vector_tags)
+              if (cond.value == val)
+              {
+                passes = true;
+                break;
+              }
+            break;
+          case AttributeId::MatrixTag:
+            passes = false;
+            for (auto val : d.matrix_tags)
+              if (cond.value == val)
               {
                 passes = true;
                 break;
@@ -141,6 +159,12 @@ private:
         case AttributeId::Thread:
           d.thread = attrib.value;
           break;
+        case AttributeId::Type:
+          d.type = attrib.value;
+          break;
+        case AttributeId::Name:
+          d.name = attrib.value;
+          break;
         case AttributeId::System:
           d.system = attrib.strvalue;
           break;
@@ -156,8 +180,11 @@ private:
         case AttributeId::ExecOn:
           d.execute_ons.push_back(attrib.value);
           break;
-        case AttributeId::Tag:
-          d.tags.push_back(attrib.strvalue);
+        case AttributeId::VectorTag:
+          d.vector_tags.push_back(attrib.value);
+          break;
+        case AttributeId::MatrixTag:
+          d.matrix_tags.push_back(attrib.value);
           break;
         default:
           throw std::runtime_error("unknown AttributeId " +
@@ -188,16 +215,35 @@ TheWarehouse::add(std::unique_ptr<MooseObject> obj)
 void
 TheWarehouse::readAttribs(MooseObject * obj, std::vector<Attribute> & attribs)
 {
-  attribs.push_back({AttributeId::System, 0, obj->system});
-  attribs.push_back({AttributeId::Thread, obj->thread, ""});
-  attribs.push_back({AttributeId::Enabled, obj->enabled, ""});
-  for (auto & tag : obj->tags)
-    attribs.push_back({AttributeId::Tag, 0, tag});
-  for (auto & sub : obj->subdomains)
-    attribs.push_back({AttributeId::Subdomain, sub, ""});
-  for (auto & bound : obj->boundaries)
-    attribs.push_back({AttributeId::Boundary, bound, ""});
-  for (auto & on : obj->execute_ons)
+
+  attribs.push_back({AttributeId::System, 0, obj->TODO});
+  attribs.push_back({AttributeId::Type, 0, obj->TODO});
+  attribs.push_back({AttributeId::Name, 0, obj->name()});
+  attribs.push_back({AttributeId::Thread, obj->getParam<THREAD_ID>("_tid"), ""});
+  attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
+
+  auto ti = dynamic_cast<TaggingInterface>(obj);
+  if (ti)
+  {
+    for (auto tag : ti->getVectorTags())
+      attribs.push_back({AttributeId::VectorTag, tag, ""});
+    for (auto tag : ti->getMatrixTags())
+      attribs.push_back({AttributeId::MatrixTag, tag, ""});
+  }
+  auto blk = dynamic_cast<BlockRestrictable>(obj);
+  if (blk)
+  {
+    for (auto id : blk->blockIDs())
+      attribs.push_back({AttributeId::Subdomain, id, ""});
+  }
+  auto bnd = dynamic_cast<BoundaryRestrictable>(obj);
+  if (bnd)
+  {
+    for (auto & bound : bnd->boundaryIDs())
+      attribs.push_back({AttributeId::Boundary, bound, ""});
+  }
+  // execute_ons:
+  for (auto & on : obj->TODO)
     attribs.push_back({AttributeId::ExecOn, on, ""});
 }
 
