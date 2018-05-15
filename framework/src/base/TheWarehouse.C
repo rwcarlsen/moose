@@ -7,6 +7,13 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
+#include "TheWarehouse.h"
+#include "MooseObject.h"
+#include "TaggingInterface.h"
+#include "BoundaryRestrictable.h"
+#include "BlockRestrictable.h"
+#include "SetupInterface.h"
+
 #include <memory>
 
 class Storage
@@ -22,7 +29,7 @@ class VecStore : public Storage
 private:
   struct Data
   {
-    std::string id;
+    int id;
     std::string type;
     std::string name;
     std::string system;
@@ -36,9 +43,9 @@ private:
   };
 
 public:
-  virtual void add(int obj_id, const std::vector<Attribute> & attribs) override;
+  virtual void add(int obj_id, const std::vector<Attribute> & attribs) override
   {
-    if (obj_id < _system.size())
+    if (obj_id < _data.size())
       throw std::runtime_error("object with id " + std::to_string(obj_id) + " already added");
 
     _data.push_back({});
@@ -47,7 +54,7 @@ public:
     set(d, attribs);
   }
 
-  virtual std::vector<int> query(const std::vector<Attribute> & conds) override;
+  virtual std::vector<int> query(const std::vector<Attribute> & conds) override
   {
     std::vector<int> objs;
     for (int i = 0; i < _data.size(); i++)
@@ -62,10 +69,10 @@ public:
             passes = cond.value == d.thread;
             break;
           case AttributeId::Type:
-            passes = cond.value == d.type;
+            passes = cond.strvalue == d.type;
             break;
           case AttributeId::Name:
-            passes = cond.value == d.name;
+            passes = cond.strvalue == d.name;
             break;
           case AttributeId::System:
             passes = cond.strvalue == d.system;
@@ -133,20 +140,20 @@ public:
     return objs;
   }
 
-  virtual void set(int obj_id, const std::vector<Attribute> & attribs) override;
+  virtual void set(int obj_id, const std::vector<Attribute> & attribs) override
   {
-    Data * d = nullptr;
+    Data * dat = nullptr;
     for (auto & d : _data)
       if (d.id == obj_id)
       {
-        d = &d;
+        dat = &d;
         break;
       }
 
-    if (!d)
-      throw std::runtime_error("unknown object id " std::to_string(obj_id));
+    if (!dat)
+      throw std::runtime_error("unknown object id " + std::to_string(obj_id));
 
-    set(*d, attribs);
+    set(*dat, attribs);
   }
 
 private:
@@ -196,30 +203,40 @@ private:
   std::vector<Data> _data;
 };
 
-TheWarehouse::TheWarehouse() : _store(nullptr) { _store = libmesh_make_unique<VecStore>(); };
+TheWarehouse::TheWarehouse() : _store(new VecStore()){};
 
 void
-TheWarehouse::add(std::unique_ptr<MooseObject> obj)
+TheWarehouse::add(std::unique_ptr<MooseObject> obj, const std::string & system)
 {
   for (int i = 0; i < _query_dirty.size(); i++)
     _query_dirty[i] = true;
 
   std::vector<Attribute> attribs;
-  readAttribs(attribs);
+  readAttribs(obj.get(), system, attribs);
   _objects.push_back(std::move(obj));
   int obj_id = _objects.size() - 1;
-  obj->parameters().set<int>("_warehouse_id") = obj_id;
   _store->add(obj_id, attribs);
 }
 
-TheWarehouse::update(std::unique_ptr<MooseObject> obj)
+void
+TheWarehouse::update(std::unique_ptr<MooseObject> obj, const std::string & system)
 {
   for (int i = 0; i < _query_dirty.size(); i++)
     _query_dirty[i] = true;
 
-  int obj_id = obj->getParam<int>("_warehouse_id");
+  int obj_id = -1;
+  for (int i = 0; i < _objects.size(); i++)
+    if (_objects[i] == obj)
+    {
+      obj_id = i;
+      break;
+    }
+
+  if (obj_id == -1)
+    throw std::runtime_error("cannot update unknown object");
+
   std::vector<Attribute> attribs;
-  readAttribs(attribs);
+  readAttribs(obj.get(), system, attribs);
   _store->set(obj_id, attribs);
 }
 
@@ -253,38 +270,40 @@ TheWarehouse::query(int query_id)
 }
 
 void
-TheWarehouse::readAttribs(MooseObject * obj, std::vector<Attribute> & attribs)
+TheWarehouse::readAttribs(MooseObject * obj,
+                          const std::string & system,
+                          std::vector<Attribute> & attribs)
 {
-  attribs.push_back({AttributeId::System, 0, obj->TODO});
-  attribs.push_back({AttributeId::Type, 0, obj->TODO});
+  attribs.push_back({AttributeId::System, 0, system});
+  attribs.push_back({AttributeId::Type, 0, ""}); // TODO: make this not be blank
   attribs.push_back({AttributeId::Name, 0, obj->name()});
-  attribs.push_back({AttributeId::Thread, obj->getParam<THREAD_ID>("_tid"), ""});
+  attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
   attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
 
-  auto ti = dynamic_cast<TaggingInterface>(obj);
+  auto ti = dynamic_cast<TaggingInterface *>(obj);
   if (ti)
   {
     for (auto tag : ti->getVectorTags())
-      attribs.push_back({AttributeId::VectorTag, tag, ""});
+      attribs.push_back({AttributeId::VectorTag, static_cast<int>(tag), ""});
     for (auto tag : ti->getMatrixTags())
-      attribs.push_back({AttributeId::MatrixTag, tag, ""});
+      attribs.push_back({AttributeId::MatrixTag, static_cast<int>(tag), ""});
   }
-  auto blk = dynamic_cast<BlockRestrictable>(obj);
+  auto blk = dynamic_cast<BlockRestrictable *>(obj);
   if (blk)
   {
     for (auto id : blk->blockIDs())
       attribs.push_back({AttributeId::Subdomain, id, ""});
   }
-  auto bnd = dynamic_cast<BoundaryRestrictable>(obj);
+  auto bnd = dynamic_cast<BoundaryRestrictable *>(obj);
   if (bnd)
   {
     for (auto & bound : bnd->boundaryIDs())
       attribs.push_back({AttributeId::Boundary, bound, ""});
   }
-  auto sup = dynamic_cast<SetupInterface>(obj);
+  auto sup = dynamic_cast<SetupInterface *>(obj);
   if (sup)
   {
     for (auto & on : sup->getExecuteOnEnum().items())
-      attribs.push_back({AttributeId::ExecOn, on.int(), ""});
+      attribs.push_back({AttributeId::ExecOn, on, ""});
   }
 }

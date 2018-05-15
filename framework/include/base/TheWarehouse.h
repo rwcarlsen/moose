@@ -14,6 +14,9 @@
 #include <string>
 #include <vector>
 
+class MooseObject;
+class Storage;
+
 // attributes include:
 //
 //     * tag (multiple) few - 3ish
@@ -49,12 +52,13 @@ struct Attribute
   }
 };
 
-class Warehouse
+class TheWarehouse
 {
 public:
-  Warehouse();
+  TheWarehouse();
 
-  void add(std::unique_ptr<MooseObject> obj);
+  void add(std::unique_ptr<MooseObject> obj, const std::string & system);
+  void update(std::unique_ptr<MooseObject> obj, const std::string & system);
 
   // prepares a query and returns an associated query_id (i.e. for use with the query function.
   int prepare(const std::vector<Attribute> & conds);
@@ -75,9 +79,9 @@ public:
   }
 
 private:
-  void readAttribs(MooseObject * std::vector<Attribute> & attribs)
+  void readAttribs(MooseObject * obj, const std::string & system, std::vector<Attribute> & attribs);
 
-      std::unique_ptr<Storage> _store;
+  std::unique_ptr<Storage> _store;
   std::vector<std::unique_ptr<MooseObject>> _objects;
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
