@@ -212,41 +212,6 @@ TheWarehouse::add(std::unique_ptr<MooseObject> obj)
   _store->add(obj_id, attribs);
 }
 
-void
-TheWarehouse::readAttribs(MooseObject * obj, std::vector<Attribute> & attribs)
-{
-
-  attribs.push_back({AttributeId::System, 0, obj->TODO});
-  attribs.push_back({AttributeId::Type, 0, obj->TODO});
-  attribs.push_back({AttributeId::Name, 0, obj->name()});
-  attribs.push_back({AttributeId::Thread, obj->getParam<THREAD_ID>("_tid"), ""});
-  attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
-
-  auto ti = dynamic_cast<TaggingInterface>(obj);
-  if (ti)
-  {
-    for (auto tag : ti->getVectorTags())
-      attribs.push_back({AttributeId::VectorTag, tag, ""});
-    for (auto tag : ti->getMatrixTags())
-      attribs.push_back({AttributeId::MatrixTag, tag, ""});
-  }
-  auto blk = dynamic_cast<BlockRestrictable>(obj);
-  if (blk)
-  {
-    for (auto id : blk->blockIDs())
-      attribs.push_back({AttributeId::Subdomain, id, ""});
-  }
-  auto bnd = dynamic_cast<BoundaryRestrictable>(obj);
-  if (bnd)
-  {
-    for (auto & bound : bnd->boundaryIDs())
-      attribs.push_back({AttributeId::Boundary, bound, ""});
-  }
-  // execute_ons:
-  for (auto & on : obj->TODO)
-    attribs.push_back({AttributeId::ExecOn, on, ""});
-}
-
 TheWarehouse::update(std::unique_ptr<MooseObject> obj)
 {
   for (int i = 0; i < _query_dirty.size(); i++)
@@ -285,4 +250,41 @@ TheWarehouse::query(int query_id)
   }
 
   return _obj_cache[query_id];
+}
+
+void
+TheWarehouse::readAttribs(MooseObject * obj, std::vector<Attribute> & attribs)
+{
+  attribs.push_back({AttributeId::System, 0, obj->TODO});
+  attribs.push_back({AttributeId::Type, 0, obj->TODO});
+  attribs.push_back({AttributeId::Name, 0, obj->name()});
+  attribs.push_back({AttributeId::Thread, obj->getParam<THREAD_ID>("_tid"), ""});
+  attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
+
+  auto ti = dynamic_cast<TaggingInterface>(obj);
+  if (ti)
+  {
+    for (auto tag : ti->getVectorTags())
+      attribs.push_back({AttributeId::VectorTag, tag, ""});
+    for (auto tag : ti->getMatrixTags())
+      attribs.push_back({AttributeId::MatrixTag, tag, ""});
+  }
+  auto blk = dynamic_cast<BlockRestrictable>(obj);
+  if (blk)
+  {
+    for (auto id : blk->blockIDs())
+      attribs.push_back({AttributeId::Subdomain, id, ""});
+  }
+  auto bnd = dynamic_cast<BoundaryRestrictable>(obj);
+  if (bnd)
+  {
+    for (auto & bound : bnd->boundaryIDs())
+      attribs.push_back({AttributeId::Boundary, bound, ""});
+  }
+  auto sup = dynamic_cast<SetupInterface>(obj);
+  if (sup)
+  {
+    for (auto & on : sup->getExecuteOnEnum().items())
+      attribs.push_back({AttributeId::ExecOn, on.int(), ""});
+  }
 }
