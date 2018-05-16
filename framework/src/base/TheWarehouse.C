@@ -35,8 +35,8 @@ private:
     std::string system;
     int thread = 0;
     bool enabled = true;
-    std::vector<int> boundaries;
-    std::vector<int> subdomains;
+    std::vector<boundary_id_type> boundaries;
+    std::vector<subdomain_id_type> subdomains;
     std::vector<int> execute_ons;
     std::vector<int> vector_tags;
     std::vector<int> matrix_tags;

@@ -68,7 +68,7 @@ public:
   template <typename T>
   void queryInto(int query_id, std::vector<T> & results)
   {
-    auto objs = query(query_id);
+    auto & objs = query(query_id);
     results.resize(objs.size());
     for (int i = 0; i < objs.size(); i++)
     {
