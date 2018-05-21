@@ -40,7 +40,6 @@ validParams<MooseObject>()
   params.addPrivateParam<AuxiliarySystem *>("_aux_sys");
   params.addPrivateParam<Transient *>("_executioner");
   params.addPrivateParam<THREAD_ID>("_tid");
-  params.addPrivateParam<THREAD_ID>("_warehouse_id");
   return params;
 }
 

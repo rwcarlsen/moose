@@ -57,8 +57,8 @@ class TheWarehouse
 public:
   TheWarehouse();
 
-  void add(std::unique_ptr<MooseObject> obj, const std::string & system);
-  void update(std::unique_ptr<MooseObject> obj, const std::string & system);
+  void add(std::shared_ptr<MooseObject> obj, const std::string & system);
+  void update(const MooseObject * obj, const std::string & system);
 
   // prepares a query and returns an associated query_id (i.e. for use with the query function.
   int prepare(const std::vector<Attribute> & conds);
@@ -79,10 +79,12 @@ public:
   }
 
 private:
-  void readAttribs(MooseObject * obj, const std::string & system, std::vector<Attribute> & attribs);
+  void readAttribs(const MooseObject * obj,
+                   const std::string & system,
+                   std::vector<Attribute> & attribs);
 
   std::unique_ptr<Storage> _store;
-  std::vector<std::unique_ptr<MooseObject>> _objects;
+  std::vector<std::shared_ptr<MooseObject>> _objects;
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
   std::vector<std::vector<Attribute>> _query_cache;
