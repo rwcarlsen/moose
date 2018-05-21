@@ -13,6 +13,8 @@
 #include "BoundaryRestrictable.h"
 #include "BlockRestrictable.h"
 #include "SetupInterface.h"
+#include "MooseVariableInterface.h"
+#include "MooseVariableFE.h"
 
 #include <memory>
 
@@ -35,6 +37,7 @@ private:
     std::string system;
     int thread = 0;
     bool enabled = true;
+    int variable;
     std::vector<boundary_id_type> boundaries;
     std::vector<subdomain_id_type> subdomains;
     std::vector<int> execute_ons;
@@ -57,7 +60,7 @@ public:
   virtual std::vector<int> query(const std::vector<Attribute> & conds) override
   {
     std::vector<int> objs;
-    for (int i = 0; i < _data.size(); i++)
+    for (unsigned int i = 0; i < _data.size(); i++)
     {
       auto & d = _data[i];
       bool passes = true;
@@ -79,6 +82,9 @@ public:
             break;
           case AttributeId::Enabled:
             passes = cond.value == d.enabled;
+            break;
+          case AttributeId::Variable:
+            passes = cond.value == d.variable;
             break;
           case AttributeId::Boundary:
             passes = false;
@@ -178,6 +184,9 @@ private:
         case AttributeId::Enabled:
           d.enabled = attrib.value;
           break;
+        case AttributeId::Variable:
+          d.variable = attrib.value;
+          break;
         case AttributeId::Boundary:
           d.boundaries.push_back(attrib.value);
           break;
@@ -208,7 +217,7 @@ TheWarehouse::TheWarehouse() : _store(new VecStore()){};
 void
 TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 {
-  for (int i = 0; i < _query_dirty.size(); i++)
+  for (unsigned int i = 0; i < _query_dirty.size(); i++)
     _query_dirty[i] = true;
 
   std::vector<Attribute> attribs;
@@ -221,11 +230,11 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 void
 TheWarehouse::update(const MooseObject * obj, const std::string & system)
 {
-  for (int i = 0; i < _query_dirty.size(); i++)
+  for (unsigned int i = 0; i < _query_dirty.size(); i++)
     _query_dirty[i] = true;
 
   int obj_id = -1;
-  for (int i = 0; i < _objects.size(); i++)
+  for (unsigned int i = 0; i < _objects.size(); i++)
     if (_objects[i].get() == obj)
     {
       obj_id = i;
@@ -279,6 +288,10 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   attribs.push_back({AttributeId::Name, 0, obj->name()});
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
   attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
+
+  auto vi = dynamic_cast<const MooseVariableInterface<Real> *>(obj);
+  if (vi)
+    attribs.push_back({AttributeId::Variable, static_cast<int>(vi->mooseVariable()->number()), ""});
 
   auto ti = dynamic_cast<const TaggingInterface *>(obj);
   if (ti)
