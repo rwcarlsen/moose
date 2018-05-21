@@ -33,6 +33,7 @@ enum class AttributeId
   Type,
   Name,
   System,
+  Variable,
   Enabled,
   VectorTag, // multiple
   MatrixTag, // multiple
@@ -70,7 +71,7 @@ public:
   {
     auto & objs = query(query_id);
     results.resize(objs.size());
-    for (int i = 0; i < objs.size(); i++)
+    for (unsigned int i = 0; i < objs.size(); i++)
     {
       auto obj = objs[i];
       assert(dynamic_cast<T *>(obj));
