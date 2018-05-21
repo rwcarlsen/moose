@@ -206,7 +206,7 @@ private:
 TheWarehouse::TheWarehouse() : _store(new VecStore()){};
 
 void
-TheWarehouse::add(std::unique_ptr<MooseObject> obj, const std::string & system)
+TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 {
   for (int i = 0; i < _query_dirty.size(); i++)
     _query_dirty[i] = true;
@@ -219,14 +219,14 @@ TheWarehouse::add(std::unique_ptr<MooseObject> obj, const std::string & system)
 }
 
 void
-TheWarehouse::update(std::unique_ptr<MooseObject> obj, const std::string & system)
+TheWarehouse::update(const MooseObject * obj, const std::string & system)
 {
   for (int i = 0; i < _query_dirty.size(); i++)
     _query_dirty[i] = true;
 
   int obj_id = -1;
   for (int i = 0; i < _objects.size(); i++)
-    if (_objects[i] == obj)
+    if (_objects[i].get() == obj)
     {
       obj_id = i;
       break;
@@ -236,7 +236,7 @@ TheWarehouse::update(std::unique_ptr<MooseObject> obj, const std::string & syste
     throw std::runtime_error("cannot update unknown object");
 
   std::vector<Attribute> attribs;
-  readAttribs(obj.get(), system, attribs);
+  readAttribs(obj, system, attribs);
   _store->set(obj_id, attribs);
 }
 
@@ -270,7 +270,7 @@ TheWarehouse::query(int query_id)
 }
 
 void
-TheWarehouse::readAttribs(MooseObject * obj,
+TheWarehouse::readAttribs(const MooseObject * obj,
                           const std::string & system,
                           std::vector<Attribute> & attribs)
 {
@@ -280,7 +280,7 @@ TheWarehouse::readAttribs(MooseObject * obj,
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
   attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
 
-  auto ti = dynamic_cast<TaggingInterface *>(obj);
+  auto ti = dynamic_cast<const TaggingInterface *>(obj);
   if (ti)
   {
     for (auto tag : ti->getVectorTags())
@@ -288,19 +288,19 @@ TheWarehouse::readAttribs(MooseObject * obj,
     for (auto tag : ti->getMatrixTags())
       attribs.push_back({AttributeId::MatrixTag, static_cast<int>(tag), ""});
   }
-  auto blk = dynamic_cast<BlockRestrictable *>(obj);
+  auto blk = dynamic_cast<const BlockRestrictable *>(obj);
   if (blk)
   {
     for (auto id : blk->blockIDs())
       attribs.push_back({AttributeId::Subdomain, id, ""});
   }
-  auto bnd = dynamic_cast<BoundaryRestrictable *>(obj);
+  auto bnd = dynamic_cast<const BoundaryRestrictable *>(obj);
   if (bnd)
   {
     for (auto & bound : bnd->boundaryIDs())
       attribs.push_back({AttributeId::Boundary, bound, ""});
   }
-  auto sup = dynamic_cast<SetupInterface *>(obj);
+  auto sup = dynamic_cast<const SetupInterface *>(obj);
   if (sup)
   {
     for (auto & on : sup->getExecuteOnEnum().items())
