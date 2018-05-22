@@ -35,17 +35,33 @@ enum class AttributeId
   System,
   Variable,
   Enabled,
-  VectorTag, // multiple
-  MatrixTag, // multiple
-  Boundary,  // multiple
-  Subdomain, // multiple
-  ExecOn,    // multiple
+  Interfaces, // bitmask
+  VectorTag,  // multiple
+  MatrixTag,  // multiple
+  Boundary,   // multiple
+  Subdomain,  // multiple
+  ExecOn,     // multiple
+};
+
+enum class Interfaces
+{
+  ElementUserObject,
+  SideUserObject,
+  InternalSideUserObject,
+  NodalUserObject,
+  GeneralUserObject,
+  NonlocalKernel,
+  NonlocalIntegratedBC,
+  InternalSideIndicator,
+  TransientMultiApp,
+  MultiAppTransfer,
+  Max, // This must be last
 };
 
 struct Attribute
 {
   AttributeId id;
-  int value;
+  int64_t value;
   std::string strvalue;
   inline bool operator==(const Attribute & other) const
   {
@@ -57,6 +73,7 @@ class TheWarehouse
 {
 public:
   TheWarehouse();
+  ~TheWarehouse();
 
   void add(std::shared_ptr<MooseObject> obj, const std::string & system);
   void update(const MooseObject * obj, const std::string & system);

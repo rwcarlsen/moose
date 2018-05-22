@@ -9,18 +9,31 @@
 
 #include "TheWarehouse.h"
 #include "MooseObject.h"
+
 #include "TaggingInterface.h"
 #include "BoundaryRestrictable.h"
 #include "BlockRestrictable.h"
 #include "SetupInterface.h"
 #include "MooseVariableInterface.h"
 #include "MooseVariableFE.h"
+#include "ElementUserObject.h"
+#include "SideUserObject.h"
+#include "InternalSideUserObject.h"
+#include "NodalUserObject.h"
+#include "GeneralUserObject.h"
+#include "NonlocalKernel.h"
+#include "NonlocalIntegratedBC.h"
+#include "InternalSideIndicator.h"
+#include "TransientMultiApp.h"
+#include "MultiAppTransfer.h"
 
 #include <memory>
 
 class Storage
 {
 public:
+  virtual ~Storage() = default;
+
   virtual void add(int obj_id, const std::vector<Attribute> & attribs) = 0;
   virtual std::vector<int> query(const std::vector<Attribute> & conds) = 0;
   virtual void set(int obj_id, const std::vector<Attribute> & attribs) = 0;
@@ -37,7 +50,8 @@ private:
     std::string system;
     int thread = 0;
     bool enabled = true;
-    int variable;
+    int variable = -1;
+    int64_t interfaces = 0; // this is a bitmask for Interfaces enum
     std::vector<boundary_id_type> boundaries;
     std::vector<subdomain_id_type> subdomains;
     std::vector<int> execute_ons;
@@ -85,6 +99,9 @@ public:
             break;
           case AttributeId::Variable:
             passes = cond.value == d.variable;
+            break;
+          case AttributeId::Interfaces:
+            passes = cond.value & d.interfaces; // check bit in bitmask
             break;
           case AttributeId::Boundary:
             passes = false;
@@ -187,6 +204,9 @@ private:
         case AttributeId::Variable:
           d.variable = attrib.value;
           break;
+        case AttributeId::Interfaces:
+          d.interfaces = attrib.value;
+          break;
         case AttributeId::Boundary:
           d.boundaries.push_back(attrib.value);
           break;
@@ -213,6 +233,7 @@ private:
 };
 
 TheWarehouse::TheWarehouse() : _store(new VecStore()){};
+TheWarehouse::~TheWarehouse(){};
 
 void
 TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
@@ -288,6 +309,21 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   attribs.push_back({AttributeId::Name, 0, obj->name()});
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
   attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
+
+  // clang-format off
+  unsigned int imask = 0;
+  imask |= (int)Interfaces::ElementUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::SideUserObject         * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::InternalSideUserObject * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::NodalUserObject        * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::GeneralUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::NonlocalKernel         * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::NonlocalIntegratedBC   * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::InternalSideIndicator  * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::TransientMultiApp      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::MultiAppTransfer       * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  attribs.push_back({AttributeId::Interfaces, static_cast<int>(imask), ""});
+  // clang-format on
 
   auto vi = dynamic_cast<const MooseVariableInterface<Real> *>(obj);
   if (vi)
