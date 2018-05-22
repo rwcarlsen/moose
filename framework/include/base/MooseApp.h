@@ -19,6 +19,7 @@
 #include "OutputWarehouse.h"
 #include "RestartableData.h"
 #include "ConsoleStreamInterface.h"
+#include "TheWarehouse.h"
 
 #include "libmesh/parallel_object.h"
 
@@ -55,6 +56,8 @@ class MooseApp : public ConsoleStreamInterface, public libMesh::ParallelObject
 {
 public:
   virtual ~MooseApp();
+
+  TheWarehouse & theWarehouse() { return _the_warehouse; }
 
   /**
    * Get the name of the object. In the case of MooseApp, the name of the object is *NOT* the name
@@ -752,6 +755,8 @@ private:
     OBJECT,
     SYNTAX
   };
+
+  TheWarehouse _the_warehouse;
 
   /// Level of multiapp, the master is level 0. This used by the Console to indent output
   unsigned int _multiapp_level;

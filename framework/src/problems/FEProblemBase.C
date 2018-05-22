@@ -2580,6 +2580,7 @@ FEProblemBase::addUserObject(std::string user_object_name,
     // Create the UserObject
     std::shared_ptr<UserObject> user_object =
         _factory.create<UserObject>(user_object_name, name, parameters, tid);
+    _app.theWarehouse().add(user_object, "UserObject");
     _all_user_objects.addObject(user_object, tid);
 
     // Attempt to create all the possible UserObject types
