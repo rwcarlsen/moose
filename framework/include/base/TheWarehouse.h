@@ -30,7 +30,6 @@ enum class AttributeId
 {
   None,
   Thread,
-  Type,
   Name,
   System,
   Variable,
