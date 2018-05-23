@@ -45,7 +45,6 @@ private:
   struct Data
   {
     int id;
-    std::string type;
     std::string name;
     std::string system;
     int thread = 0;
@@ -84,9 +83,6 @@ public:
         {
           case AttributeId::Thread:
             passes = cond.value == d.thread;
-            break;
-          case AttributeId::Type:
-            passes = cond.strvalue == d.type;
             break;
           case AttributeId::Name:
             passes = cond.strvalue == d.name;
@@ -188,9 +184,6 @@ private:
       {
         case AttributeId::Thread:
           d.thread = attrib.value;
-          break;
-        case AttributeId::Type:
-          d.type = attrib.value;
           break;
         case AttributeId::Name:
           d.name = attrib.value;
@@ -305,7 +298,6 @@ TheWarehouse::readAttribs(const MooseObject * obj,
                           std::vector<Attribute> & attribs)
 {
   attribs.push_back({AttributeId::System, 0, system});
-  attribs.push_back({AttributeId::Type, 0, ""}); // TODO: make this not be blank
   attribs.push_back({AttributeId::Name, 0, obj->name()});
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
   attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
