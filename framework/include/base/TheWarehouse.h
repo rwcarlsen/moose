@@ -25,7 +25,6 @@ class Storage;
 //     * thread_id - order 10
 //     * boundary_id (multiple) 1000 per mesh, 1000 per object (use "all/any" optimization)
 //     * subdomain_id (multiple) 10000 per mesh, 1000 per object (use "all/any" optimization)
-//     * enabled
 enum class AttributeId
 {
   None,
@@ -33,7 +32,6 @@ enum class AttributeId
   Name,
   System,
   Variable,
-  Enabled,
   Interfaces, // bitmask
   VectorTag,  // multiple
   MatrixTag,  // multiple
@@ -75,7 +73,6 @@ public:
   ~TheWarehouse();
 
   void add(std::shared_ptr<MooseObject> obj, const std::string & system);
-  void update(const MooseObject * obj, const std::string & system);
 
   // prepares a query and returns an associated query_id (i.e. for use with the query function.
   int prepare(const std::vector<Attribute> & conds);
@@ -105,7 +102,6 @@ private:
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
   std::vector<std::vector<Attribute>> _query_cache;
-  std::vector<bool> _query_dirty;
 };
 
 #endif // THEWAREHOUSE_H

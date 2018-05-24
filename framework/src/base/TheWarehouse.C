@@ -48,7 +48,6 @@ private:
     std::string name;
     std::string system;
     int thread = 0;
-    bool enabled = true;
     int variable = -1;
     int64_t interfaces = 0; // this is a bitmask for Interfaces enum
     std::vector<boundary_id_type> boundaries;
@@ -89,9 +88,6 @@ public:
             break;
           case AttributeId::System:
             passes = cond.strvalue == d.system;
-            break;
-          case AttributeId::Enabled:
-            passes = cond.value == d.enabled;
             break;
           case AttributeId::Variable:
             passes = cond.value == d.variable;
@@ -191,9 +187,6 @@ private:
         case AttributeId::System:
           d.system = attrib.strvalue;
           break;
-        case AttributeId::Enabled:
-          d.enabled = attrib.value;
-          break;
         case AttributeId::Variable:
           d.variable = attrib.value;
           break;
@@ -231,9 +224,6 @@ TheWarehouse::~TheWarehouse(){};
 void
 TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 {
-  for (unsigned int i = 0; i < _query_dirty.size(); i++)
-    _query_dirty[i] = true;
-
   std::vector<Attribute> attribs;
   readAttribs(obj.get(), system, attribs);
   _objects.push_back(std::move(obj));
@@ -241,37 +231,20 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
   _store->add(obj_id, attribs);
 }
 
-void
-TheWarehouse::update(const MooseObject * obj, const std::string & system)
-{
-  for (unsigned int i = 0; i < _query_dirty.size(); i++)
-    _query_dirty[i] = true;
-
-  int obj_id = -1;
-  for (unsigned int i = 0; i < _objects.size(); i++)
-    if (_objects[i].get() == obj)
-    {
-      obj_id = i;
-      break;
-    }
-
-  if (obj_id == -1)
-    throw std::runtime_error("cannot update unknown object");
-
-  std::vector<Attribute> attribs;
-  readAttribs(obj, system, attribs);
-  _store->set(obj_id, attribs);
-}
-
 // prepares a query and returns an associated query_id (i.e. for use with the query function.
 int
 TheWarehouse::prepare(const std::vector<Attribute> & conds)
 {
   auto obj_ids = _store->query(conds);
-  _query_dirty.push_back(true);
   _obj_cache.push_back({});
   _query_cache.push_back(conds);
-  return _obj_cache.size() - 1;
+
+  auto query_id = _obj_cache.size() - 1;
+  auto & vec = _obj_cache.back();
+  for (auto & id : _store->query(conds))
+    vec.push_back(_objects[id].get());
+
+  return query_id;
 }
 
 const std::vector<MooseObject *> &
@@ -279,16 +252,6 @@ TheWarehouse::query(int query_id)
 {
   if (query_id >= _obj_cache.size())
     throw std::runtime_error("unknown query id");
-
-  if (_query_dirty[query_id])
-  {
-    auto & vec = _obj_cache[query_id];
-    vec.clear();
-    for (auto & id : _store->query(_query_cache[query_id]))
-      vec.push_back(_objects[id].get());
-    _query_dirty[query_id] = false;
-  }
-
   return _obj_cache[query_id];
 }
 
@@ -300,7 +263,6 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   attribs.push_back({AttributeId::System, 0, system});
   attribs.push_back({AttributeId::Name, 0, obj->name()});
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
-  attribs.push_back({AttributeId::Enabled, obj->enabled(), ""});
 
   // clang-format off
   unsigned int imask = 0;
