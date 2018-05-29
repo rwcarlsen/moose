@@ -414,7 +414,7 @@ public:
   /**
    * Returns a Boolean indicating whether the specified parameter is controllable
    */
-  bool isControllable(const std::string & name);
+  bool isControllable(const std::string & name) const;
 
   /**
    * This method must be called from every base "Moose System" to create linkage with the Action
