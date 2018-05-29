@@ -13,8 +13,6 @@
 #include <gtest/gtest.h>
 #include "MooseObjectName.h"
 #include "MooseTypes.h"
-#include "ControllableItem.h"
-#include "ControllableParameter.h"
 #include "Factory.h"
 #include "ControlOutput.h"
 
@@ -66,22 +64,6 @@ public:
   const std::multimap<MooseObjectName, std::shared_ptr<InputParameters>> &
   getInputParameters(THREAD_ID tid = 0) const;
 
-  /**
-   * Method for linking control parameters of different names
-   */
-  void addControllableParameterConnection(const MooseObjectParameterName & master,
-                                          const MooseObjectParameterName & slave,
-                                          bool error_on_empty = true);
-
-  /**
-   * Method for creating alias to an existing controllable parameters.
-   *
-   * @param alias The new name to serve as an alias.
-   * @param slave The name of the slave parameter to be aliased.
-   */
-  void addControllableParameterAlias(const MooseObjectParameterName & alias,
-                                     const MooseObjectParameterName & slave);
-
   /***
    * Helper method for printing controllable items.
    */
@@ -99,12 +81,6 @@ private:
   /// TODO: Remove multimap
   std::vector<std::multimap<MooseObjectName, std::shared_ptr<InputParameters>>> _input_parameters;
 
-  /// Storage for controllable parameters via ControllableItem objects, a unique_ptr is
-  /// used to avoid creating multiple copies. All access to the objects are done via
-  /// pointers. The ControllableItem objects are not designed and will not be used directly in
-  /// user code. All user level access goes through the ControllableParameter object.
-  std::vector<std::vector<std::shared_ptr<ControllableItem>>> _controllable_items;
-
   /**
    * Method for adding a new InputParameters object
    * @param parameters The InputParameters object to copy and store in the warehouse
@@ -120,21 +96,6 @@ private:
    */
   InputParameters &
   addInputParameters(const std::string & name, InputParameters parameters, THREAD_ID tid = 0);
-
-  /**
-   * Returns a ControllableParameter object that contains all matches to ControllableItem objects
-   * for the provided name.
-   *
-   * This is private because it should only be accessed via a Control object.
-   */
-  ControllableParameter getControllableParameter(const MooseObjectParameterName & input) const;
-
-  /**
-   * Returns a ControllableItem iterator, if the name is located.
-   * @see Control
-   */
-  std::vector<ControllableItem *> getControllableItems(const MooseObjectParameterName & desired,
-                                                       THREAD_ID tid = 0) const;
 
   ///@{
   /**
@@ -167,21 +128,6 @@ private:
   /// the Control object.
   friend class Control;
 
-  // Allow unit test to call methods
-  FRIEND_TEST(InputParameterWarehouse, getControllableItems);
-  FRIEND_TEST(InputParameterWarehouse, getControllableParameter);
-  FRIEND_TEST(InputParameterWarehouse, getControllableParameterValues);
-  FRIEND_TEST(InputParameterWarehouse, addControllableParameterConnection);
-  FRIEND_TEST(InputParameterWarehouse, addControllableParameterAlias);
 };
-
-template <typename T>
-std::vector<T>
-InputParameterWarehouse::getControllableParameterValues(
-    const MooseObjectParameterName & input) const
-{
-  ControllableParameter param = getControllableParameter(input);
-  return param.get<T>();
-}
 
 #endif // INPUTPARAMETERWAREHOUSE_H

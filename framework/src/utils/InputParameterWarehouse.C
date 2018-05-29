@@ -63,21 +63,6 @@ InputParameterWarehouse::addInputParameters(const std::string & name,
     }
   }
 
-  // Store controllable parameters using all possible names
-  for (libMesh::Parameters::iterator map_iter = ptr->begin(); map_iter != ptr->end(); ++map_iter)
-  {
-    const std::string & name = map_iter->first;
-    libMesh::Parameters::Value * value = map_iter->second;
-
-    if (ptr->isControllable(name))
-      for (const auto & object_name : object_names)
-      {
-        MooseObjectParameterName param_name(object_name, name);
-        _controllable_items[tid].emplace_back(
-            std::make_shared<ControllableItem>(param_name, value));
-      }
-  }
-
   // Set the name and tid parameters
   ptr->addPrivateParam<std::string>("_object_name", name);
   ptr->addPrivateParam<THREAD_ID>("_tid", tid);
@@ -141,82 +126,10 @@ InputParameterWarehouse::getInputParameters(THREAD_ID tid) const
   return _input_parameters[tid];
 }
 
-void
-InputParameterWarehouse::addControllableParameterConnection(const MooseObjectParameterName & master,
-                                                            const MooseObjectParameterName & slave,
-                                                            bool error_on_empty /*=true*/)
-{
-  for (THREAD_ID tid = 0; tid < libMesh::n_threads(); ++tid)
-  {
-    std::vector<ControllableItem *> masters = getControllableItems(master, tid);
-    if (masters.empty() && error_on_empty && tid == 0) // some objects only exist on tid 0
-      mooseError("Unable to locate master parameter with name ", master);
-    else if (masters.empty())
-      return;
-
-    std::vector<ControllableItem *> slaves = getControllableItems(slave, tid);
-    if (slaves.empty() && error_on_empty && tid == 0) // some objects only exist on tid 0
-      mooseError("Unable to locate slave parameter with name ", slave);
-    else if (slaves.empty())
-      return;
-
-    for (auto master_ptr : masters)
-      for (auto slave_ptr : slaves)
-        if (master_ptr != slave_ptr)
-          master_ptr->connect(slave_ptr);
-  }
-}
-
-void
-InputParameterWarehouse::addControllableParameterAlias(const MooseObjectParameterName & alias,
-                                                       const MooseObjectParameterName & slave)
-{
-  for (THREAD_ID tid = 0; tid < libMesh::n_threads(); ++tid)
-  {
-    std::vector<ControllableItem *> slaves = getControllableItems(slave, tid);
-    if (slaves.empty() && tid == 0) // some objects only exist on tid 0
-      mooseError("Unable to locate slave parameter with name ", slave);
-
-    for (auto slave_ptr : slaves)
-      _controllable_items[tid].emplace_back(
-          libmesh_make_unique<ControllableAlias>(alias, slave_ptr));
-  }
-}
-
-std::vector<ControllableItem *>
-InputParameterWarehouse::getControllableItems(const MooseObjectParameterName & input,
-                                              THREAD_ID tid /*=0*/) const
-{
-  std::vector<ControllableItem *> output;
-  for (auto & ptr : _controllable_items[tid])
-    if (ptr->name() == input)
-      output.push_back(ptr.get());
-  return output;
-}
-
-ControllableParameter
-InputParameterWarehouse::getControllableParameter(const MooseObjectParameterName & input) const
-{
-  ControllableParameter cparam;
-  for (THREAD_ID tid = 0; tid < libMesh::n_threads(); ++tid)
-    for (auto it = _controllable_items[tid].begin(); it != _controllable_items[tid].end(); ++it)
-      if ((*it)->name() == input)
-        cparam.add(it->get());
-  return cparam;
-}
-
 std::string
 InputParameterWarehouse::dumpChangedControls(bool reset_changed) const
 {
+  throw std::runtime_error("unimplemented");
   std::stringstream oss;
-  oss << std::left;
-
-  for (const auto & item : _controllable_items[0])
-    if (item->isChanged())
-    {
-      oss << item->dump(4);
-      if (reset_changed)
-        item->resetChanged();
-    }
   return oss.str();
 }
