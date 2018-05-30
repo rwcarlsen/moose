@@ -69,6 +69,8 @@ public:
     set(d, attribs);
   }
 
+  virtual void reset() { _data.clear(); }
+
   virtual std::vector<int> query(const std::vector<Attribute> & conds) override
   {
     std::vector<int> objs;
@@ -158,12 +160,15 @@ public:
   virtual void set(int obj_id, const std::vector<Attribute> & attribs) override
   {
     Data * dat = nullptr;
-    for (auto & d : _data)
-      if (d.id == obj_id)
-      {
-        dat = &d;
-        break;
-      }
+    if (_data[obj_id].id == obj_id)
+      dat = &_data[obj_id];
+    else
+      for (auto & d : _data)
+        if (d.id == obj_id)
+        {
+          dat = &d;
+          break;
+        }
 
     if (!dat)
       throw std::runtime_error("unknown object id " + std::to_string(obj_id));
@@ -231,6 +236,17 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
   _store->add(obj_id, attribs);
 }
 
+void
+TheWarehouse::reindex()
+{
+  for (unsigned int id = 0; id < _objects.size(); id++)
+  {
+    std::vector<Attribute> attribs;
+    readAttribs(_objects[id].get(), "", attribs);
+    _store->set(id, attribs);
+  }
+}
+
 // prepares a query and returns an associated query_id (i.e. for use with the query function.
 int
 TheWarehouse::prepare(const std::vector<Attribute> & conds)
@@ -260,7 +276,8 @@ TheWarehouse::readAttribs(const MooseObject * obj,
                           const std::string & system,
                           std::vector<Attribute> & attribs)
 {
-  attribs.push_back({AttributeId::System, 0, system});
+  if (!system.empty())
+    attribs.push_back({AttributeId::System, 0, system});
   attribs.push_back({AttributeId::Name, 0, obj->name()});
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
 

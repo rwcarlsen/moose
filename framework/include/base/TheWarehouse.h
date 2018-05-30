@@ -72,7 +72,46 @@ public:
   TheWarehouse();
   ~TheWarehouse();
 
+  class Builder
+  {
+  public:
+    Builder(TheWarehouse & w) : _w(w) {}
+    Builder thread(int tid)
+    {
+      _attribs.push_back({AttributeId::Thread, tid, ""});
+      return *this;
+    }
+    Builder interfaces(int ifaces)
+    {
+      _attribs.push_back({AttributeId::Interfaces, ifaces, ""});
+      return *this;
+    }
+    Builder interfaces(Interfaces ifaces)
+    {
+      _attribs.push_back({AttributeId::Interfaces, (int)ifaces, ""});
+      return *this;
+    }
+    Builder exec_on(int on)
+    {
+      _attribs.push_back({AttributeId::ExecOn, on, ""});
+      return *this;
+    }
+    Builder system(const std::string & sys)
+    {
+      _attribs.push_back({AttributeId::System, 0, sys});
+      return *this;
+    }
+    int prepare() { return _w.prepare(_attribs); }
+
+  private:
+    TheWarehouse & _w;
+    std::vector<Attribute> _attribs;
+  };
+  Builder build() { return Builder(*this); }
+
   void add(std::shared_ptr<MooseObject> obj, const std::string & system);
+
+  void reindex();
 
   // prepares a query and returns an associated query_id (i.e. for use with the query function.
   int prepare(const std::vector<Attribute> & conds);
