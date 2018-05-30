@@ -517,6 +517,8 @@ FEProblemBase::initialSetup()
     _nodal_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux, tid);
     _nodal_user_objects.initialSetup(tid);
 
+    int qid =
+        _app.theWarehouse().build().thread(tid).interfaces(Interfaces::ElementUserObject).prepare();
     _elemental_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux, tid);
     _elemental_user_objects.initialSetup(tid);
 

@@ -82,6 +82,38 @@ operator[](Moose::AuxGroup group) const
 
 template <typename T>
 void
+groupUserObjects(std::vector<T *> objs,
+                 const std::set<std::string> & ic_deps,
+                 const std::set<std::string> & aux_deps,
+                 std::vector<T *> & pre_ic,
+                 std::vector<T *> & pre_aux,
+                 std::vector<T *> & post_aux)
+{
+  // Only run pre-ic objects for their "initial" exec flag time (not the others).
+  //
+  // For pre/post aux objects:
+  //
+  //     If an object was not run as a pre-ic object or it is a pre-ic object and
+  //     shouldDuplicateInitialExecution returns true:
+  //         * run the object at all its exec flag times.
+  //     Else
+  //         * run the object at all its exec flag times *except* "initial"
+  //
+  for (const auto obj : objs)
+  {
+    if (ic_deps.count(obj->name()) > 0)
+      pre_ic.push_back(obj);
+
+    if ((obj->isParamValid("force_preaux") && obj->template getParam<bool>("force_preaux")) ||
+        aux_deps.count(obj->name()) > 0 || ic_deps.count(obj->name()) > 0)
+      pre_aux.push_back(obj);
+    else
+      post_aux.push_back(obj);
+  }
+}
+
+template <typename T>
+void
 AuxGroupExecuteMooseObjectWarehouse<T>::updateDependObjects(
     const std::set<std::string> & depend_ic,
     const std::set<std::string> & depend_aux,
