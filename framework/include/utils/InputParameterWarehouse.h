@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "MooseObjectName.h"
+#include "MooseObjectParameterName.h"
 #include "MooseTypes.h"
 #include "Factory.h"
 #include "ControlOutput.h"

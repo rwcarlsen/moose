@@ -302,7 +302,7 @@ InputParameters::declareControllable(const std::string & input_names)
 bool
 InputParameters::isControllable(const std::string & name) const
 {
-  return _params.count(name) > 0 && _params[name]._controllable;
+  return _params.count(name) > 0 && _params.at(name)._controllable;
 }
 
 void

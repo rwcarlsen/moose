@@ -11,10 +11,7 @@
 #include "InputParameterWarehouse.h"
 #include "InputParameters.h"
 
-InputParameterWarehouse::InputParameterWarehouse()
-  : _input_parameters(libMesh::n_threads()), _controllable_items(libMesh::n_threads())
-{
-}
+InputParameterWarehouse::InputParameterWarehouse() : _input_parameters(libMesh::n_threads()) {}
 
 InputParameters &
 InputParameterWarehouse::addInputParameters(const std::string & name,
@@ -113,6 +110,11 @@ InputParameterWarehouse::getInputParameters(const MooseObjectName & object_name,
 {
   // Locate the InputParameters object and error if it was not located
   const auto iter = _input_parameters[tid].find(object_name);
+  std::cout << "finding params for tag=" << object_name.tag() << ",name=" << object_name.name()
+            << ":\n";
+  for (auto & item : _input_parameters[tid])
+    std::cout << "    checking tag=" << item.first.tag() << ",name=" << item.first.name() << "\n";
+
   if (iter == _input_parameters[tid].end())
     mooseError("Unknown InputParameters object ", object_name);
 

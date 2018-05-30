@@ -50,13 +50,13 @@ TestControl::TestControl(const InputParameters & parameters)
   {
     MooseObjectParameterName master(MooseObjectName("Kernels", "diff"), "coef");
     MooseObjectParameterName slave(MooseObjectName("BCs", "left"), "value");
-    _app.getInputParameterWarehouse().addControllableParameterConnection(master, slave);
+    //_app.getInputParameterWarehouse().addControllableParameterConnection(master, slave);
   }
 
   else if (_test_type == "alias")
   {
     MooseObjectParameterName slave(MooseObjectName("BCs", "left"), "value");
-    _app.getInputParameterWarehouse().addControllableParameterAlias(_alias, slave);
+    //_app.getInputParameterWarehouse().addControllableParameterAlias(_alias, slave);
   }
 
   else if (_test_type == "mult")
@@ -76,7 +76,7 @@ TestControl::execute()
     setControllableValue<Real>("parameter", 0.2);
 
   if (_test_type == "alias")
-    setControllableValueByName<Real>(_alias, 0.42);
+    setControllableValue<Real>(_alias, 0.42);
 
   if (_test_type == "mult")
   {

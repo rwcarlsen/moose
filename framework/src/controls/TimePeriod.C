@@ -97,10 +97,12 @@ TimePeriod::execute()
     // _start_time and _t < _end_time)
     if (MooseUtils::absoluteFuzzyGreaterEqual(_t, _start_time[i]) &&
         MooseUtils::absoluteFuzzyLessThan(_t, _end_time[i]))
-      setControllableValueByName<bool>(_enable[i], std::string("enable"), true);
+      setControllableValue<bool>(MooseObjectParameterName(MooseObjectName(_enable[i]), "enable"),
+                                 true);
 
     else if (_set_outside_of_range)
-      setControllableValueByName<bool>(_enable[i], std::string("enable"), false);
+      setControllableValue<bool>(MooseObjectParameterName(MooseObjectName(_enable[i]), "enable"),
+                                 false);
   }
 
   // DISABLE
@@ -110,10 +112,12 @@ TimePeriod::execute()
     // _start_time and _t < _end_time)
     if (MooseUtils::absoluteFuzzyGreaterEqual(_t, _start_time[i]) &&
         MooseUtils::absoluteFuzzyLessThan(_t, _end_time[i]))
-      setControllableValueByName<bool>(_disable[i], std::string("enable"), false);
+      setControllableValue<bool>(MooseObjectParameterName(MooseObjectName(_disable[i]), "enable"),
+                                 false);
 
     else if (_set_outside_of_range)
-      setControllableValueByName<bool>(_disable[i], std::string("enable"), true);
+      setControllableValue<bool>(MooseObjectParameterName(MooseObjectName(_disable[i]), "enable"),
+                                 true);
   }
 }
 

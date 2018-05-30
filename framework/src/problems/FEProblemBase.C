@@ -2301,9 +2301,9 @@ FEProblemBase::addMaterial(const std::string & mat_name,
       MooseObjectParameterName face_name(MooseObjectName("Material", face_material->name()), "*");
       MooseObjectParameterName neighbor_name(MooseObjectName("Material", neighbor_material->name()),
                                              "*");
-      _app.getInputParameterWarehouse().addControllableParameterConnection(name, face_name, false);
-      _app.getInputParameterWarehouse().addControllableParameterConnection(
-          name, neighbor_name, false);
+      //_app.getInputParameterWarehouse().addControllableParameterConnection(name, face_name,
+      // false); _app.getInputParameterWarehouse().addControllableParameterConnection(
+      //    name, neighbor_name, false);
     }
   }
 }
