@@ -48,7 +48,8 @@ ComputeNodalUserObjectsThread::onNode(ConstNodeRange::const_iterator & node_it)
     {
       const auto & objects = _user_objects.getActiveBoundaryObjects(bnd, _tid);
       for (const auto & uo : objects)
-        uo->execute();
+        if (uo->enabled())
+          uo->execute();
     }
   }
 
@@ -68,7 +69,8 @@ ComputeNodalUserObjectsThread::onNode(ConstNodeRange::const_iterator & node_it)
     {
       const auto & objects = _user_objects.getActiveBlockObjects(block, _tid);
       for (const auto & uo : objects)
-        if (!uo->isUniqueNodeExecute() || std::count(computed.begin(), computed.end(), uo) == 0)
+        if (uo->enabled() &&
+            (!uo->isUniqueNodeExecute() || std::count(computed.begin(), computed.end(), uo) == 0))
         {
           uo->execute();
           computed.push_back(uo);

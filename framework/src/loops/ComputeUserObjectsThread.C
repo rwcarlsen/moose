@@ -86,7 +86,8 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
   {
     const auto & objects = _elemental_user_objects.getActiveBlockObjects(_subdomain, _tid);
     for (const auto & uo : objects)
-      uo->execute();
+      if (uo->enabled())
+        uo->execute();
   }
 
   // UserObject Jacobians
@@ -107,7 +108,7 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
       for (const auto & uo : e_objects)
       {
         auto shape_element_uo = std::dynamic_pointer_cast<ShapeElementUserObject>(uo);
-        if (shape_element_uo)
+        if (uo->enabled() && shape_element_uo)
           shape_element_uo->executeJacobianWrapper(jvar_id, dof_indices);
       }
     }
@@ -130,7 +131,8 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
 
   const auto & objects = _side_user_objects.getActiveBoundaryObjects(bnd_id, _tid);
   for (const auto & uo : objects)
-    uo->execute();
+    if (uo->enabled())
+      uo->execute();
 
   // UserObject Jacobians
   if (_fe_problem.currentlyComputingJacobian())
@@ -148,7 +150,7 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
       for (const auto & uo : objects)
       {
         auto shape_side_uo = std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
-        if (shape_side_uo)
+        if (uo->enabled() && shape_side_uo)
           shape_side_uo->executeJacobianWrapper(jvar_id, dof_indices);
       }
     }
@@ -184,9 +186,7 @@ ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
   const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
   for (const auto & uo : objects)
   {
-    if (!uo->blockRestricted())
-      uo->execute();
-    else if (uo->hasBlocks(neighbor->subdomain_id()))
+    if (uo->enabled() && (!uo->blockRestricted() || uo->hasBlocks(neighbor->subdomain_id())))
       uo->execute();
   }
 }
