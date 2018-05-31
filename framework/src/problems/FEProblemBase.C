@@ -508,26 +508,16 @@ FEProblemBase::initialSetup()
   std::set<std::string> depend_objects_ic = _ics.getDependObjects();
   std::set<std::string> depend_objects_aux = _aux->getDependObjects();
 
-  _general_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux);
-  _general_user_objects.initialSetup();
+  // This replaces all prior updateDependObjects calls on the old user object warehouses.
+  auto & w = _app.theWarehouse();
+  std::vector<UserObject *> userobjs;
+  _app.theWarehouse().queryInto(w.build().system("UserObject").prepare(), userobjs);
+  groupUserObjects(w, userobjs, depend_objects_ic, depend_objects_aux);
+
+  for (auto obj : userobjs)
+    IfEnabled(obj) obj->initialSetup();
+
   _general_user_objects.sort();
-
-  for (THREAD_ID tid = 0; tid < n_threads; tid++)
-  {
-    _nodal_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux, tid);
-    _nodal_user_objects.initialSetup(tid);
-
-    int qid =
-        _app.theWarehouse().build().thread(tid).interfaces(Interfaces::ElementUserObject).prepare();
-    _elemental_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux, tid);
-    _elemental_user_objects.initialSetup(tid);
-
-    _side_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux, tid);
-    _side_user_objects.initialSetup(tid);
-
-    _internal_side_user_objects.updateDependObjects(depend_objects_ic, depend_objects_aux, tid);
-    _internal_side_user_objects.initialSetup(tid);
-  }
 
   // check if jacobian calculation is done in userobject
   for (THREAD_ID tid = 0; tid < n_threads; ++tid)
@@ -810,14 +800,13 @@ FEProblemBase::timestepSetup()
     _internal_side_indicators.timestepSetup(tid);
     _indicators.timestepSetup(tid);
     _markers.timestepSetup(tid);
-
-    // Timestep setup of all UserObjects
-    _nodal_user_objects.timestepSetup(tid);
-    _elemental_user_objects.timestepSetup(tid);
-    _side_user_objects.timestepSetup(tid);
-    _internal_side_user_objects.timestepSetup(tid);
   }
-  _general_user_objects.timestepSetup();
+
+  static id = _app.theWarehouse().build().system("UserObject").prepare();
+  std::vector<SetupInterface *> userobjs;
+  _app.theWarehouse().queryInto(qid, userobjs);
+  for (auto obj : userobjs)
+    IfEnabled(obj) obj->timestepSetup();
 
   // Timestep setup of output objects
   _app.getOutputWarehouse().timestepSetup();
@@ -888,30 +877,20 @@ void
 FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
 {
   std::set<MooseVariableFEBase *> uo_jacobian_moose_vars;
-  const auto & e_objects = _elemental_user_objects.getActiveObjects(tid);
-  for (const auto & uo : e_objects)
+
+  auto qid =
+      _app.theWarehouse().build().interfaces(Interfaces::ShapeUserObject).thread(tid).prepare();
+  std::vector<ShapeUserObject *> objs;
+  _app.theWarehouse.queryInto(qid, objs);
+  for (const auto & uo : objs)
   {
-    std::shared_ptr<ShapeElementUserObject> shape_element_uo =
-        std::dynamic_pointer_cast<ShapeElementUserObject>(uo);
-    if (shape_element_uo)
-    {
-      _calculate_jacobian_in_uo = shape_element_uo->computeJacobianFlag();
-      const std::set<MooseVariableFEBase *> & mv_deps = shape_element_uo->jacobianMooseVariables();
-      uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
-    }
+    if (!uo->enabled())
+      continue;
+    _calculate_jacobian_in_uo = shape_side_uo->computeJacobianFlag();
+    const std::set<MooseVariableFEBase *> & mv_deps = shape_side_uo->jacobianMooseVariables();
+    uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
   }
-  const auto & s_objects = _side_user_objects.getActiveObjects(tid);
-  for (const auto & uo : s_objects)
-  {
-    std::shared_ptr<ShapeSideUserObject> shape_side_uo =
-        std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
-    if (shape_side_uo)
-    {
-      _calculate_jacobian_in_uo = shape_side_uo->computeJacobianFlag();
-      const std::set<MooseVariableFEBase *> & mv_deps = shape_side_uo->jacobianMooseVariables();
-      uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
-    }
-  }
+
   _uo_jacobian_moose_vars[tid].assign(uo_jacobian_moose_vars.begin(), uo_jacobian_moose_vars.end());
   std::sort(
       _uo_jacobian_moose_vars[tid].begin(), _uo_jacobian_moose_vars[tid].end(), sortMooseVariables);
@@ -2610,21 +2589,6 @@ FEProblemBase::addUserObject(std::string user_object_name,
       else if (suo)
         _reinit_displaced_face = true;
     }
-
-    // Add the object to the correct warehouse
-    if (guo)
-    {
-      _general_user_objects.addObject(guo);
-      break; // not threaded
-    }
-    else if (nuo)
-      _nodal_user_objects.addObject(nuo, tid);
-    else if (suo)
-      _side_user_objects.addObject(suo, tid);
-    else if (isuo)
-      _internal_side_user_objects.addObject(isuo, tid);
-    else if (euo)
-      _elemental_user_objects.addObject(euo, tid);
   }
 }
 
