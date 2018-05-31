@@ -26,6 +26,9 @@
 #include "InternalSideIndicator.h"
 #include "TransientMultiApp.h"
 #include "MultiAppTransfer.h"
+#include "ShapeUserObject.h"
+#include "ShapeSideUserObject.h"
+#include "ShapeElementUserObject.h"
 
 #include <memory>
 
@@ -55,6 +58,10 @@ private:
     std::vector<int> execute_ons;
     std::vector<int> vector_tags;
     std::vector<int> matrix_tags;
+    // TODO: delete these two later - they are temporary hacks for dealing with inter-system
+    // dependencies:
+    bool pre_ic = false;
+    bool pre_aux = false;
   };
 
 public:
@@ -96,6 +103,19 @@ public:
             break;
           case AttributeId::Interfaces:
             passes = cond.value & d.interfaces; // check bit in bitmask
+            break;
+          case AttributeId::Interfaces:
+            passes = cond.value & d.interfaces; // check bit in bitmask
+            break;
+          // TODO: delete this case later - it is a temporary hack for dealing with inter-system
+          // dependencies:
+          case AttributeId::PreIC:
+            passes = cond.value == d.pre_ic;
+            break;
+          // TODO: delete this case later - it is a temporary hack for dealing with inter-system
+          // dependencies:
+          case AttributeId::PreAux:
+            passes = cond.value == d.pre_aux;
             break;
           case AttributeId::Boundary:
             passes = false;
@@ -198,6 +218,16 @@ private:
         case AttributeId::Interfaces:
           d.interfaces = attrib.value;
           break;
+        // TODO: delete this case later - it is a temporary hack for dealing with inter-system
+        // dependencies:
+        case AttributeId::PreIC:
+          d.pre_ic = attrib.value;
+          break;
+        // TODO: delete this case later - it is a temporary hack for dealing with inter-system
+        // dependencies:
+        case AttributeId::PreAux:
+          d.pre_aux = attrib.value;
+          break;
         case AttributeId::Boundary:
           d.boundaries.push_back(attrib.value);
           break;
@@ -237,17 +267,14 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 }
 
 void
-TheWarehouse::reindex()
+TheWarehouse::update(MooseObject * obj, const std::vector<Attribute> & extras /*={}*/)
 {
-  for (unsigned int id = 0; id < _objects.size(); id++)
-  {
-    std::vector<Attribute> attribs;
-    readAttribs(_objects[id].get(), "", attribs);
-    _store->set(id, attribs);
-  }
+  std::vector<Attribute> attribs;
+  readAttribs(_objects[id].get(), "", attribs);
+  attribs.insert(attribs.end(), extras.begin(), exras.end());
+  _store->set(id, attribs);
 }
 
-// prepares a query and returns an associated query_id (i.e. for use with the query function.
 int
 TheWarehouse::prepare(const std::vector<Attribute> & conds)
 {
@@ -284,15 +311,18 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   // clang-format off
   unsigned int imask = 0;
   imask |= (int)Interfaces::ElementUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::SideUserObject         * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::InternalSideUserObject * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::NodalUserObject        * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::GeneralUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::NonlocalKernel         * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::NonlocalIntegratedBC   * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::InternalSideIndicator  * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::TransientMultiApp      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::MultiAppTransfer       * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::SideUserObject         * (dynamic_cast<const SideUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::InternalSideUserObject * (dynamic_cast<const InternalSideUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::NodalUserObject        * (dynamic_cast<const NodalUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::GeneralUserObject      * (dynamic_cast<const GeneralUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::ShapeUserObject        * (dynamic_cast<const ShapeUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::ShapeElementUserObject * (dynamic_cast<const ShapeElementUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::ShapeSideUserObject    * (dynamic_cast<const ShapeSideUserObject *>(obj) != nullptr);
+  imask |= (int)Interfaces::NonlocalKernel         * (dynamic_cast<const NonlocalKernel *>(obj) != nullptr);
+  imask |= (int)Interfaces::NonlocalIntegratedBC   * (dynamic_cast<const NonlocalIntegratedBC *>(obj) != nullptr);
+  imask |= (int)Interfaces::InternalSideIndicator  * (dynamic_cast<const InternalSideIndicator *>(obj) != nullptr);
+  imask |= (int)Interfaces::TransientMultiApp      * (dynamic_cast<const TransientMultiApp *>(obj) != nullptr);
+  imask |= (int)Interfaces::MultiAppTransfer       * (dynamic_cast<const MultiAppTransfer *>(obj) != nullptr);
   attribs.push_back({AttributeId::Interfaces, static_cast<int>(imask), ""});
   // clang-format on
 

@@ -38,6 +38,10 @@ enum class AttributeId
   Boundary,   // multiple
   Subdomain,  // multiple
   ExecOn,     // multiple
+  // TODO: delete these two later - they are temporary hacks for dealing with inter-system
+  // dependencies
+  PreIC,
+  PreAux,
 };
 
 enum class Interfaces
@@ -52,6 +56,9 @@ enum class Interfaces
   InternalSideIndicator,
   TransientMultiApp,
   MultiAppTransfer,
+  ShapeUserObject,
+  ShapeElementUserObject,
+  ShapeSideUserObject,
   Max, // This must be last
 };
 
@@ -101,7 +108,21 @@ public:
       _attribs.push_back({AttributeId::System, 0, sys});
       return *this;
     }
+
+    /// TODO: delete this later - it is a temporary hack for dealing with inter-system dependencies
+    Builder pre_ic(bool pre_ic)
+    {
+      _attribs.push_back({AttributeId::PreIC, (int)pre_ic, ""});
+      return *this;
+    }
+    /// TODO: delete this later - it is a temporary hack for dealing with inter-system dependencies
+    Builder pre_aux(bool pre_aux)
+    {
+      _attribs.push_back({AttributeId::PreAux, (int)pre_aux, ""});
+      return *this;
+    }
     int prepare() { return _w.prepare(_attribs); }
+    std::vector<Attribute> attribs() { return _attribs; }
 
   private:
     TheWarehouse & _w;
@@ -111,9 +132,10 @@ public:
 
   void add(std::shared_ptr<MooseObject> obj, const std::string & system);
 
-  void reindex();
+  /// Any attributes specified in extras overwrite/trump ones read from the object's current state.
+  void update(MooseObject * obj, const std::vector<Attribute> & extras = {});
 
-  // prepares a query and returns an associated query_id (i.e. for use with the query function.
+  /// prepares a query and returns an associated query_id (i.e. for use with the query function).
   int prepare(const std::vector<Attribute> & conds);
 
   const std::vector<MooseObject *> & query(int query_id);
