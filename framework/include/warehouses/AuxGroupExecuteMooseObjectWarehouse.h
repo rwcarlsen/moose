@@ -80,16 +80,19 @@ operator[](Moose::AuxGroup group) const
   return _group_objects[group];
 }
 
+// determine when we need to run user objects based on whether any initial conditions or aux
+// kernels depend on the user objects.  If so we need to run them either before ics, before aux
+// kernels, or after aux kernels (if nothing depends on them).  Mark/store this information as
+// attributes in the warehouse for later reference.
 template <typename T>
 void
-groupUserObjects(std::vector<T *> objs,
+groupUserObjects(TheWarehouse & w,
+                 const std::vector<T *> & objs,
                  const std::set<std::string> & ic_deps,
-                 const std::set<std::string> & aux_deps,
-                 std::vector<T *> & pre_ic,
-                 std::vector<T *> & pre_aux,
-                 std::vector<T *> & post_aux)
+                 const std::set<std::string> & aux_deps)
 {
-  // Only run pre-ic objects for their "initial" exec flag time (not the others).
+  // Notes about how this information is used later during the simulation:
+  // We only need to run pre-ic objects for their "initial" exec flag time (not the others).
   //
   // For pre/post aux objects:
   //
@@ -101,14 +104,19 @@ groupUserObjects(std::vector<T *> objs,
   //
   for (const auto obj : objs)
   {
+    std::vector<Attribute> attribs;
+    auto b = w.build();
+
     if (ic_deps.count(obj->name()) > 0)
-      pre_ic.push_back(obj);
+      b.pre_ic(true);
 
     if ((obj->isParamValid("force_preaux") && obj->template getParam<bool>("force_preaux")) ||
         aux_deps.count(obj->name()) > 0 || ic_deps.count(obj->name()) > 0)
-      pre_aux.push_back(obj);
+      b.pre_aux(true);
     else
-      post_aux.push_back(obj);
+      b.pre_aux(false);
+
+    w.update(obj, b.attribs());
   }
 }
 
