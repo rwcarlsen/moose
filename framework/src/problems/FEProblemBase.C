@@ -2563,11 +2563,17 @@ FEProblemBase::addUserObject(std::string user_object_name,
     parameters.set<SubProblem *>("_subproblem") = this;
   }
 
+  UserObject * primary = nullptr;
   for (THREAD_ID tid = 0; tid < libMesh::n_threads(); ++tid)
   {
     // Create the UserObject
     std::shared_ptr<UserObject> user_object =
         _factory.create<UserObject>(user_object_name, name, parameters, tid);
+    if (tid == 0)
+      primary = user_object.get();
+    else
+      user_object->setPrimaryThreadCopy(primary);
+
     _app.theWarehouse().add(user_object, "UserObject");
     _all_user_objects.addObject(user_object, tid);
 
