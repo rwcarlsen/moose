@@ -141,7 +141,7 @@ public:
   const std::vector<MooseObject *> & query(int query_id);
 
   template <typename T>
-  void queryInto(int query_id, std::vector<T> & results)
+  std::vector<T> & queryInto(int query_id, std::vector<T> & results)
   {
     auto & objs = query(query_id);
     results.resize(objs.size());
@@ -151,6 +151,7 @@ public:
       assert(dynamic_cast<T *>(obj));
       results[i] = static_cast<T *>(obj);
     }
+    return results;
   }
 
 private:
