@@ -49,21 +49,31 @@ public:
 
 protected:
   const NumericVector<Number> & _soln;
+  _w
 
-  ///@{
-  /// Storage for UserObjects (see FEProblemBase::computeUserObjects)
-  const MooseObjectWarehouse<ElementUserObject> & _elemental_user_objects;
+      ///@{
+      /// Storage for UserObjects (see FEProblemBase::computeUserObjects)
+      const MooseObjectWarehouse<ElementUserObject> & _elemental_user_objects;
   const MooseObjectWarehouse<SideUserObject> & _side_user_objects;
   const MooseObjectWarehouse<InternalSideUserObject> & _internal_side_user_objects;
   ///@}
-
 private:
-  void query(std::vector<std::map<SubdomainID, int>> & cache, std::vector<UserObject *> & dst);
-
-  // map<THREAD_ID, map<subdomain_id, objects>>
-  std::vector<std::map<SubdomainID, int>> _query_ids_elemental;
-  std::vector<std::map<SubdomainID, int>> _query_ids_side;
-  std::vector<std::map<SubdomainID, int>> _query_ids_internal_side;
+  template <typename T>
+  TheWarehouse::Builder querySubdomain(Interfaces iface, std::vector<T> & results)
+  {
+    _fe_problem.theWarehouse()
+        .build()
+        .thread(_tid)
+        .subdomain(_subdomain)
+        .interfaces(iface)
+        .queryInto(results);
+  }
+  template <typename T>
+  TheWarehouse::Builder queryBoundary(Interfaces iface, BoundryID bnd, std::vector<T> & results)
+  {
+    _fe_problem.theWarehouse().build().thread(_tid).boundary(bnd).interfaces(iface).queryInto(
+        results);
+  }
 };
 
 #endif // COMPUTEUSEROBJECTSTHREAD_H

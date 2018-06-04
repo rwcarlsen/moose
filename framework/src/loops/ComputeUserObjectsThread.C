@@ -31,8 +31,7 @@ ComputeUserObjectsThread::ComputeUserObjectsThread(
     _soln(*sys.currentSolution()),
     _elemental_user_objects(elemental_user_objects),
     _side_user_objects(side_user_objects),
-    _internal_side_user_objects(internal_side_user_objects),
-    _query_ids(libMesh::n_threads())
+    _internal_side_user_objects(internal_side_user_objects)
 {
 }
 
@@ -73,41 +72,25 @@ ComputeUserObjectsThread::subdomainChanged()
 }
 
 void
-ComputeUserObjectsThread::query(std::vector<std::map<SubdomainID, int>> & cache,
-                                std::vector<UserObject *> & dst)
-{
-  if (cache[_tid].count(_internal_side) == 0)
-  {
-    cache[_tid][_internal_side] = _fe_problem->theWarehouse()
-                                      .build()
-                                      .thread(_tid)
-                                      .subdomain(_internal_side)
-                                      .interfaces(Interfaces::InternalSideUserObject)
-                                      .prepare();
-  }
-  _fe_problem->theWareouse().queryInto(cache[_tid][_internal_side], dst);
-}
-
-void
 ComputeUserObjectsThread::onElement(const Elem * elem)
 {
   _fe_problem.prepare(elem, _tid);
   _fe_problem.reinitElem(elem, _tid);
-
-  std::vector<UserObject *> userobjs;
-  query(_query_ids_elemental, userobjs);
 
   // Set up Sentinel class so that, even if reinitMaterials() throws, we
   // still remember to swap back during stack unwinding.
   SwapBackSentinel sentinel(_fe_problem, &FEProblem::swapBackMaterials, _tid);
   _fe_problem.reinitMaterials(_subdomain, _tid);
 
+  std::vector<UserObject *> userobjs;
+  querySubdomain(Interfaces::ElementUserObject, userobjs);
   for (const auto & uo : userobjects)
     IfEnabled(uo) uo->execute();
 
   // UserObject Jacobians
-  if (_fe_problem.currentlyComputingJacobian() &&
-      _elemental_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+  std::vector<ShapeElementUserObject *> shapers;
+  querySubdomain(Interfaces::ShapeElementUserObject, shapers);
+  if (_fe_problem.currentlyComputingJacobian() && shapers.size() > 0)
   {
     // Prepare shape functions for ShapeElementUserObjects
     std::vector<MooseVariableFEBase *> jacobian_moose_vars =
@@ -118,13 +101,8 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
       std::vector<dof_id_type> & dof_indices = jvar->dofIndices();
 
       _fe_problem.prepareShapes(jvar_id, _tid);
-
-      for (const auto uo : userobjs)
-      {
-        auto shape_element_uo = std::dynamic_pointer_cast<ShapeElementUserObject>(uo);
-        if (uo->enabled() && shape_element_uo)
-          shape_element_uo->executeJacobianWrapper(jvar_id, dof_indices);
-      }
+      for (const auto uo : shapers)
+        IfEnabled(uo) uo->executeJacobianWrapper(jvar_id, dof_indices);
     }
   }
 }
@@ -143,13 +121,15 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
   _fe_problem.reinitMaterialsFace(_subdomain, _tid);
   _fe_problem.reinitMaterialsBoundary(bnd_id, _tid);
 
-  const auto & objects = _side_user_objects.getActiveBoundaryObjects(bnd_id, _tid);
+  std::vector<UserObject *> userobjs;
+  queryBoundary(Interfaces::SideUserObject, bnd_id, userobjs);
   for (const auto & uo : objects)
-    if (uo->enabled())
-      uo->execute();
+    IfEnabled(uo) uo->execute();
 
   // UserObject Jacobians
-  if (_fe_problem.currentlyComputingJacobian())
+  std::vector<ShapeSideUserObject *> shapers;
+  queryBoundary(Interfaces::ShapeSideUserObject, bnd_id, shapers);
+  if (_fe_problem.currentlyComputingJacobian() && shapers.size() > 0)
   {
     // Prepare shape functions for ShapeSideUserObjects
     std::vector<MooseVariableFEBase *> jacobian_moose_vars =
@@ -161,12 +141,8 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
 
       _fe_problem.prepareFaceShapes(jvar_id, _tid);
 
-      for (const auto & uo : objects)
-      {
-        auto shape_side_uo = std::dynamic_pointer_cast<ShapeSideUserObject>(uo);
-        if (uo->enabled() && shape_side_uo)
-          shape_side_uo->executeJacobianWrapper(jvar_id, dof_indices);
-      }
+      for (const auto & uo : shapers)
+        IfEnabled(uo) uo->executeJacobianWrapper(jvar_id, dof_indices);
     }
   }
 }
@@ -180,7 +156,9 @@ ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
   // Get the global id of the element and the neighbor
   const dof_id_type elem_id = elem->id(), neighbor_id = neighbor->id();
 
-  if (!_internal_side_user_objects.hasActiveBlockObjects(_subdomain, _tid))
+  std::vector<InternalSideUserObject *> userobjs;
+  querySubdomain(Interfaces::InternalSideUserObject, userobjs);
+  if (userobjs.size() == 0)
     return;
   if (!((neighbor->active() && (neighbor->level() == elem->level()) && (elem_id < neighbor_id)) ||
         (neighbor->level() < elem->level())))
@@ -197,12 +175,9 @@ ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
   SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
   _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
 
-  const auto & objects = _internal_side_user_objects.getActiveBlockObjects(_subdomain, _tid);
-  for (const auto & uo : objects)
-  {
+  for (const auto & uo : userobjects)
     if (uo->enabled() && (!uo->blockRestricted() || uo->hasBlocks(neighbor->subdomain_id())))
       uo->execute();
-  }
 }
 
 void
