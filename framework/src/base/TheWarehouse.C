@@ -67,6 +67,7 @@ private:
 public:
   virtual void add(int obj_id, const std::vector<Attribute> & attribs) override
   {
+    std::lock_guard<std::mutex> l(_mutex);
     if (obj_id < _data.size())
       throw std::runtime_error("object with id " + std::to_string(obj_id) + " already added");
 
@@ -76,50 +77,54 @@ public:
     set(d, attribs);
   }
 
-  virtual void reset() { _data.clear(); }
-
   virtual std::vector<int> query(const std::vector<Attribute> & conds) override
   {
+    std::lock_guard<std::mutex> l(_mutex);
     std::vector<int> objs;
     for (unsigned int i = 0; i < _data.size(); i++)
     {
-      auto & d = _data[i];
+      Data * d = nullptr;
+      {
+        std::lock_guard<std::mutex> l(_mutex);
+        d = &_data[i];
+      }
+
       bool passes = true;
       for (auto & cond : conds)
       {
         switch (cond.id)
         {
           case AttributeId::Thread:
-            passes = cond.value == d.thread;
+            passes = cond.value == d->thread;
             break;
           case AttributeId::Name:
-            passes = cond.strvalue == d.name;
+            passes = cond.strvalue == d->name;
             break;
           case AttributeId::System:
-            passes = cond.strvalue == d.system;
+            passes = cond.strvalue == d->system;
             break;
           case AttributeId::Variable:
-            passes = cond.value == d.variable;
+            passes = cond.value == d->variable;
             break;
           case AttributeId::Interfaces:
-            passes = cond.value & d.interfaces; // check bit in bitmask
+            passes = cond.value & d->interfaces; // check bit in bitmask
             break;
           case AttributeId::Interfaces:
-            passes = cond.value & d.interfaces; // check bit in bitmask
+            passes = cond.value & d->interfaces; // check bit in bitmask
             break;
           // TODO: delete this case later - it is a temporary hack for dealing with inter-system
           // dependencies:
           case AttributeId::PreIC:
-            passes = cond.value == d.pre_ic;
+            passes = cond.value == d->pre_ic;
             break;
           // TODO: delete this case later - it is a temporary hack for dealing with inter-system
           // dependencies:
           case AttributeId::PreAux:
-            passes = cond.value == d.pre_aux;
+            passes = cond.value == d->pre_aux;
             break;
           case AttributeId::Boundary:
             passes = false;
-            for (auto val : d.boundaries)
+            for (auto val : d->boundaries)
               if (cond.value == Moose::ANY_BOUNDARY_ID || val == Moose::ANY_BOUNDARY_ID ||
                   cond.value == val)
               {
@@ -129,7 +134,7 @@ public:
             break;
           case AttributeId::Subdomain:
             passes = false;
-            for (auto val : d.subdomains)
+            for (auto val : d->subdomains)
               if (cond.value == Moose::ANY_BLOCK_ID || val == Moose::ANY_BLOCK_ID ||
                   cond.value == val)
               {
@@ -139,7 +144,7 @@ public:
             break;
           case AttributeId::ExecOn:
             passes = false;
-            for (auto val : d.execute_ons)
+            for (auto val : d->execute_ons)
               if (cond.value == val)
               {
                 passes = true;
@@ -148,7 +153,7 @@ public:
             break;
           case AttributeId::VectorTag:
             passes = false;
-            for (auto val : d.vector_tags)
+            for (auto val : d->vector_tags)
               if (cond.value == val)
               {
                 passes = true;
@@ -157,7 +162,7 @@ public:
             break;
           case AttributeId::MatrixTag:
             passes = false;
-            for (auto val : d.matrix_tags)
+            for (auto val : d->matrix_tags)
               if (cond.value == val)
               {
                 passes = true;
@@ -179,6 +184,7 @@ public:
 
   virtual void set(int obj_id, const std::vector<Attribute> & attribs) override
   {
+    std::lock_guard<std::mutex> l(_mutex);
     Data * dat = nullptr;
     if (_data[obj_id].id == obj_id)
       dat = &_data[obj_id];
@@ -250,19 +256,26 @@ private:
     }
   }
 
+  std::mutex _mutex;
   std::vector<Data> _data;
 };
 
 TheWarehouse::TheWarehouse() : _store(new VecStore()){};
 TheWarehouse::~TheWarehouse(){};
 
+static std::mutex obj_mutex;
+static std::mutex cache_mutex;
+
 void
 TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 {
   std::vector<Attribute> attribs;
   readAttribs(obj.get(), system, attribs);
-  _objects.push_back(std::move(obj));
-  int obj_id = _objects.size() - 1;
+  {
+    std::lock_guard<std::mutex> lock(obj_mutex);
+    _objects.push_back(std::move(obj));
+    int obj_id = _objects.size() - 1;
+  }
   _store->add(obj_id, attribs);
 }
 
@@ -279,22 +292,25 @@ int
 TheWarehouse::prepare(const std::vector<Attribute> & conds)
 {
   auto obj_ids = _store->query(conds);
-  _obj_cache.push_back({});
-  _query_cache.push_back(conds);
 
+  std::lock_guard<std::mutex> lock(cache_mutex);
+  _obj_cache.push_back({});
   auto query_id = _obj_cache.size() - 1;
   auto & vec = _obj_cache.back();
-  for (auto & id : _store->query(conds))
+
+  std::lock_guard<std::mutex> lock(obj_mutex);
+  for (auto & id : obj_ids)
     vec.push_back(_objects[id].get());
 
   return query_id;
 }
 
-const std::vector<MooseObject *> &
+const std::vector<MooseObject *>
 TheWarehouse::query(int query_id)
 {
   if (query_id >= _obj_cache.size())
     throw std::runtime_error("unknown query id");
+  std::lock_guard<std::mutex> lock(cache_mutex);
   return _obj_cache[query_id];
 }
 

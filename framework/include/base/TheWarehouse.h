@@ -44,6 +44,13 @@ enum class AttributeId
   PreAux,
 };
 
+#define START_QUERY(w) w.queryInto([]() static int qid = w.build()
+#define STORE_IN(vec)                                                                              \
+  prepare();                                                                                       \
+  return qid;                                                                                      \
+  }(), vec);
+// w.query([](){static int qid = w.build().thread(4).system("FooSystem").prepare(); return qid;}()
+
 enum class Interfaces
 {
   ElementUserObject,
@@ -138,7 +145,7 @@ public:
   /// prepares a query and returns an associated query_id (i.e. for use with the query function).
   int prepare(const std::vector<Attribute> & conds);
 
-  const std::vector<MooseObject *> & query(int query_id);
+  const std::vector<MooseObject *> query(int query_id);
 
   template <typename T>
   std::vector<T> & queryInto(int query_id, std::vector<T> & results)
@@ -163,7 +170,6 @@ private:
   std::vector<std::shared_ptr<MooseObject>> _objects;
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
-  std::vector<std::vector<Attribute>> _query_cache;
 };
 
 #endif // THEWAREHOUSE_H
