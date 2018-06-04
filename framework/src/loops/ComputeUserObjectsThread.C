@@ -31,7 +31,8 @@ ComputeUserObjectsThread::ComputeUserObjectsThread(
     _soln(*sys.currentSolution()),
     _elemental_user_objects(elemental_user_objects),
     _side_user_objects(side_user_objects),
-    _internal_side_user_objects(internal_side_user_objects)
+    _internal_side_user_objects(internal_side_user_objects),
+    _query_ids(libMesh::n_threads())
 {
 }
 
@@ -72,23 +73,37 @@ ComputeUserObjectsThread::subdomainChanged()
 }
 
 void
+ComputeUserObjectsThread::query(std::vector<std::map<SubdomainID, int>> & cache,
+                                std::vector<UserObject *> & dst)
+{
+  if (cache[_tid].count(_internal_side) == 0)
+  {
+    cache[_tid][_internal_side] = _fe_problem->theWarehouse()
+                                      .build()
+                                      .thread(_tid)
+                                      .subdomain(_internal_side)
+                                      .interfaces(Interfaces::InternalSideUserObject)
+                                      .prepare();
+  }
+  _fe_problem->theWareouse().queryInto(cache[_tid][_internal_side], dst);
+}
+
+void
 ComputeUserObjectsThread::onElement(const Elem * elem)
 {
   _fe_problem.prepare(elem, _tid);
   _fe_problem.reinitElem(elem, _tid);
+
+  std::vector<UserObject *> userobjs;
+  query(_query_ids_elemental, userobjs);
 
   // Set up Sentinel class so that, even if reinitMaterials() throws, we
   // still remember to swap back during stack unwinding.
   SwapBackSentinel sentinel(_fe_problem, &FEProblem::swapBackMaterials, _tid);
   _fe_problem.reinitMaterials(_subdomain, _tid);
 
-  if (_elemental_user_objects.hasActiveBlockObjects(_subdomain, _tid))
-  {
-    const auto & objects = _elemental_user_objects.getActiveBlockObjects(_subdomain, _tid);
-    for (const auto & uo : objects)
-      if (uo->enabled())
-        uo->execute();
-  }
+  for (const auto & uo : userobjects)
+    IfEnabled(uo) uo->execute();
 
   // UserObject Jacobians
   if (_fe_problem.currentlyComputingJacobian() &&
@@ -104,8 +119,7 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
 
       _fe_problem.prepareShapes(jvar_id, _tid);
 
-      const auto & e_objects = _elemental_user_objects.getActiveBlockObjects(_subdomain, _tid);
-      for (const auto & uo : e_objects)
+      for (const auto uo : userobjs)
       {
         auto shape_element_uo = std::dynamic_pointer_cast<ShapeElementUserObject>(uo);
         if (uo->enabled() && shape_element_uo)

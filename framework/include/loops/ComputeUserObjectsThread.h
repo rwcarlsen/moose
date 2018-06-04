@@ -56,6 +56,14 @@ protected:
   const MooseObjectWarehouse<SideUserObject> & _side_user_objects;
   const MooseObjectWarehouse<InternalSideUserObject> & _internal_side_user_objects;
   ///@}
+
+private:
+  void query(std::vector<std::map<SubdomainID, int>> & cache, std::vector<UserObject *> & dst);
+
+  // map<THREAD_ID, map<subdomain_id, objects>>
+  std::vector<std::map<SubdomainID, int>> _query_ids_elemental;
+  std::vector<std::map<SubdomainID, int>> _query_ids_side;
+  std::vector<std::map<SubdomainID, int>> _query_ids_internal_side;
 };
 
 #endif // COMPUTEUSEROBJECTSTHREAD_H

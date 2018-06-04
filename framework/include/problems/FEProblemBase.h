@@ -22,7 +22,6 @@
 #include "PetscSupport.h"
 #include "MooseApp.h"
 #include "ExecuteMooseObjectWarehouse.h"
-#include "AuxGroupExecuteMooseObjectWarehouse.h"
 #include "MaterialWarehouse.h"
 #include "MooseVariableFE.h"
 #include "MultiAppTransfer.h"
@@ -1398,10 +1397,6 @@ public:
    * Call compute methods on UserObjects.
    */
   virtual void computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group);
-  template <typename T>
-  void initializeUserObjects(const MooseObjectWarehouse<T> & warehouse);
-  template <typename T>
-  void finalizeUserObjects(const MooseObjectWarehouse<T> & warehouse);
 
   /**
    * Call compute methods on AuxKernels
@@ -1469,6 +1464,8 @@ public:
   ExecuteMooseObjectWarehouse<MultiApp> & getMultiAppWarehouse() { return _multi_apps; }
 
   const VectorPostprocessorData & getVectorPostprocessorData() const;
+
+  inline TheWarehouse & theWarehouse() { return _app.theWarehouse(); }
 
 protected:
   MooseMesh & _mesh;
@@ -1551,16 +1548,6 @@ protected:
 
   // VectorPostprocessors
   VectorPostprocessorData _vpps_data;
-
-  ///@{
-  /// Storage for UserObjects
-  ExecuteMooseObjectWarehouse<UserObject> _all_user_objects;
-  AuxGroupExecuteMooseObjectWarehouse<GeneralUserObject> _general_user_objects;
-  AuxGroupExecuteMooseObjectWarehouse<NodalUserObject> _nodal_user_objects;
-  AuxGroupExecuteMooseObjectWarehouse<ElementUserObject> _elemental_user_objects;
-  AuxGroupExecuteMooseObjectWarehouse<SideUserObject> _side_user_objects;
-  AuxGroupExecuteMooseObjectWarehouse<InternalSideUserObject> _internal_side_user_objects;
-  ///@}
 
   /// MultiApp Warehouse
   ExecuteMooseObjectWarehouse<MultiApp> _multi_apps;
@@ -1737,62 +1724,6 @@ void
 FEProblemBase::allowOutput(bool state)
 {
   _app.getOutputWarehouse().allowOutput<T>(state);
-}
-
-template <typename T>
-void
-FEProblemBase::initializeUserObjects(const MooseObjectWarehouse<T> & warehouse)
-{
-  if (warehouse.hasActiveObjects())
-  {
-    for (THREAD_ID tid = 0; tid < libMesh::n_threads(); ++tid)
-    {
-      const auto & objects = warehouse.getActiveObjects(tid);
-      for (const auto & object : objects)
-        object->initialize();
-    }
-  }
-}
-
-template <typename T>
-void
-FEProblemBase::finalizeUserObjects(const MooseObjectWarehouse<T> & warehouse)
-{
-  if (warehouse.hasActiveObjects())
-  {
-    const auto & objects = warehouse.getActiveObjects(0);
-
-    // Join them down to processor 0
-    for (THREAD_ID tid = 1; tid < libMesh::n_threads(); ++tid)
-    {
-      const auto & other_objects = warehouse.getActiveObjects(tid);
-
-      for (unsigned int i = 0; i < objects.size(); ++i)
-        objects[i]->threadJoin(*(other_objects[i]));
-    }
-
-    std::set<std::string> vpps_finalized;
-
-    // Finalize them and save off PP values
-    for (auto & object : objects)
-    {
-      object->finalize();
-
-      auto pp = std::dynamic_pointer_cast<Postprocessor>(object);
-
-      if (pp)
-        _pps_data.storeValue(pp->PPName(), pp->getValue());
-
-      auto vpp = std::dynamic_pointer_cast<VectorPostprocessor>(object);
-
-      if (vpp)
-        vpps_finalized.insert(vpp->PPName());
-    }
-
-    // Broadcast/Scatter any VPPs that need it
-    for (auto & vpp_name : vpps_finalized)
-      _vpps_data.broadcastScatterVectors(vpp_name);
-  }
 }
 
 #endif /* FEPROBLEMBASE_H */

@@ -509,9 +509,9 @@ FEProblemBase::initialSetup()
   std::set<std::string> depend_objects_aux = _aux->getDependObjects();
 
   // This replaces all prior updateDependObjects calls on the old user object warehouses.
-  auto & w = _app.theWarehouse();
+  auto & w = theWarehouse();
   std::vector<UserObject *> userobjs;
-  _app.theWarehouse().queryInto(w.build().system("UserObject").prepare(), userobjs);
+  START_QUERY(w).system("UserObject").STORE_IN(userobjs);
   groupUserObjects(w, userobjs, depend_objects_ic, depend_objects_aux);
 
   for (auto obj : userobjs)
@@ -802,9 +802,9 @@ FEProblemBase::timestepSetup()
     _markers.timestepSetup(tid);
   }
 
-  static id = _app.theWarehouse().build().system("UserObject").prepare();
+  static id = theWarehouse().build().system("UserObject").prepare();
   std::vector<SetupInterface *> userobjs;
-  _app.theWarehouse().queryInto(qid, userobjs);
+  theWarehouse().queryInto(qid, userobjs);
   for (auto obj : userobjs)
     IfEnabled(obj) obj->timestepSetup();
 
@@ -878,10 +878,9 @@ FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
 {
   std::set<MooseVariableFEBase *> uo_jacobian_moose_vars;
 
-  auto qid =
-      _app.theWarehouse().build().interfaces(Interfaces::ShapeUserObject).thread(tid).prepare();
+  auto qid = theWarehouse().build().interfaces(Interfaces::ShapeUserObject).thread(tid).prepare();
   std::vector<ShapeUserObject *> objs;
-  _app.theWarehouse.queryInto(qid, objs);
+  theWarehouse.queryInto(qid, objs);
   for (const auto & uo : objs)
   {
     if (!uo->enabled())
@@ -2574,7 +2573,7 @@ FEProblemBase::addUserObject(std::string user_object_name,
     else
       user_object->setPrimaryThreadCopy(primary);
 
-    _app.theWarehouse().add(user_object, "UserObject");
+    theWarehouse().add(user_object, "UserObject");
     _all_user_objects.addObject(user_object, tid);
 
     // Attempt to create all the possible UserObject types
@@ -2864,44 +2863,33 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   const MooseObjectWarehouse<NodalUserObject> & nodal = _nodal_user_objects[group][type];
   const MooseObjectWarehouse<GeneralUserObject> & general = _general_user_objects[group][type];
 
-  if (!elemental.hasActiveObjects() && !side.hasActiveObjects() &&
-      !internal_side.hasActiveObjects() && !nodal.hasActiveObjects() && !general.hasActiveObjects())
-    // Nothing to do, return early
-    return;
-
   // Start the timer here since we have at least one active user object
   std::string compute_uo_tag = "computeUserObjects(" + Moose::stringify(type) + ")";
   Moose::perf_log.push(compute_uo_tag, "Execution");
 
+  auto & w = theWarehouse();
+
   // Perform Residual/Jacobian setups
+  static qid = w.build().system("UserObject").prepare();
+  std::vector<UserObject *> userobjs;
+  w.queryInto(qid, userobjs);
+
+  if (userobjs.empty())
+    return;
+
   if (type == EXEC_LINEAR)
   {
-    for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
-    {
-      elemental.residualSetup(tid);
-      side.residualSetup(tid);
-      internal_side.residualSetup(tid);
-      nodal.residualSetup(tid);
-    }
-    general.residualSetup();
+    for (auto obj : userobjs)
+      IfEnabled(obj) obj->residualSetup();
   }
-
   else if (type == EXEC_NONLINEAR)
   {
-    for (THREAD_ID tid = 0; tid < libMesh::n_threads(); tid++)
-    {
-      elemental.jacobianSetup(tid);
-      side.jacobianSetup(tid);
-      internal_side.jacobianSetup(tid);
-      nodal.jacobianSetup(tid);
-    }
-    general.jacobianSetup();
+    for (auto obj : userobjs)
+      IfEnabled(obj) obj->jacobianSetup();
   }
 
-  // Initialize Elemental/Side/InternalSideUserObjects
-  initializeUserObjects<ElementUserObject>(elemental);
-  initializeUserObjects<SideUserObject>(side);
-  initializeUserObjects<InternalSideUserObject>(internal_side);
+  for (auto obj : userobjs)
+    IfEnabled(obj) obj->initialize();
 
   // Execute Elemental/Side/InternalSideUserObjects
   if (elemental.hasActiveObjects() || side.hasActiveObjects() || internal_side.hasActiveObjects())
@@ -2910,14 +2898,6 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cppt);
   }
 
-  // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
-  finalizeUserObjects<SideUserObject>(side);
-  finalizeUserObjects<InternalSideUserObject>(internal_side);
-  finalizeUserObjects<ElementUserObject>(elemental);
-
-  // Initialize Nodal
-  initializeUserObjects<NodalUserObject>(nodal);
-
   // Execute NodalUserObjects
   if (nodal.hasActiveObjects())
   {
@@ -2925,29 +2905,36 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cnppt);
   }
 
-  // Finalize, threadJoin, and update PP values of Nodal
-  finalizeUserObjects<NodalUserObject>(nodal);
-
-  // Execute GeneralUserObjects
-  if (general.hasActiveObjects())
+  // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
+  for (auto obj : userobjs)
   {
-    const auto & objects = general.getActiveObjects();
-    for (const auto & obj : objects)
-    {
-      obj->initialize();
-      obj->execute();
-      obj->finalize();
-
-      std::shared_ptr<Postprocessor> pp = std::dynamic_pointer_cast<Postprocessor>(obj);
-      if (pp)
-        _pps_data.storeValue(obj->name(), pp->getValue());
-
-      auto vpp = std::dynamic_pointer_cast<VectorPostprocessor>(obj);
-
-      if (vpp)
-        _vpps_data.broadcastScatterVectors(vpp->PPName());
-    }
+    if (obj->enabled() && obj->primaryThreadCopy())
+      obj->primaryThreadCopy()->threadJoin(obj);
   }
+
+  static qid0 = w.build().system("UserObject").thread(0).prepare();
+  std::vector<UserObject *> userobjs_thread0;
+  w.queryInto(qid0, userobjs_thread0);
+
+  for (auto obj : userobjs_thread0)
+    obj->finalize();
+
+  static qid_pps =
+      w.build().system("UserObject").thread(0).interfaces(Interfaces::Postprocessor).prepare();
+  std::vector<Postprocessor *> pps;
+  w.queryInto(qid_pps, pps);
+  for (auto pp : pps)
+    _pps_data.storeValue(pp->name(), pp->getValue());
+
+  static qid_pps = w.build()
+                       .system("UserObject")
+                       .thread(0)
+                       .interfaces(Interfaces::VectorPostprocessor)
+                       .prepare();
+  std::vector<Postprocessor *> vppss;
+  w.queryInto(qid_pps, ppss);
+  for (auto vpp : vpps)
+    _vpps_data.broadcastScatterVectors(vpp->PPName());
 
   Moose::perf_log.pop(compute_uo_tag, "Execution");
 }
