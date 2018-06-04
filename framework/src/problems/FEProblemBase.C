@@ -802,9 +802,8 @@ FEProblemBase::timestepSetup()
     _markers.timestepSetup(tid);
   }
 
-  static id = theWarehouse().build().system("UserObject").prepare();
   std::vector<SetupInterface *> userobjs;
-  theWarehouse().queryInto(qid, userobjs);
+  theWarehouse().build().system("UserObject").queryInto(userobjs);
   for (auto obj : userobjs)
     IfEnabled(obj) obj->timestepSetup();
 
@@ -878,9 +877,8 @@ FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
 {
   std::set<MooseVariableFEBase *> uo_jacobian_moose_vars;
 
-  auto qid = theWarehouse().build().interfaces(Interfaces::ShapeUserObject).thread(tid).prepare();
   std::vector<ShapeUserObject *> objs;
-  theWarehouse.queryInto(qid, objs);
+  theWarehouse().build().interfaces(Interfaces::ShapeUserObject).thread(tid).queryInto(objs);
   for (const auto & uo : objs)
   {
     if (!uo->enabled())
@@ -2870,9 +2868,8 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   auto & w = theWarehouse();
 
   // Perform Residual/Jacobian setups
-  static qid = w.build().system("UserObject").prepare();
   std::vector<UserObject *> userobjs;
-  w.queryInto(qid, userobjs);
+  w.build().system("UserObject").queryInto(userobjs);
 
   if (userobjs.empty())
     return;
@@ -2912,27 +2909,23 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
       obj->primaryThreadCopy()->threadJoin(obj);
   }
 
-  static qid0 = w.build().system("UserObject").thread(0).prepare();
   std::vector<UserObject *> userobjs_thread0;
-  w.queryInto(qid0, userobjs_thread0);
+  w.build().system("UserObject").thread(0).queryInto(userobjs_thread0);
 
   for (auto obj : userobjs_thread0)
     obj->finalize();
 
-  static qid_pps =
-      w.build().system("UserObject").thread(0).interfaces(Interfaces::Postprocessor).prepare();
   std::vector<Postprocessor *> pps;
-  w.queryInto(qid_pps, pps);
+  w.build().system("UserObject").thread(0).interfaces(Interfaces::PostProcessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->name(), pp->getValue());
 
-  static qid_pps = w.build()
-                       .system("UserObject")
-                       .thread(0)
-                       .interfaces(Interfaces::VectorPostprocessor)
-                       .prepare();
   std::vector<Postprocessor *> vppss;
-  w.queryInto(qid_pps, ppss);
+  w.build()
+      .system("UserObject")
+      .thread(0)
+      .interfaces(Interfaces::VectorPostprocessor)
+      .queryInto(ppss);
   for (auto vpp : vpps)
     _vpps_data.broadcastScatterVectors(vpp->PPName());
 
