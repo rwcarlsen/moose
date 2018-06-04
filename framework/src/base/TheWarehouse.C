@@ -297,6 +297,7 @@ TheWarehouse::prepare(const std::vector<Attribute> & conds)
   _obj_cache.push_back({});
   auto query_id = _obj_cache.size() - 1;
   auto & vec = _obj_cache.back();
+  _query_cache[query_id] = conds;
 
   std::lock_guard<std::mutex> lock(obj_mutex);
   for (auto & id : obj_ids)

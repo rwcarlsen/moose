@@ -78,6 +78,16 @@ struct Attribute
   {
     return id == other.id && value == other.value && strvalue == other.strvalue;
   }
+  inline bool operator<(const Attribute & other) const
+  {
+    if (id == other.id)
+    {
+      if (value == other.value)
+        return strvalue < other.strvalue;
+      return value < other.value;
+    }
+    return id < other.id;
+  }
 };
 
 class TheWarehouse
@@ -130,6 +140,11 @@ public:
     }
     int prepare() { return _w.prepare(_attribs); }
     std::vector<Attribute> attribs() { return _attribs; }
+    template <typename T>
+    std::vector<T> & queryInto(std::vector<T> & results)
+    {
+      return _w.queryInto(_attribs, results);
+    }
 
   private:
     TheWarehouse & _w;
@@ -146,6 +161,17 @@ public:
   int prepare(const std::vector<Attribute> & conds);
 
   const std::vector<MooseObject *> query(int query_id);
+
+  template <typename T>
+  std::vector<T> & queryInto(const std::vector<Attribute> & conds, std::vector<T> & results)
+  {
+    int query_id = -1;
+    if (_query_cache.count(conds) == 0)
+      query_id = prepare(conds);
+    else
+      query_id = _query_cache[conds];
+    return queryInto(query_id, results);
+  }
 
   template <typename T>
   std::vector<T> & queryInto(int query_id, std::vector<T> & results)
@@ -170,6 +196,7 @@ private:
   std::vector<std::shared_ptr<MooseObject>> _objects;
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
+  std::map<std::vector<Attribute>, int> _query_cache;
 };
 
 #endif // THEWAREHOUSE_H
