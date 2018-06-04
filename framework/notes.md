@@ -24,3 +24,6 @@ Questions:
 - Keeping track of query ids is a huge pain.  Is there a better way to track+cache queries?
     - macro that caches on the warehouse by a file and line number string of the call location?
         But this doesn't handle thread locking.
+
+- add a way to "lock" the warehouse as immutable (except the cache) to prevent new objects from
+    being added (but still allow updating existing objects.
