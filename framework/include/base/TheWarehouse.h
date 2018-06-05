@@ -44,13 +44,6 @@ enum class AttributeId
   PreAux,
 };
 
-#define START_QUERY(w) w.queryInto([]() static int qid = w.build()
-#define STORE_IN(vec)                                                                              \
-  prepare();                                                                                       \
-  return qid;                                                                                      \
-  }(), vec);
-// w.query([](){static int qid = w.build().thread(4).system("FooSystem").prepare(); return qid;}()
-
 enum class Interfaces
 {
   ElementUserObject,
@@ -104,6 +97,11 @@ public:
     Builder thread(int tid)
     {
       _attribs.push_back({AttributeId::Thread, tid, ""});
+      return *this;
+    }
+    Builder name(const std::string & name)
+    {
+      _attribs.push_back({AttributeId::Name, 0, name});
       return *this;
     }
     Builder interfaces(int ifaces)
