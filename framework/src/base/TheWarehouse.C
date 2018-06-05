@@ -327,6 +327,7 @@ TheWarehouse::readAttribs(const MooseObject * obj,
 
   // clang-format off
   unsigned int imask = 0;
+  imask |= (int)Interfaces::UserObject             * (dynamic_cast<const UserObject *>(obj) != nullptr);
   imask |= (int)Interfaces::ElementUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
   imask |= (int)Interfaces::SideUserObject         * (dynamic_cast<const SideUserObject *>(obj) != nullptr);
   imask |= (int)Interfaces::InternalSideUserObject * (dynamic_cast<const InternalSideUserObject *>(obj) != nullptr);

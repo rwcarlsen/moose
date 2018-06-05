@@ -58,14 +58,15 @@ enum class Interfaces
   InternalSideUserObject,
   NodalUserObject,
   GeneralUserObject,
+  ShapeUserObject,
+  ShapeElementUserObject,
+  ShapeSideUserObject,
+  UserObject,
   NonlocalKernel,
   NonlocalIntegratedBC,
   InternalSideIndicator,
   TransientMultiApp,
   MultiAppTransfer,
-  ShapeUserObject,
-  ShapeElementUserObject,
-  ShapeSideUserObject,
   Max, // This must be last
 };
 
