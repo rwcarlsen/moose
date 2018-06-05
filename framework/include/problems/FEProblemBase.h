@@ -645,16 +645,6 @@ public:
   addUserObject(std::string user_object_name, const std::string & name, InputParameters parameters);
 
   /**
-   * Return the storage of all UserObjects.
-   *
-   * @see AdvancedOutput::initPostprocessorOrVectorPostprocessorLists
-   */
-  const ExecuteMooseObjectWarehouse<UserObject> & getUserObjects() const
-  {
-    return _all_user_objects;
-  }
-
-  /**
    * Get the user object by its name
    * @param name The name of the user object being retrieved
    * @return Const reference to the user object
@@ -662,14 +652,11 @@ public:
   template <class T>
   const T & getUserObject(const std::string & name, unsigned int tid = 0) const
   {
-    if (_all_user_objects.hasActiveObject(name, tid))
-    {
-      auto uo_ptr = std::dynamic_pointer_cast<T>(_all_user_objects.getActiveObject(name, tid));
-      if (uo_ptr == nullptr)
-        mooseError("User object with name '" + name + "' is of wrong type");
-      return *uo_ptr;
-    }
-    mooseError("Unable to find user object with name '" + name + "'");
+    std::vector<T *> objs;
+    theWarehouse().build().thread(tid).name(name).queryInto(objs);
+    if (objs.empty() || !objs[0].enabled())
+      mooseError("Unable to find user object with name '" + name + "'");
+    return *(objs[0]);
   }
   /**
    * Get the user object by its name

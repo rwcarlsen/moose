@@ -175,12 +175,6 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
         "neighbor_material_props", &_mesh)),
     _pps_data(*this),
     _vpps_data(*this),
-    _all_user_objects(_app.getExecuteOnEnum()),
-    _general_user_objects(_app.getExecuteOnEnum(), /*threaded=*/false),
-    _nodal_user_objects(_app.getExecuteOnEnum()),
-    _elemental_user_objects(_app.getExecuteOnEnum()),
-    _side_user_objects(_app.getExecuteOnEnum()),
-    _internal_side_user_objects(_app.getExecuteOnEnum()),
     _multi_apps(_app.getExecuteOnEnum()),
     _transient_multi_apps(_app.getExecuteOnEnum()),
     _transfers(_app.getExecuteOnEnum(), /*threaded=*/false),
@@ -511,13 +505,23 @@ FEProblemBase::initialSetup()
   // This replaces all prior updateDependObjects calls on the old user object warehouses.
   auto & w = theWarehouse();
   std::vector<UserObject *> userobjs;
-  START_QUERY(w).system("UserObject").STORE_IN(userobjs);
+  w.build().system("UserObject").queryInto(userobjs);
   groupUserObjects(w, userobjs, depend_objects_ic, depend_objects_aux);
 
   for (auto obj : userobjs)
     IfEnabled(obj) obj->initialSetup();
 
-  _general_user_objects.sort();
+  std::vector<GeneralUserObject *> gen_objs;
+  w.build().interfaces(Interfaces::GeneralUserObject).queryInto(gen_objs);
+  try
+  {
+    DependencyResolverInterface::sort(gen_objs);
+  }
+  catch (CyclicDependencyException<GeneralUserObject *> & e)
+  {
+    DependencyResolverInterface::cyclicDependencyError<GeneralUserObject *>(
+        e, "Cyclic dependency detected in object ordering");
+  }
 
   // check if jacobian calculation is done in userobject
   for (THREAD_ID tid = 0; tid < n_threads; ++tid)
@@ -2516,7 +2520,7 @@ FEProblemBase::addPostprocessor(std::string pp_name,
                                 InputParameters parameters)
 {
   // Check for name collision
-  if (_all_user_objects.hasActiveObject(name))
+  if (hasUserObject(name))
     mooseError(std::string("A UserObject with the name \"") + name +
                "\" already exists.  You may not add a Postprocessor by the same name.");
 
@@ -2530,7 +2534,7 @@ FEProblemBase::addVectorPostprocessor(std::string pp_name,
                                       InputParameters parameters)
 {
   // Check for name collision
-  if (_all_user_objects.hasActiveObject(name))
+  if (hasUserObject(name))
     mooseError(std::string("A UserObject with the name \"") + name +
                "\" already exists.  You may not add a VectorPostprocessor by the same name.");
 
@@ -2572,7 +2576,6 @@ FEProblemBase::addUserObject(std::string user_object_name,
       user_object->setPrimaryThreadCopy(primary);
 
     theWarehouse().add(user_object, "UserObject");
-    _all_user_objects.addObject(user_object, tid);
 
     // Attempt to create all the possible UserObject types
     std::shared_ptr<ElementUserObject> euo =
@@ -2598,16 +2601,19 @@ FEProblemBase::addUserObject(std::string user_object_name,
 const UserObject &
 FEProblemBase::getUserObjectBase(const std::string & name) const
 {
-  if (_all_user_objects.hasActiveObject(name))
-    return *(_all_user_objects.getActiveObject(name).get());
-
-  mooseError("Unable to find user object with name '" + name + "'");
+  std::vector<UserObject *> objs;
+  theWarehouse().build().thread(0).name(name).queryInto(objs);
+  if (objs.empty() || !objs[0].enabled())
+    mooseError("Unable to find user object with name '" + name + "'");
+  return *(objs[0]);
 }
 
 bool
 FEProblemBase::hasUserObject(const std::string & name) const
 {
-  return _all_user_objects.hasActiveObject(name);
+  std::vector<UserObject *> objs;
+  theWarehouse().build().thread(0).name(name).queryInto(objs);
+  return !objs.empty();
 }
 
 bool
@@ -2853,14 +2859,6 @@ FEProblemBase::computeAuxiliaryKernels(const ExecFlagType & type)
 void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
-  // Get convenience reference to active warehouse
-  const MooseObjectWarehouse<ElementUserObject> & elemental = _elemental_user_objects[group][type];
-  const MooseObjectWarehouse<SideUserObject> & side = _side_user_objects[group][type];
-  const MooseObjectWarehouse<InternalSideUserObject> & internal_side =
-      _internal_side_user_objects[group][type];
-  const MooseObjectWarehouse<NodalUserObject> & nodal = _nodal_user_objects[group][type];
-  const MooseObjectWarehouse<GeneralUserObject> & general = _general_user_objects[group][type];
-
   // Start the timer here since we have at least one active user object
   std::string compute_uo_tag = "computeUserObjects(" + Moose::stringify(type) + ")";
   Moose::perf_log.push(compute_uo_tag, "Execution");
@@ -3011,14 +3009,9 @@ FEProblemBase::updateActiveObjects()
     _all_materials.updateActive(tid);
     _materials.updateActive(tid);
     _discrete_materials.updateActive(tid);
-    _nodal_user_objects.updateActive(tid);
-    _elemental_user_objects.updateActive(tid);
-    _side_user_objects.updateActive(tid);
-    _internal_side_user_objects.updateActive(tid);
     _samplers.updateActive(tid);
   }
 
-  _general_user_objects.updateActive();
   _control_warehouse.updateActive();
   _multi_apps.updateActive();
   _transient_multi_apps.updateActive();
@@ -4968,9 +4961,11 @@ FEProblemBase::checkUserObjects()
   // and the blocks that they are defined on
   std::set<std::string> names;
 
-  const auto & objects = _all_user_objects.getActiveObjects();
+  std::vector<UserObject *> objects;
+  theWarehouse().build().interfaces(Interfaces::UserObject).queryInto(objects);
+
   for (const auto & obj : objects)
-    names.insert(obj->name());
+    IfEnabled(obj) names.insert(obj->name());
 
   // See if all referenced blocks are covered
   mesh_subdomains.insert(Moose::ANY_BLOCK_ID);
