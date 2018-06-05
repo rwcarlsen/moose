@@ -21,27 +21,14 @@
 
 #include "libmesh/numeric_vector.h"
 
-ComputeUserObjectsThread::ComputeUserObjectsThread(
-    FEProblemBase & problem,
-    SystemBase & sys,
-    const MooseObjectWarehouse<ElementUserObject> & elemental_user_objects,
-    const MooseObjectWarehouse<SideUserObject> & side_user_objects,
-    const MooseObjectWarehouse<InternalSideUserObject> & internal_side_user_objects)
-  : ThreadedElementLoop<ConstElemRange>(problem),
-    _soln(*sys.currentSolution()),
-    _elemental_user_objects(elemental_user_objects),
-    _side_user_objects(side_user_objects),
-    _internal_side_user_objects(internal_side_user_objects)
+ComputeUserObjectsThread::ComputeUserObjectsThread(FEProblemBase & problem, SystemBase & sys)
+  : ThreadedElementLoop<ConstElemRange>(problem), _soln(*sys.currentSolution())
 {
 }
 
 // Splitting Constructor
 ComputeUserObjectsThread::ComputeUserObjectsThread(ComputeUserObjectsThread & x, Threads::split)
-  : ThreadedElementLoop<ConstElemRange>(x._fe_problem),
-    _soln(x._soln),
-    _elemental_user_objects(x._elemental_user_objects),
-    _side_user_objects(x._side_user_objects),
-    _internal_side_user_objects(x._internal_side_user_objects)
+  : ThreadedElementLoop<ConstElemRange>(x._fe_problem), _soln(x._soln)
 {
 }
 
@@ -50,21 +37,37 @@ ComputeUserObjectsThread::~ComputeUserObjectsThread() {}
 void
 ComputeUserObjectsThread::subdomainChanged()
 {
+  // for the current thread get block objects for the current subdomain and *all* side objects
+  std::vector<UserObject *> objs;
+  querySubdomain(Interfaces::ElementUserObject | Interfaces::InternalSideUserObject, objs);
+
+  std::vector<UserObject *> side_objs;
+  _fe_problem.theWarehouse()
+      .build()
+      .thread(_tid)
+      .interfaces(Interfaces::SideUserObject)
+      .queryInto(side_objs);
+
+  objs.insert(objs.begin(), side_objs.begin(), side_objs.end());
+
+  // collect dependenciesand run subdomain setup
   _fe_problem.subdomainSetup(_subdomain, _tid);
 
   std::set<MooseVariableFEBase *> needed_moose_vars;
-  _elemental_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
-  _side_user_objects.updateBoundaryVariableDependency(needed_moose_vars, _tid);
-  _internal_side_user_objects.updateBlockVariableDependency(_subdomain, needed_moose_vars, _tid);
-
   std::set<unsigned int> needed_mat_props;
-  _elemental_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
-  _side_user_objects.updateBoundaryMatPropDependency(needed_mat_props, _tid);
-  _internal_side_user_objects.updateBlockMatPropDependency(_subdomain, needed_mat_props, _tid);
+  for (const auto obj : objs)
+  {
+    if (!obj->enabled())
+      continue;
 
-  _elemental_user_objects.subdomainSetup(_subdomain, _tid);
-  _side_user_objects.subdomainSetup(_tid);
-  _internal_side_user_objects.subdomainSetup(_subdomain, _tid);
+    const auto & mv_deps = obj->getMooseVariableDependencies();
+    needed_moose_vars.insert(mv_deps.begin(), mv_deps.end());
+
+    auto & mp_deps = obj->getMatPropDependencies();
+    needed_mat_props.insert(mp_deps.begin(), mp_deps.end());
+
+    obj->subdomainSetup();
+  }
 
   _fe_problem.setActiveElementalMooseVariables(needed_moose_vars, _tid);
   _fe_problem.setActiveMaterialProperties(needed_mat_props, _tid);
@@ -110,9 +113,6 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
 void
 ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id)
 {
-  if (!_side_user_objects.hasActiveBoundaryObjects(bnd_id, _tid))
-    return;
-
   _fe_problem.reinitElemFace(elem, side, bnd_id, _tid);
 
   // Set up Sentinel class so that, even if reinitMaterialsFace() throws, we
