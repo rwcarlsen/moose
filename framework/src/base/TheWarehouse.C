@@ -107,10 +107,8 @@ public:
             passes = cond.value == d->variable;
             break;
           case AttributeId::Interfaces:
-            passes = cond.value & d->interfaces; // check bit in bitmask
-            break;
-          case AttributeId::Interfaces:
-            passes = cond.value & d->interfaces; // check bit in bitmask
+            passes = static_cast<unsigned int>(cond.value) &
+                     static_cast<unsigned int>(d->interfaces); // check bit in bitmask
             break;
           // TODO: delete this case later - it is a temporary hack for dealing with inter-system
           // dependencies:
@@ -327,20 +325,21 @@ TheWarehouse::readAttribs(const MooseObject * obj,
 
   // clang-format off
   unsigned int imask = 0;
-  imask |= (int)Interfaces::UserObject             * (dynamic_cast<const UserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::ElementUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::SideUserObject         * (dynamic_cast<const SideUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::InternalSideUserObject * (dynamic_cast<const InternalSideUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::NodalUserObject        * (dynamic_cast<const NodalUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::GeneralUserObject      * (dynamic_cast<const GeneralUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::ShapeUserObject        * (dynamic_cast<const ShapeUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::ShapeElementUserObject * (dynamic_cast<const ShapeElementUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::ShapeSideUserObject    * (dynamic_cast<const ShapeSideUserObject *>(obj) != nullptr);
-  imask |= (int)Interfaces::NonlocalKernel         * (dynamic_cast<const NonlocalKernel *>(obj) != nullptr);
-  imask |= (int)Interfaces::NonlocalIntegratedBC   * (dynamic_cast<const NonlocalIntegratedBC *>(obj) != nullptr);
-  imask |= (int)Interfaces::InternalSideIndicator  * (dynamic_cast<const InternalSideIndicator *>(obj) != nullptr);
-  imask |= (int)Interfaces::TransientMultiApp      * (dynamic_cast<const TransientMultiApp *>(obj) != nullptr);
-  imask |= (int)Interfaces::MultiAppTransfer       * (dynamic_cast<const MultiAppTransfer *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::UserObject             * (dynamic_cast<const UserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::ElementUserObject      * (dynamic_cast<const ElementUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::SideUserObject         * (dynamic_cast<const SideUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::InternalSideUserObject * (dynamic_cast<const InternalSideUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::NodalUserObject        * (dynamic_cast<const NodalUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::GeneralUserObject      * (dynamic_cast<const GeneralUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::ShapeUserObject        * (dynamic_cast<const ShapeUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::ShapeElementUserObject * (dynamic_cast<const ShapeElementUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::ShapeSideUserObject    * (dynamic_cast<const ShapeSideUserObject *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::Postprocessor          * (dynamic_cast<const Postprocessor *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::NonlocalKernel         * (dynamic_cast<const NonlocalKernel *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::NonlocalIntegratedBC   * (dynamic_cast<const NonlocalIntegratedBC *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::InternalSideIndicator  * (dynamic_cast<const InternalSideIndicator *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::TransientMultiApp      * (dynamic_cast<const TransientMultiApp *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::MultiAppTransfer       * (dynamic_cast<const MultiAppTransfer *>(obj) != nullptr);
   attribs.push_back({AttributeId::Interfaces, static_cast<int>(imask), ""});
   // clang-format on
 

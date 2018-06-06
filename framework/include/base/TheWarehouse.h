@@ -46,21 +46,28 @@ enum class AttributeId
 
 enum class Interfaces
 {
-  ElementUserObject,
-  SideUserObject,
-  InternalSideUserObject,
-  NodalUserObject,
-  GeneralUserObject,
-  ShapeUserObject,
-  ShapeElementUserObject,
-  ShapeSideUserObject,
-  UserObject,
-  NonlocalKernel,
-  NonlocalIntegratedBC,
-  InternalSideIndicator,
-  TransientMultiApp,
-  MultiAppTransfer,
-  Max, // This must be last
+  ElementUserObject = 1 << 1,
+  SideUserObject = 1 << 2,
+  InternalSideUserObject = 1 << 3,
+  NodalUserObject = 1 << 4,
+  GeneralUserObject = 1 << 5,
+  ShapeUserObject = 1 << 6,
+  ShapeElementUserObject = 1 << 7,
+  ShapeSideUserObject = 1 << 8,
+  UserObject = 1 << 9,
+  Postprocessor = 1 << 10,
+  NonlocalKernel = 1 << 11,
+  NonlocalIntegratedBC = 1 << 12,
+  InternalSideIndicator = 1 << 13,
+  TransientMultiApp = 1 << 14,
+  MultiAppTransfer = 1 << 15
+};
+
+// enable bitwise operators
+template <>
+struct enable_bitmask_operators<Interfaces>
+{
+  static constexpr bool enable = true;
 };
 
 struct Attribute
@@ -114,6 +121,16 @@ public:
       _attribs.push_back({AttributeId::Interfaces, (int)ifaces, ""});
       return *this;
     }
+    Builder subdomain(int id)
+    {
+      _attribs.push_back({AttributeId::Subdomain, id, ""});
+      return *this;
+    }
+    Builder boundary(int id)
+    {
+      _attribs.push_back({AttributeId::Boundary, id, ""});
+      return *this;
+    }
     Builder exec_on(int on)
     {
       _attribs.push_back({AttributeId::ExecOn, on, ""});
@@ -140,7 +157,7 @@ public:
     int prepare() { return _w.prepare(_attribs); }
     std::vector<Attribute> attribs() { return _attribs; }
     template <typename T>
-    std::vector<T> & queryInto(std::vector<T> & results)
+    int queryInto(std::vector<T *> & results)
     {
       return _w.queryInto(_attribs, results);
     }
@@ -162,18 +179,19 @@ public:
   const std::vector<MooseObject *> query(int query_id);
 
   template <typename T>
-  std::vector<T> & queryInto(const std::vector<Attribute> & conds, std::vector<T> & results)
+  int queryInto(const std::vector<Attribute> & conds, std::vector<T *> & results)
   {
     int query_id = -1;
     if (_query_cache.count(conds) == 0)
       query_id = prepare(conds);
     else
       query_id = _query_cache[conds];
-    return queryInto(query_id, results);
+    queryInto(query_id, results);
+    return query_id;
   }
 
   template <typename T>
-  std::vector<T> & queryInto(int query_id, std::vector<T> & results)
+  std::vector<T *> & queryInto(int query_id, std::vector<T *> & results)
   {
     auto & objs = query(query_id);
     results.resize(objs.size());
@@ -181,7 +199,7 @@ public:
     {
       auto obj = objs[i];
       assert(dynamic_cast<T *>(obj));
-      results[i] = static_cast<T *>(obj);
+      results[i] = reinterpret_cast<T *>(obj);
     }
     return results;
   }
