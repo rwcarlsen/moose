@@ -887,8 +887,8 @@ FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
   {
     if (!uo->enabled())
       continue;
-    _calculate_jacobian_in_uo = shape_side_uo->computeJacobianFlag();
-    const std::set<MooseVariableFEBase *> & mv_deps = shape_side_uo->jacobianMooseVariables();
+    _calculate_jacobian_in_uo = uo->computeJacobianFlag();
+    const std::set<MooseVariableFEBase *> & mv_deps = uo->jacobianMooseVariables();
     uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
   }
 
@@ -2887,9 +2887,9 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     IfEnabled(obj) obj->initialize();
 
   // Execute Elemental/Side/InternalSideUserObjects
-  if (elemental.hasActiveObjects() || side.hasActiveObjects() || internal_side.hasActiveObjects())
+  if (!userobjs.empty())
   {
-    ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase(), elemental, side, internal_side);
+    ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase());
     Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cppt);
   }
 
@@ -2914,7 +2914,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     obj->finalize();
 
   std::vector<Postprocessor *> pps;
-  w.build().system("UserObject").thread(0).interfaces(Interfaces::PostProcessor).queryInto(pps);
+  w.build().system("UserObject").thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->name(), pp->getValue());
 

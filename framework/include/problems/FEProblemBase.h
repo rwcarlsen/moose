@@ -72,6 +72,7 @@ class Sampler;
 class KernelBase;
 class IntegratedBCBase;
 class LineSearch;
+class UserObject;
 
 // libMesh forward declarations
 namespace libMesh
@@ -654,7 +655,7 @@ public:
   {
     std::vector<T *> objs;
     theWarehouse().build().thread(tid).name(name).queryInto(objs);
-    if (objs.empty() || !objs[0].enabled())
+    if (objs.empty() || !objs[0]->enabled())
       mooseError("Unable to find user object with name '" + name + "'");
     return *(objs[0]);
   }
@@ -1452,7 +1453,7 @@ public:
 
   const VectorPostprocessorData & getVectorPostprocessorData() const;
 
-  inline TheWarehouse & theWarehouse() { return _app.theWarehouse(); }
+  inline TheWarehouse & theWarehouse() const { return _app.theWarehouse(); }
 
 protected:
   MooseMesh & _mesh;
