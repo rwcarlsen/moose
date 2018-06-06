@@ -57,11 +57,51 @@ private:
         .queryInto(results);
   }
   template <typename T>
-  TheWarehouse::Builder queryBoundary(Interfaces iface, BoundryID bnd, std::vector<T> & results)
+  TheWarehouse::Builder queryBoundary(Interfaces iface, BoundaryID bnd, std::vector<T> & results)
   {
     _fe_problem.theWarehouse().build().thread(_tid).boundary(bnd).interfaces(iface).queryInto(
         results);
   }
 };
+
+// determine when we need to run user objects based on whether any initial conditions or aux
+// kernels depend on the user objects.  If so we need to run them either before ics, before aux
+// kernels, or after aux kernels (if nothing depends on them).  Mark/store this information as
+// attributes in the warehouse for later reference.
+template <typename T>
+void
+groupUserObjects(TheWarehouse & w,
+                 const std::vector<T *> & objs,
+                 const std::set<std::string> & ic_deps,
+                 const std::set<std::string> & aux_deps)
+{
+  // Notes about how this information is used later during the simulation:
+  // We only need to run pre-ic objects for their "initial" exec flag time (not the others).
+  //
+  // For pre/post aux objects:
+  //
+  //     If an object was not run as a pre-ic object or it is a pre-ic object and
+  //     shouldDuplicateInitialExecution returns true:
+  //         * run the object at all its exec flag times.
+  //     Else
+  //         * run the object at all its exec flag times *except* "initial"
+  //
+  for (const auto obj : objs)
+  {
+    std::vector<Attribute> attribs;
+    auto b = w.build();
+
+    if (ic_deps.count(obj->name()) > 0)
+      b.pre_ic(true);
+
+    if ((obj->isParamValid("force_preaux") && obj->template getParam<bool>("force_preaux")) ||
+        aux_deps.count(obj->name()) > 0 || ic_deps.count(obj->name()) > 0)
+      b.pre_aux(true);
+    else
+      b.pre_aux(false);
+
+    w.update(obj, b.attribs());
+  }
+}
 
 #endif // COMPUTEUSEROBJECTSTHREAD_H

@@ -60,11 +60,17 @@ ComputeUserObjectsThread::subdomainChanged()
     if (!obj->enabled())
       continue;
 
-    const auto & mv_deps = obj->getMooseVariableDependencies();
-    needed_moose_vars.insert(mv_deps.begin(), mv_deps.end());
+    auto v_obj = dynamic_cast<MooseVariableDependencyInterface *>(obj);
+    if (!v_obj)
+      mooseError("robert wrote broken code");
+    const auto & v_deps = v_obj->getMooseVariableDependencies();
+    needed_moose_vars.insert(v_deps.begin(), v_deps.end());
 
-    auto & mp_deps = obj->getMatPropDependencies();
-    needed_mat_props.insert(mp_deps.begin(), mp_deps.end());
+    auto m_obj = dynamic_cast<MaterialPropertyInterface *>(obj);
+    if (!m_obj)
+      mooseError("robert wrote broken code again");
+    auto & m_deps = m_obj->getMatPropDependencies();
+    needed_mat_props.insert(m_deps.begin(), m_deps.end());
 
     obj->subdomainSetup();
   }
@@ -87,7 +93,7 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
 
   std::vector<UserObject *> userobjs;
   querySubdomain(Interfaces::ElementUserObject, userobjs);
-  for (const auto & uo : userobjects)
+  for (const auto & uo : userobjs)
     IfEnabled(uo) uo->execute();
 
   // UserObject Jacobians
@@ -123,7 +129,7 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
 
   std::vector<UserObject *> userobjs;
   queryBoundary(Interfaces::SideUserObject, bnd_id, userobjs);
-  for (const auto & uo : objects)
+  for (const auto & uo : userobjs)
     IfEnabled(uo) uo->execute();
 
   // UserObject Jacobians
@@ -175,7 +181,7 @@ ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
   SwapBackSentinel neighbor_sentinel(_fe_problem, &FEProblem::swapBackMaterialsNeighbor, _tid);
   _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
 
-  for (const auto & uo : userobjects)
+  for (const auto & uo : userobjs)
     if (uo->enabled() && (!uo->blockRestricted() || uo->hasBlocks(neighbor->subdomain_id())))
       uo->execute();
 }
