@@ -79,7 +79,6 @@ public:
 
   virtual std::vector<int> query(const std::vector<Attribute> & conds) override
   {
-    std::lock_guard<std::mutex> l(_mutex);
     std::vector<int> objs;
     for (unsigned int i = 0; i < _data.size(); i++)
     {
@@ -211,7 +210,7 @@ private:
           d.thread = attrib.value;
           break;
         case AttributeId::Name:
-          d.name = attrib.value;
+          d.name = attrib.strvalue;
           break;
         case AttributeId::System:
           d.system = attrib.strvalue;
@@ -272,7 +271,7 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
   int obj_id = 0;
   {
     std::lock_guard<std::mutex> lock(obj_mutex);
-    _objects.push_back(std::move(obj));
+    _objects.push_back(obj);
     obj_id = _objects.size() - 1;
     _obj_ids[obj.get()] = obj_id;
   }
