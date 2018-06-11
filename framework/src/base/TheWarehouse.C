@@ -269,10 +269,12 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 {
   std::vector<Attribute> attribs;
   readAttribs(obj.get(), system, attribs);
+  int obj_id = 0;
   {
     std::lock_guard<std::mutex> lock(obj_mutex);
     _objects.push_back(std::move(obj));
-    int obj_id = _objects.size() - 1;
+    obj_id = _objects.size() - 1;
+    _obj_ids[obj.get()] = obj_id;
   }
   _store->add(obj_id, attribs);
 }
@@ -281,9 +283,9 @@ void
 TheWarehouse::update(MooseObject * obj, const std::vector<Attribute> & extras /*={}*/)
 {
   std::vector<Attribute> attribs;
-  readAttribs(_objects[id].get(), "", attribs);
-  attribs.insert(attribs.end(), extras.begin(), exras.end());
-  _store->set(id, attribs);
+  readAttribs(obj, "", attribs);
+  attribs.insert(attribs.end(), extras.begin(), extras.end());
+  _store->set(_obj_ids[obj], attribs);
 }
 
 int
@@ -291,13 +293,13 @@ TheWarehouse::prepare(const std::vector<Attribute> & conds)
 {
   auto obj_ids = _store->query(conds);
 
-  std::lock_guard<std::mutex> lock(cache_mutex);
+  std::lock_guard<std::mutex> c_lock(cache_mutex);
   _obj_cache.push_back({});
   auto query_id = _obj_cache.size() - 1;
   auto & vec = _obj_cache.back();
-  _query_cache[query_id] = conds;
+  _query_cache[conds] = query_id;
 
-  std::lock_guard<std::mutex> lock(obj_mutex);
+  std::lock_guard<std::mutex> o_lock(obj_mutex);
   for (auto & id : obj_ids)
     vec.push_back(_objects[id].get());
 
@@ -311,6 +313,20 @@ TheWarehouse::query(int query_id)
     throw std::runtime_error("unknown query id");
   std::lock_guard<std::mutex> lock(cache_mutex);
   return _obj_cache[query_id];
+}
+
+size_t
+TheWarehouse::count(int query_id)
+{
+  if (query_id >= _obj_cache.size())
+    throw std::runtime_error("unknown query id");
+  std::lock_guard<std::mutex> lock(cache_mutex);
+  auto & objs = _obj_cache[query_id];
+  size_t count = 0;
+  for (auto obj : objs)
+    if (obj->enabled())
+      count++;
+  return count;
 }
 
 void
@@ -331,7 +347,6 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   imask |= (unsigned int)Interfaces::InternalSideUserObject * (dynamic_cast<const InternalSideUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::NodalUserObject        * (dynamic_cast<const NodalUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::GeneralUserObject      * (dynamic_cast<const GeneralUserObject *>(obj) != nullptr);
-  imask |= (unsigned int)Interfaces::ShapeUserObject        * (dynamic_cast<const ShapeUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::ShapeElementUserObject * (dynamic_cast<const ShapeElementUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::ShapeSideUserObject    * (dynamic_cast<const ShapeSideUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::Postprocessor          * (dynamic_cast<const Postprocessor *>(obj) != nullptr);

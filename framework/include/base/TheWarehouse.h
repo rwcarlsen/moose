@@ -13,6 +13,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <type_traits>
+#include <unordered_map>
 
 class MooseObject;
 class Storage;
@@ -51,11 +53,11 @@ enum class Interfaces
   InternalSideUserObject = 1 << 3,
   NodalUserObject = 1 << 4,
   GeneralUserObject = 1 << 5,
-  ShapeUserObject = 1 << 6,
-  ShapeElementUserObject = 1 << 7,
-  ShapeSideUserObject = 1 << 8,
-  UserObject = 1 << 9,
-  Postprocessor = 1 << 10,
+  ShapeElementUserObject = 1 << 6,
+  ShapeSideUserObject = 1 << 7,
+  UserObject = 1 << 8,
+  Postprocessor = 1 << 9,
+  VectorPostprocessor = 1 << 10,
   NonlocalKernel = 1 << 11,
   NonlocalIntegratedBC = 1 << 12,
   InternalSideIndicator = 1 << 13,
@@ -63,12 +65,26 @@ enum class Interfaces
   MultiAppTransfer = 1 << 15
 };
 
-// enable bitwise operators
-template <>
-struct enable_bitmask_operators<Interfaces>
+template <typename T>
+class EnumFlag
 {
-  static constexpr bool enable = true;
+public:
+  using UnderlyingType = typename std::underlying_type<T>::type;
+  EnumFlag(const T & flags) : m_flags(static_cast<UnderlyingType>(flags)) {}
+  bool operator&(T r) const { return 0 != (m_flags & static_cast<UnderlyingType>(r)); }
+  operator Interfaces() const { return Interfaces(m_flags); }
+  static const T NoFlag = static_cast<T>(0);
+
+private:
+  UnderlyingType m_flags;
 };
+template <typename T>
+EnumFlag<typename std::enable_if<std::is_same<T, Interfaces>::value, T>::type>
+operator|(T l, T r)
+{
+  return static_cast<T>(static_cast<typename EnumFlag<T>::UnderlyingType>(l) |
+                        static_cast<typename EnumFlag<T>::UnderlyingType>(r));
+}
 
 struct Attribute
 {
@@ -155,6 +171,7 @@ public:
       return *this;
     }
     int prepare() { return _w.prepare(_attribs); }
+    size_t count() { return _w.count(prepare()); }
     std::vector<Attribute> attribs() { return _attribs; }
     template <typename T>
     int queryInto(std::vector<T *> & results)
@@ -177,6 +194,8 @@ public:
   int prepare(const std::vector<Attribute> & conds);
 
   const std::vector<MooseObject *> query(int query_id);
+
+  size_t count(int query_id);
 
   template <typename T>
   int queryInto(const std::vector<Attribute> & conds, std::vector<T *> & results)
@@ -211,6 +230,7 @@ private:
 
   std::unique_ptr<Storage> _store;
   std::vector<std::shared_ptr<MooseObject>> _objects;
+  std::unordered_map<MooseObject *, int> _obj_ids;
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
   std::map<std::vector<Attribute>, int> _query_cache;
