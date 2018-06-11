@@ -806,7 +806,7 @@ FEProblemBase::timestepSetup()
     _markers.timestepSetup(tid);
   }
 
-  std::vector<SetupInterface *> userobjs;
+  std::vector<UserObject *> userobjs;
   theWarehouse().build().system("UserObject").queryInto(userobjs);
   for (auto obj : userobjs)
     IfEnabled(obj) obj->timestepSetup();
@@ -880,16 +880,37 @@ void
 FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
 {
   std::set<MooseVariableFEBase *> uo_jacobian_moose_vars;
-
-  std::vector<ShapeUserObject *> objs;
-  theWarehouse().build().interfaces(Interfaces::ShapeUserObject).thread(tid).queryInto(objs);
-  for (const auto & uo : objs)
   {
-    if (!uo->enabled())
-      continue;
-    _calculate_jacobian_in_uo = uo->computeJacobianFlag();
-    const std::set<MooseVariableFEBase *> & mv_deps = uo->jacobianMooseVariables();
-    uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
+    std::vector<ShapeElementUserObject *> objs;
+    theWarehouse()
+        .build()
+        .interfaces(Interfaces::ShapeElementUserObject)
+        .thread(tid)
+        .queryInto(objs);
+    for (const auto & uo : objs)
+    {
+      if (!uo->enabled())
+        continue;
+      _calculate_jacobian_in_uo = uo->computeJacobianFlag();
+      const std::set<MooseVariableFEBase *> & mv_deps = uo->jacobianMooseVariables();
+      uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
+    }
+  }
+  {
+    std::vector<ShapeSideUserObject *> objs;
+    theWarehouse()
+        .build()
+        .interfaces(Interfaces::ShapeElementUserObject)
+        .thread(tid)
+        .queryInto(objs);
+    for (const auto & uo : objs)
+    {
+      if (!uo->enabled())
+        continue;
+      _calculate_jacobian_in_uo = uo->computeJacobianFlag();
+      const std::set<MooseVariableFEBase *> & mv_deps = uo->jacobianMooseVariables();
+      uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
+    }
   }
 
   _uo_jacobian_moose_vars[tid].assign(uo_jacobian_moose_vars.begin(), uo_jacobian_moose_vars.end());
@@ -2603,7 +2624,7 @@ FEProblemBase::getUserObjectBase(const std::string & name) const
 {
   std::vector<UserObject *> objs;
   theWarehouse().build().thread(0).name(name).queryInto(objs);
-  if (objs.empty() || !objs[0].enabled())
+  if (objs.empty() || !(objs[0]->enabled()))
     mooseError("Unable to find user object with name '" + name + "'");
   return *(objs[0]);
 }
@@ -2864,10 +2885,15 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   Moose::perf_log.push(compute_uo_tag, "Execution");
 
   auto & w = theWarehouse();
+  TheWarehouse::Builder query = w.build().system("UserObject").exec_on(type);
+  if (group == Moose::PRE_IC)
+    query.pre_ic(true);
+  else if (group == Moose::PRE_AUX)
+    query.pre_aux(group == Moose::PRE_AUX);
 
   // Perform Residual/Jacobian setups
   std::vector<UserObject *> userobjs;
-  w.build().system("UserObject").queryInto(userobjs);
+  query.queryInto(userobjs);
 
   if (userobjs.empty())
     return;
@@ -2889,41 +2915,37 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   // Execute Elemental/Side/InternalSideUserObjects
   if (!userobjs.empty())
   {
-    ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase());
+    ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase(), query);
     Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cppt);
   }
 
   // Execute NodalUserObjects
-  if (nodal.hasActiveObjects())
+  if (w.build().interfaces(Interfaces::NodalUserObject).count() > 0)
   {
-    ComputeNodalUserObjectsThread cnppt(*this, nodal);
+    ComputeNodalUserObjectsThread cnppt(*this, query);
     Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cnppt);
   }
 
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
-  for (auto obj : userobjs)
+  for (UserObject * obj : userobjs)
   {
     if (obj->enabled() && obj->primaryThreadCopy())
-      obj->primaryThreadCopy()->threadJoin(obj);
+      obj->primaryThreadCopy()->threadJoin(*obj);
   }
 
   std::vector<UserObject *> userobjs_thread0;
-  w.build().system("UserObject").thread(0).queryInto(userobjs_thread0);
+  query.thread(0).queryInto(userobjs_thread0);
 
   for (auto obj : userobjs_thread0)
     obj->finalize();
 
   std::vector<Postprocessor *> pps;
-  w.build().system("UserObject").thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
+  query.thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
-    _pps_data.storeValue(pp->name(), pp->getValue());
+    _pps_data.storeValue(dynamic_cast<MooseObject *>(pp)->name(), pp->getValue());
 
-  std::vector<Postprocessor *> vppss;
-  w.build()
-      .system("UserObject")
-      .thread(0)
-      .interfaces(Interfaces::VectorPostprocessor)
-      .queryInto(ppss);
+  std::vector<Postprocessor *> vpps;
+  query.thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
     _vpps_data.broadcastScatterVectors(vpp->PPName());
 
@@ -5305,8 +5327,12 @@ FEProblemBase::needBoundaryMaterialOnSide(BoundaryID bnd_id, THREAD_ID tid)
 
     if (_nl->needBoundaryMaterialOnSide(bnd_id, tid) || _aux->needMaterialOnSide(bnd_id))
       _bnd_mat_side_cache[tid][bnd_id] = true;
-
-    else if (_side_user_objects.hasActiveBoundaryObjects(bnd_id, tid))
+    else if (theWarehouse()
+                 .build()
+                 .thread(tid)
+                 .interfaces(Interfaces::SideUserObject)
+                 .boundary(bnd_id)
+                 .count() > 0)
       _bnd_mat_side_cache[tid][bnd_id] = true;
   }
 
@@ -5322,7 +5348,12 @@ FEProblemBase::needSubdomainMaterialOnSide(SubdomainID subdomain_id, THREAD_ID t
 
     if (_nl->needSubdomainMaterialOnSide(subdomain_id, tid))
       _block_mat_side_cache[tid][subdomain_id] = true;
-    else if (_internal_side_user_objects.hasActiveBlockObjects(subdomain_id, tid))
+    else if (theWarehouse()
+                 .build()
+                 .thread(tid)
+                 .interfaces(Interfaces::InternalSideUserObject)
+                 .subdomain(subdomain_id)
+                 .count() > 0)
       _block_mat_side_cache[tid][subdomain_id] = true;
   }
 
