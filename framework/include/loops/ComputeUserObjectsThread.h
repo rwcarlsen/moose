@@ -28,7 +28,9 @@ class NumericVector;
 class ComputeUserObjectsThread : public ThreadedElementLoop<ConstElemRange>
 {
 public:
-  ComputeUserObjectsThread(FEProblemBase & problem, SystemBase & sys);
+  ComputeUserObjectsThread(FEProblemBase & problem,
+                           SystemBase & sys,
+                           const TheWarehouse::Builder & query);
   // Splitting Constructor
   ComputeUserObjectsThread(ComputeUserObjectsThread & x, Threads::split);
 
@@ -47,21 +49,17 @@ protected:
 
 private:
   template <typename T>
-  TheWarehouse::Builder querySubdomain(Interfaces iface, std::vector<T> & results)
+  void querySubdomain(Interfaces iface, std::vector<T> & results)
   {
-    _fe_problem.theWarehouse()
-        .build()
-        .thread(_tid)
-        .subdomain(_subdomain)
-        .interfaces(iface)
-        .queryInto(results);
+    _query.thread(_tid).subdomain(_subdomain).interfaces(iface).queryInto(results);
   }
   template <typename T>
-  TheWarehouse::Builder queryBoundary(Interfaces iface, BoundaryID bnd, std::vector<T> & results)
+  void queryBoundary(Interfaces iface, BoundaryID bnd, std::vector<T> & results)
   {
-    _fe_problem.theWarehouse().build().thread(_tid).boundary(bnd).interfaces(iface).queryInto(
-        results);
+    _query.thread(_tid).boundary(bnd).interfaces(iface).queryInto(results);
   }
+
+  TheWarehouse::Builder _query;
 };
 
 // determine when we need to run user objects based on whether any initial conditions or aux

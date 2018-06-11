@@ -21,14 +21,16 @@
 
 #include "libmesh/numeric_vector.h"
 
-ComputeUserObjectsThread::ComputeUserObjectsThread(FEProblemBase & problem, SystemBase & sys)
-  : ThreadedElementLoop<ConstElemRange>(problem), _soln(*sys.currentSolution())
+ComputeUserObjectsThread::ComputeUserObjectsThread(FEProblemBase & problem,
+                                                   SystemBase & sys,
+                                                   const TheWarehouse::Builder & query)
+  : ThreadedElementLoop<ConstElemRange>(problem), _soln(*sys.currentSolution()), _query(query)
 {
 }
 
 // Splitting Constructor
 ComputeUserObjectsThread::ComputeUserObjectsThread(ComputeUserObjectsThread & x, Threads::split)
-  : ThreadedElementLoop<ConstElemRange>(x._fe_problem), _soln(x._soln)
+  : ThreadedElementLoop<ConstElemRange>(x._fe_problem), _soln(x._soln), _query(x._query)
 {
 }
 
@@ -42,11 +44,7 @@ ComputeUserObjectsThread::subdomainChanged()
   querySubdomain(Interfaces::ElementUserObject | Interfaces::InternalSideUserObject, objs);
 
   std::vector<UserObject *> side_objs;
-  _fe_problem.theWarehouse()
-      .build()
-      .thread(_tid)
-      .interfaces(Interfaces::SideUserObject)
-      .queryInto(side_objs);
+  _query.thread(_tid).interfaces(Interfaces::SideUserObject).queryInto(side_objs);
 
   objs.insert(objs.begin(), side_objs.begin(), side_objs.end());
 
