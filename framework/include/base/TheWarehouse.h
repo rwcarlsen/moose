@@ -15,6 +15,7 @@
 #include <vector>
 #include <type_traits>
 #include <unordered_map>
+#include <iostream>
 
 class MooseObject;
 class Storage;
@@ -212,6 +213,7 @@ public:
   template <typename T>
   std::vector<T *> & queryInto(int query_id, std::vector<T *> & results)
   {
+    std::cout << "    * querying query_id=" << query_id << "\n";
     auto & objs = query(query_id);
     results.resize(objs.size());
     for (unsigned int i = 0; i < objs.size(); i++)

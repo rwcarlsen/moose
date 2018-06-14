@@ -79,6 +79,7 @@ public:
 
   virtual std::vector<int> query(const std::vector<Attribute> & conds) override
   {
+    std::cout << "query internals:\n";
     std::vector<int> objs;
     for (unsigned int i = 0; i < _data.size(); i++)
     {
@@ -87,6 +88,7 @@ public:
         std::lock_guard<std::mutex> l(_mutex);
         d = &_data[i];
       }
+      std::cout << "    checking object " << i << " named " << d->name << "\n";
 
       bool passes = true;
       for (auto & cond : conds)
@@ -302,6 +304,7 @@ TheWarehouse::prepare(const std::vector<Attribute> & conds)
   for (auto & id : obj_ids)
     vec.push_back(_objects[id].get());
 
+  std::cout << "prepared query " << query_id << "\n";
   return query_id;
 }
 
@@ -335,6 +338,8 @@ TheWarehouse::readAttribs(const MooseObject * obj,
 {
   if (!system.empty())
     attribs.push_back({AttributeId::System, 0, system});
+  std::cout << "storing user object with name " << obj->name() << " in thread "
+            << obj->getParam<THREAD_ID>("_tid") << "\n";
   attribs.push_back({AttributeId::Name, 0, obj->name()});
   attribs.push_back({AttributeId::Thread, static_cast<int>(obj->getParam<THREAD_ID>("_tid")), ""});
 

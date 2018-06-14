@@ -2624,6 +2624,7 @@ FEProblemBase::getUserObjectBase(const std::string & name) const
 {
   std::vector<UserObject *> objs;
   theWarehouse().build().thread(0).name(name).queryInto(objs);
+  std::cout << "looking2 for " << name << ", found " << objs.size() << " objects\n";
   if (objs.empty() || !(objs[0]->enabled()))
     mooseError("Unable to find user object with name '" + name + "'");
   return *(objs[0]);
