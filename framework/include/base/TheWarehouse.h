@@ -214,13 +214,13 @@ public:
   std::vector<T *> & queryInto(int query_id, std::vector<T *> & results)
   {
     std::cout << "    * querying query_id=" << query_id << "\n";
-    auto & objs = query(query_id);
+    auto objs = query(query_id);
     results.resize(objs.size());
     for (unsigned int i = 0; i < objs.size(); i++)
     {
       auto obj = objs[i];
       assert(dynamic_cast<T *>(obj));
-      results[i] = reinterpret_cast<T *>(obj);
+      results[i] = dynamic_cast<T *>(obj);
     }
     return results;
   }

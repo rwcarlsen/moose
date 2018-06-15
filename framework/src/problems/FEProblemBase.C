@@ -898,11 +898,7 @@ FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
   }
   {
     std::vector<ShapeSideUserObject *> objs;
-    theWarehouse()
-        .build()
-        .interfaces(Interfaces::ShapeElementUserObject)
-        .thread(tid)
-        .queryInto(objs);
+    theWarehouse().build().interfaces(Interfaces::ShapeSideUserObject).thread(tid).queryInto(objs);
     for (const auto & uo : objs)
     {
       if (!uo->enabled())
