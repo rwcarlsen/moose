@@ -2877,10 +2877,6 @@ FEProblemBase::computeAuxiliaryKernels(const ExecFlagType & type)
 void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
-  // Start the timer here since we have at least one active user object
-  std::string compute_uo_tag = "computeUserObjects(" + Moose::stringify(type) + ")";
-  Moose::perf_log.push(compute_uo_tag, "Execution");
-
   auto & w = theWarehouse();
   TheWarehouse::Builder query = w.build().system("UserObject").exec_on(type);
   if (group == Moose::PRE_IC)
@@ -2894,6 +2890,10 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
 
   if (userobjs.empty())
     return;
+
+  // Start the timer here since we have at least one active user object
+  std::string compute_uo_tag = "computeUserObjects(" + Moose::stringify(type) + ")";
+  Moose::perf_log.push(compute_uo_tag, "Execution");
 
   if (type == EXEC_LINEAR)
   {
