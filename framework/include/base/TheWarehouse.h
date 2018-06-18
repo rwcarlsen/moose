@@ -118,6 +118,7 @@ public:
   {
   public:
     Builder(TheWarehouse & w) : _w(w) {}
+    Builder clone() const { return Builder(*this); }
     Builder thread(int tid)
     {
       _attribs.push_back({AttributeId::Thread, tid, ""});

@@ -51,15 +51,15 @@ private:
   template <typename T>
   void querySubdomain(Interfaces iface, std::vector<T> & results)
   {
-    _query.thread(_tid).subdomain(_subdomain).interfaces(iface).queryInto(results);
+    _query.clone().thread(_tid).subdomain(_subdomain).interfaces(iface).queryInto(results);
   }
   template <typename T>
   void queryBoundary(Interfaces iface, BoundaryID bnd, std::vector<T> & results)
   {
-    _query.thread(_tid).boundary(bnd).interfaces(iface).queryInto(results);
+    _query.clone().thread(_tid).boundary(bnd).interfaces(iface).queryInto(results);
   }
 
-  TheWarehouse::Builder _query;
+  const TheWarehouse::Builder _query;
 };
 
 // determine when we need to run user objects based on whether any initial conditions or aux

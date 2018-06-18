@@ -2939,7 +2939,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   std::vector<Postprocessor *> pps;
   query.thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
-    _pps_data.storeValue(dynamic_cast<MooseObject *>(pp)->name(), pp->getValue());
+    _pps_data.storeValue(pp->PPName(), pp->getValue());
 
   std::vector<Postprocessor *> vpps;
   query.thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);

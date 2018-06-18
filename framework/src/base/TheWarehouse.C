@@ -32,6 +32,72 @@
 
 #include <memory>
 
+std::string
+printAttribs(const std::vector<Attribute> & attribs)
+{
+  std::string s = "attrib_set:\n";
+  for (auto & attrib : attribs)
+  {
+    s += "    ";
+    switch (attrib.id)
+    {
+      case AttributeId::Thread:
+        s += "Thread=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::Name:
+        s += "Name=";
+        s += attrib.strvalue;
+        break;
+      case AttributeId::System:
+        s += "System=";
+        s += attrib.strvalue;
+        break;
+      case AttributeId::Variable:
+        s += "Variable=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::Interfaces:
+        s += "Interfaces=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::PreIC:
+        s += "PreIC=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::PreAux:
+        s += "PreAux=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::Boundary:
+        s += "Boundary=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::Subdomain:
+        s += "Subdomain=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::ExecOn:
+        s += "ExecOn=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::VectorTag:
+        s += "VectorTag=";
+        s += std::to_string(attrib.value);
+        break;
+      case AttributeId::MatrixTag:
+        s += "MatrixTag=";
+        s += std::to_string(attrib.value);
+        break;
+      default:
+        throw std::runtime_error("unknown AttributeId " +
+                                 std::to_string(static_cast<int>(attrib.id)));
+    }
+    s += "\n";
+  }
+  return s;
+}
+
 class Storage
 {
 public:

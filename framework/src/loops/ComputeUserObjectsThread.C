@@ -44,7 +44,7 @@ ComputeUserObjectsThread::subdomainChanged()
   querySubdomain(Interfaces::ElementUserObject | Interfaces::InternalSideUserObject, objs);
 
   std::vector<UserObject *> side_objs;
-  _query.thread(_tid).interfaces(Interfaces::SideUserObject).queryInto(side_objs);
+  _query.clone().thread(_tid).interfaces(Interfaces::SideUserObject).queryInto(side_objs);
 
   objs.insert(objs.begin(), side_objs.begin(), side_objs.end());
 
