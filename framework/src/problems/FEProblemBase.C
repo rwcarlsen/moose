@@ -2881,7 +2881,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   TheWarehouse::Builder query = w.build().system("UserObject").exec_on(type);
   if (group == Moose::PRE_IC)
     query.pre_ic(true);
-  else if (group == Moose::PRE_AUX)
+  else
     query.pre_aux(group == Moose::PRE_AUX);
 
   // Perform Residual/Jacobian setups
@@ -2924,7 +2924,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
-  for (UserObject * obj : userobjs)
+  for (auto obj : userobjs)
   {
     if (obj->enabled() && obj->primaryThreadCopy())
       obj->primaryThreadCopy()->threadJoin(*obj);
@@ -2937,12 +2937,12 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
     obj->finalize();
 
   std::vector<Postprocessor *> pps;
-  query.thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
+  query.interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->PPName(), pp->getValue());
 
   std::vector<Postprocessor *> vpps;
-  query.thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
+  query.interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
     _vpps_data.broadcastScatterVectors(vpp->PPName());
 

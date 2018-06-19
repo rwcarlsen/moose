@@ -455,7 +455,13 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   auto sup = dynamic_cast<const SetupInterface *>(obj);
   if (sup)
   {
-    for (auto & on : sup->getExecuteOnEnum().items())
-      attribs.push_back({AttributeId::ExecOn, on, ""});
+    auto e = sup->getExecuteOnEnum();
+    for (auto & on : e.items())
+    {
+      // std::cout << "    reading exec_on attrib " << on << "=" << e.contains(on) << "\n";
+
+      if (e.contains(on))
+        attribs.push_back({AttributeId::ExecOn, on, ""});
+    }
   }
 }
