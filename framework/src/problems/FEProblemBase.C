@@ -2939,15 +2939,32 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   query.thread(0).queryInto(userobjs_thread0);
 
   for (auto obj : userobjs_thread0)
+  {
+    if (dynamic_cast<GeneralUserObject *>(obj))
+      continue; // general userobjs are finalized later.
+    obj->finalize();
+  }
+
+  // TODO: general user objects use to be initialized, executed, and finalized (all three)
+  // starting *after* all other user objects were finialized.  Now they are initialized with all
+  // the other objects, but not executed and finalized until after the others are finalized.  Is
+  // this okay?
+
+  // Execute GeneralUserObjects
+  std::vector<GeneralUserObject *> genobjs;
+  query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
+  for (auto obj : genobjs)
+    obj->execute();
+  for (auto obj : genobjs)
     obj->finalize();
 
   std::vector<Postprocessor *> pps;
-  query.interfaces(Interfaces::Postprocessor).queryInto(pps);
+  query.clone().interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->PPName(), pp->getValue());
 
   std::vector<Postprocessor *> vpps;
-  query.interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
+  query.clone().interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
     _vpps_data.broadcastScatterVectors(vpp->PPName());
 
