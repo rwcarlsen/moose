@@ -2887,6 +2887,8 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   // Perform Residual/Jacobian setups
   std::vector<UserObject *> userobjs;
   query.queryInto(userobjs);
+  std::cout << "COMPUTE: time=" << _time << ", execflag=" << type << ", auxgroup=" << group
+            << ", n_userobjs=" << userobjs.size() << "\n";
 
   if (userobjs.empty())
     return;
@@ -2907,7 +2909,10 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   for (auto obj : userobjs)
+  {
+    // std::cout << "COMPUTE:     enabled=" << obj->enabled() << "\n";
     IfEnabled(obj) obj->initialize();
+  }
 
   // Execute Elemental/Side/InternalSideUserObjects
   if (!userobjs.empty())

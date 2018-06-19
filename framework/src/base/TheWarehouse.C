@@ -343,6 +343,7 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
     obj_id = _objects.size() - 1;
     _obj_ids[obj.get()] = obj_id;
   }
+  std::cout << "ADD_OBJECT " << printAttribs(attribs);
   _store->add(obj_id, attribs);
 }
 
@@ -370,7 +371,8 @@ TheWarehouse::prepare(const std::vector<Attribute> & conds)
   for (auto & id : obj_ids)
     vec.push_back(_objects[id].get());
 
-  std::cout << "prepared query " << query_id << "\n";
+  std::cout << "prepared query " << query_id << " ";
+  std::cout << printAttribs(conds);
   return query_id;
 }
 
