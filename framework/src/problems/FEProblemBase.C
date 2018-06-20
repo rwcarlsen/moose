@@ -2944,19 +2944,19 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
 
   // Execute GeneralUserObjects
   std::vector<GeneralUserObject *> genobjs;
-  query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
+  w.build().thread(0).interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
   for (auto obj : genobjs)
     obj->execute();
   for (auto obj : genobjs)
     obj->finalize();
 
   std::vector<Postprocessor *> pps;
-  query.clone().interfaces(Interfaces::Postprocessor).queryInto(pps);
+  w.build().thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->PPName(), pp->getValue());
 
   std::vector<VectorPostprocessor *> vpps;
-  query.clone().interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
+  w.build().thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
   {
     std::cout << "BROADCASTING " << vpp->PPName() << "\n";

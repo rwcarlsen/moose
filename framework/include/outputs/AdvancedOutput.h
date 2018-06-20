@@ -358,17 +358,13 @@ AdvancedOutput::initPostprocessorOrVectorPostprocessorLists(const std::string & 
   // True if the postprocessors has been limited using 'outputs' parameter
   bool has_limited_pps = false;
 
-  std::vector<MooseObject *> objs;
-  _problem_ptr->theWarehouse()
-      .build()
-      .interfaces(Interfaces::Postprocessor)
-      .thread(0)
-      .queryInto(objs);
+  std::vector<UserObject *> objs;
+  _problem_ptr->theWarehouse().build().system("UserObject").thread(0).queryInto(objs);
 
   for (const auto & obj : objs)
   {
-    auto pps = dynamic_cast<Postprocessor *>(obj);
-    if (!obj->enabled() || !pps)
+    auto pps = dynamic_cast<postprocessor_type *>(obj);
+    if (!pps)
       continue;
 
     execute_data.available.insert(pps->PPName());
