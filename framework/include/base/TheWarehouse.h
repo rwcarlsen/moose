@@ -172,11 +172,10 @@ public:
       _attribs.push_back({AttributeId::PreAux, (int)pre_aux, ""});
       return *this;
     }
-    int prepare() { return _w.prepare(_attribs); }
-    size_t count() { return _w.count(prepare()); }
+    size_t count() { return _w.count(_attribs); }
     std::vector<Attribute> attribs() { return _attribs; }
     template <typename T>
-    int queryInto(std::vector<T *> & results)
+    std::vector<T *> queryInto(std::vector<T *> & results)
     {
       return _w.queryInto(_attribs, results);
     }
@@ -192,25 +191,20 @@ public:
   /// Any attributes specified in extras overwrite/trump ones read from the object's current state.
   void update(MooseObject * obj, const std::vector<Attribute> & extras = {});
 
-  /// prepares a query and returns an associated query_id (i.e. for use with the query function).
-  int prepare(const std::vector<Attribute> & conds);
-
-  const std::vector<MooseObject *> query(int query_id);
-
-  size_t count(int query_id);
+  size_t count(const std::vector<Attribute> & conds);
 
   template <typename T>
-  int queryInto(const std::vector<Attribute> & conds, std::vector<T *> & results)
+  std::vector<T *> & queryInto(const std::vector<Attribute> & conds, std::vector<T *> & results)
   {
     int query_id = -1;
     if (_query_cache.count(conds) == 0)
       query_id = prepare(conds);
     else
       query_id = _query_cache[conds];
-    queryInto(query_id, results);
-    return query_id;
+    return queryInto(query_id, results);
   }
 
+private:
   template <typename T>
   std::vector<T *> & queryInto(int query_id, std::vector<T *> & results)
   {
@@ -226,7 +220,11 @@ public:
     return results;
   }
 
-private:
+  /// prepares a query and returns an associated query_id (i.e. for use with the query function).
+  int prepare(const std::vector<Attribute> & conds);
+
+  const std::vector<MooseObject *> query(int query_id);
+
   void readAttribs(const MooseObject * obj,
                    const std::string & system,
                    std::vector<Attribute> & attribs);

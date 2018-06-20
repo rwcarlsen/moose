@@ -345,6 +345,9 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
   }
   std::cout << "ADD_OBJECT " << printAttribs(attribs);
   _store->add(obj_id, attribs);
+
+  _obj_cache.clear();
+  _query_cache.clear();
 }
 
 void
@@ -386,8 +389,9 @@ TheWarehouse::query(int query_id)
 }
 
 size_t
-TheWarehouse::count(int query_id)
+TheWarehouse::count(const std::vector<Attribute> & conds)
 {
+  auto query_id = prepare(conds);
   if (query_id >= _obj_cache.size())
     throw std::runtime_error("unknown query id");
   std::lock_guard<std::mutex> lock(cache_mutex);
