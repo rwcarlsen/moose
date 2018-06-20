@@ -426,6 +426,7 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   imask |= (unsigned int)Interfaces::ShapeElementUserObject * (dynamic_cast<const ShapeElementUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::ShapeSideUserObject    * (dynamic_cast<const ShapeSideUserObject *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::Postprocessor          * (dynamic_cast<const Postprocessor *>(obj) != nullptr);
+  imask |= (unsigned int)Interfaces::VectorPostprocessor    * (dynamic_cast<const VectorPostprocessor *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::NonlocalKernel         * (dynamic_cast<const NonlocalKernel *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::NonlocalIntegratedBC   * (dynamic_cast<const NonlocalIntegratedBC *>(obj) != nullptr);
   imask |= (unsigned int)Interfaces::InternalSideIndicator  * (dynamic_cast<const InternalSideIndicator *>(obj) != nullptr);

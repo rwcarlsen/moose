@@ -2931,7 +2931,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
   for (auto obj : userobjs)
   {
-    if (obj->enabled() && obj->primaryThreadCopy())
+    if (obj->enabled() && obj->primaryThreadCopy() && !dynamic_cast<GeneralUserObject *>(obj))
       obj->primaryThreadCopy()->threadJoin(*obj);
   }
 
@@ -2940,7 +2940,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
 
   for (auto obj : userobjs_thread0)
   {
-    if (dynamic_cast<GeneralUserObject *>(obj))
+    if (!obj->enabled() || dynamic_cast<GeneralUserObject *>(obj))
       continue; // general userobjs are finalized later.
     obj->finalize();
   }
@@ -2954,16 +2954,16 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   std::vector<GeneralUserObject *> genobjs;
   query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
   for (auto obj : genobjs)
-    obj->execute();
+    IfEnabled(obj) obj->execute();
   for (auto obj : genobjs)
-    obj->finalize();
+    IfEnabled(obj) obj->finalize();
 
   std::vector<Postprocessor *> pps;
   query.clone().interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->PPName(), pp->getValue());
 
-  std::vector<Postprocessor *> vpps;
+  std::vector<VectorPostprocessor *> vpps;
   query.clone().interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
     _vpps_data.broadcastScatterVectors(vpp->PPName());

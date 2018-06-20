@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <iostream>
 
+#include "MooseObject.h"
+
 class MooseObject;
 class Storage;
 
@@ -193,6 +195,7 @@ public:
 
   size_t count(const std::vector<Attribute> & conds);
 
+  /// This function filters out not-enabled objects.
   template <typename T>
   std::vector<T *> & queryInto(const std::vector<Attribute> & conds, std::vector<T *> & results)
   {
@@ -205,17 +208,19 @@ public:
   }
 
 private:
+  // This function filters out not-enabled objects.
   template <typename T>
-  std::vector<T *> & queryInto(int query_id, std::vector<T *> & results)
+  std::vector<T *> & queryInto(int query_id, std::vector<T *> & results, bool show_all = false)
   {
     std::cout << "    * querying query_id=" << query_id << "\n";
     auto objs = query(query_id);
-    results.resize(objs.size());
+    results.resize(0);
     for (unsigned int i = 0; i < objs.size(); i++)
     {
       auto obj = objs[i];
       assert(dynamic_cast<T *>(obj));
-      results[i] = dynamic_cast<T *>(obj);
+      if (show_all || obj->enabled())
+        results.push_back(dynamic_cast<T *>(obj));
     }
     return results;
   }
