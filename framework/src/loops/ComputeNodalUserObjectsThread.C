@@ -47,7 +47,7 @@ ComputeNodalUserObjectsThread::onNode(ConstNodeRange::const_iterator & node_it)
     if (objs.size() > 0)
     {
       for (const auto & uo : objs)
-        IfEnabled(uo) uo->execute();
+        uo->execute();
     }
   }
 
@@ -67,7 +67,7 @@ ComputeNodalUserObjectsThread::onNode(ConstNodeRange::const_iterator & node_it)
     _query.thread(_tid).interfaces(Interfaces::NodalUserObject).subdomain(block).queryInto(objs);
 
     for (const auto & uo : objs)
-      if (uo->enabled() && (!uo->isUniqueNodeExecute() || computed.count(uo) == 0))
+      if (!uo->isUniqueNodeExecute() || computed.count(uo) == 0)
       {
         uo->execute();
         computed.insert(uo);

@@ -509,7 +509,7 @@ FEProblemBase::initialSetup()
   groupUserObjects(w, userobjs, depend_objects_ic, depend_objects_aux);
 
   for (auto obj : userobjs)
-    IfEnabled(obj) obj->initialSetup();
+    obj->initialSetup();
 
   std::vector<GeneralUserObject *> gen_objs;
   w.build().interfaces(Interfaces::GeneralUserObject).queryInto(gen_objs);
@@ -809,7 +809,7 @@ FEProblemBase::timestepSetup()
   std::vector<UserObject *> userobjs;
   theWarehouse().build().system("UserObject").queryInto(userobjs);
   for (auto obj : userobjs)
-    IfEnabled(obj) obj->timestepSetup();
+    obj->timestepSetup();
 
   // Timestep setup of output objects
   _app.getOutputWarehouse().timestepSetup();
@@ -889,8 +889,6 @@ FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
         .queryInto(objs);
     for (const auto & uo : objs)
     {
-      if (!uo->enabled())
-        continue;
       _calculate_jacobian_in_uo = uo->computeJacobianFlag();
       const std::set<MooseVariableFEBase *> & mv_deps = uo->jacobianMooseVariables();
       uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
@@ -901,8 +899,6 @@ FEProblemBase::checkUserObjectJacobianRequirement(THREAD_ID tid)
     theWarehouse().build().interfaces(Interfaces::ShapeSideUserObject).thread(tid).queryInto(objs);
     for (const auto & uo : objs)
     {
-      if (!uo->enabled())
-        continue;
       _calculate_jacobian_in_uo = uo->computeJacobianFlag();
       const std::set<MooseVariableFEBase *> & mv_deps = uo->jacobianMooseVariables();
       uo_jacobian_moose_vars.insert(mv_deps.begin(), mv_deps.end());
@@ -2621,7 +2617,7 @@ FEProblemBase::getUserObjectBase(const std::string & name) const
   std::vector<UserObject *> objs;
   theWarehouse().build().thread(0).name(name).queryInto(objs);
   std::cout << "looking2 for " << name << ", found " << objs.size() << " objects\n";
-  if (objs.empty() || !(objs[0]->enabled()))
+  if (objs.empty())
     mooseError("Unable to find user object with name '" + name + "'");
   return *(objs[0]);
 }
@@ -2900,19 +2896,16 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   if (type == EXEC_LINEAR)
   {
     for (auto obj : userobjs)
-      IfEnabled(obj) obj->residualSetup();
+      obj->residualSetup();
   }
   else if (type == EXEC_NONLINEAR)
   {
     for (auto obj : userobjs)
-      IfEnabled(obj) obj->jacobianSetup();
+      obj->jacobianSetup();
   }
 
   for (auto obj : userobjs)
-  {
-    // std::cout << "COMPUTE:     enabled=" << obj->enabled() << "\n";
-    IfEnabled(obj) obj->initialize();
-  }
+    obj->initialize();
 
   // Execute Elemental/Side/InternalSideUserObjects
   if (!userobjs.empty())
@@ -2931,7 +2924,7 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
   for (auto obj : userobjs)
   {
-    if (obj->enabled() && obj->primaryThreadCopy() && !dynamic_cast<GeneralUserObject *>(obj))
+    if (obj->primaryThreadCopy() && !dynamic_cast<GeneralUserObject *>(obj))
       obj->primaryThreadCopy()->threadJoin(*obj);
   }
 
@@ -2940,9 +2933,8 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
 
   for (auto obj : userobjs_thread0)
   {
-    if (!obj->enabled() || dynamic_cast<GeneralUserObject *>(obj))
-      continue; // general userobjs are finalized later.
-    obj->finalize();
+    if (!dynamic_cast<GeneralUserObject *>(obj))
+      obj->finalize(); // general userobjs are finalized later.
   }
 
   // TODO: general user objects use to be initialized, executed, and finalized (all three)
@@ -2954,9 +2946,9 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   std::vector<GeneralUserObject *> genobjs;
   query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
   for (auto obj : genobjs)
-    IfEnabled(obj) obj->execute();
+    obj->execute();
   for (auto obj : genobjs)
-    IfEnabled(obj) obj->finalize();
+    obj->finalize();
 
   std::vector<Postprocessor *> pps;
   query.clone().interfaces(Interfaces::Postprocessor).queryInto(pps);
@@ -2966,7 +2958,10 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   std::vector<VectorPostprocessor *> vpps;
   query.clone().interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
+  {
+    std::cout << "BROADCASTING " << vpp->PPName() << "\n";
     _vpps_data.broadcastScatterVectors(vpp->PPName());
+  }
 
   Moose::perf_log.pop(compute_uo_tag, "Execution");
 }
@@ -5006,7 +5001,7 @@ FEProblemBase::checkUserObjects()
   theWarehouse().build().interfaces(Interfaces::UserObject).queryInto(objects);
 
   for (const auto & obj : objects)
-    IfEnabled(obj) names.insert(obj->name());
+    names.insert(obj->name());
 
   // See if all referenced blocks are covered
   mesh_subdomains.insert(Moose::ANY_BLOCK_ID);

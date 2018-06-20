@@ -20,8 +20,6 @@
 class MooseApp;
 class MooseObject;
 
-#define IfEnabled(obj) if (obj->enabled())
-
 template <>
 InputParameters validParams<MooseObject>();
 

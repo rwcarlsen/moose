@@ -55,9 +55,6 @@ ComputeUserObjectsThread::subdomainChanged()
   std::set<unsigned int> needed_mat_props;
   for (const auto obj : objs)
   {
-    if (!obj->enabled())
-      continue;
-
     auto v_obj = dynamic_cast<MooseVariableDependencyInterface *>(obj);
     if (!v_obj)
       mooseError("robert wrote broken code");
@@ -92,7 +89,7 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
   std::vector<UserObject *> userobjs;
   querySubdomain(Interfaces::ElementUserObject, userobjs);
   for (const auto & uo : userobjs)
-    IfEnabled(uo) uo->execute();
+    uo->execute();
 
   // UserObject Jacobians
   std::vector<ShapeElementUserObject *> shapers;
@@ -109,7 +106,7 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
 
       _fe_problem.prepareShapes(jvar_id, _tid);
       for (const auto uo : shapers)
-        IfEnabled(uo) uo->executeJacobianWrapper(jvar_id, dof_indices);
+        uo->executeJacobianWrapper(jvar_id, dof_indices);
     }
   }
 }
@@ -128,7 +125,8 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
   std::vector<UserObject *> userobjs;
   queryBoundary(Interfaces::SideUserObject, bnd_id, userobjs);
   for (const auto & uo : userobjs)
-    IfEnabled(uo) uo->execute();
+    uo->execute();
+  std::cout << "got " << userobjs.size() << " side userobjs\n";
 
   // UserObject Jacobians
   std::vector<ShapeSideUserObject *> shapers;
@@ -146,7 +144,7 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
       _fe_problem.prepareFaceShapes(jvar_id, _tid);
 
       for (const auto & uo : shapers)
-        IfEnabled(uo) uo->executeJacobianWrapper(jvar_id, dof_indices);
+        uo->executeJacobianWrapper(jvar_id, dof_indices);
     }
   }
 }
@@ -180,7 +178,7 @@ ComputeUserObjectsThread::onInternalSide(const Elem * elem, unsigned int side)
   _fe_problem.reinitMaterialsNeighbor(neighbor->subdomain_id(), _tid);
 
   for (const auto & uo : userobjs)
-    if (uo->enabled() && (!uo->blockRestricted() || uo->hasBlocks(neighbor->subdomain_id())))
+    if (!uo->blockRestricted() || uo->hasBlocks(neighbor->subdomain_id()))
       uo->execute();
 }
 
