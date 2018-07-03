@@ -2874,33 +2874,45 @@ void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
   auto & w = theWarehouse();
+  std::vector<GeneralUserObject *> genobjs;
+  w.build().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
+
   TheWarehouse::Builder query = w.build().system("UserObject").exec_on(type);
   if (group == Moose::PRE_IC)
     query.pre_ic(true);
   else
     query.pre_aux(group == Moose::PRE_AUX);
 
-  // Perform Residual/Jacobian setups
   std::vector<UserObject *> userobjs;
   query.queryInto(userobjs);
+  auto nongen_query =
+      query.clone().interfaces(Interfaces::ElementUserObject | Interfaces::NodalUserObject |
+                               Interfaces::SideUserObject | Interfaces::InternalSideUserObject);
+  nongen_query.queryInto(userobjs);
+
   std::cout << "COMPUTE: time=" << _time << ", execflag=" << type << ", auxgroup=" << group
             << ", n_userobjs=" << userobjs.size() << "\n";
 
-  if (userobjs.empty())
+  if (userobjs.empty() && genobjs.empty())
     return;
 
   // Start the timer here since we have at least one active user object
   std::string compute_uo_tag = "computeUserObjects(" + Moose::stringify(type) + ")";
   Moose::perf_log.push(compute_uo_tag, "Execution");
 
+  // Perform Residual/Jacobian setups
   if (type == EXEC_LINEAR)
   {
     for (auto obj : userobjs)
+      obj->residualSetup();
+    for (auto obj : genobjs)
       obj->residualSetup();
   }
   else if (type == EXEC_NONLINEAR)
   {
     for (auto obj : userobjs)
+      obj->jacobianSetup();
+    for (auto obj : genobjs)
       obj->jacobianSetup();
   }
 
@@ -2924,31 +2936,21 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
   for (auto obj : userobjs)
   {
-    if (obj->primaryThreadCopy() && !dynamic_cast<GeneralUserObject *>(obj))
+    if (obj->primaryThreadCopy())
       obj->primaryThreadCopy()->threadJoin(*obj);
   }
 
   std::vector<UserObject *> userobjs_thread0;
-  query.thread(0).queryInto(userobjs_thread0);
-
+  nongen_query.thread(0).queryInto(userobjs_thread0);
   for (auto obj : userobjs_thread0)
-  {
-    if (!dynamic_cast<GeneralUserObject *>(obj))
-      obj->finalize(); // general userobjs are finalized later.
-  }
-
-  // TODO: general user objects use to be initialized, executed, and finalized (all three)
-  // starting *after* all other user objects were finialized.  Now they are initialized with all
-  // the other objects, but not executed and finalized until after the others are finalized.  Is
-  // this okay?
-
-  // Execute GeneralUserObjects
-  std::vector<GeneralUserObject *> genobjs;
-  w.build().thread(0).interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
-  for (auto obj : genobjs)
-    obj->execute();
-  for (auto obj : genobjs)
     obj->finalize();
+
+  for (auto obj : genobjs)
+  {
+    obj->initialize();
+    obj->execute();
+    obj->finalize();
+  }
 
   std::vector<Postprocessor *> pps;
   w.build().thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
