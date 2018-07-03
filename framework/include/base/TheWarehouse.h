@@ -76,18 +76,14 @@ public:
   EnumFlag(const T & flags) : m_flags(static_cast<UnderlyingType>(flags)) {}
   bool operator&(T r) const { return 0 != (m_flags & static_cast<UnderlyingType>(r)); }
   operator Interfaces() const { return Interfaces(m_flags); }
+  operator int() const { return (int)Interfaces(m_flags); }
   static const T NoFlag = static_cast<T>(0);
 
 private:
   UnderlyingType m_flags;
 };
-template <typename T>
-EnumFlag<typename std::enable_if<std::is_same<T, Interfaces>::value, T>::type>
-operator|(T l, T r)
-{
-  return static_cast<T>(static_cast<typename EnumFlag<T>::UnderlyingType>(l) |
-                        static_cast<typename EnumFlag<T>::UnderlyingType>(r));
-}
+
+Interfaces operator|(Interfaces l, Interfaces r);
 
 struct Attribute
 {

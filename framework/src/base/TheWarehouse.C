@@ -32,6 +32,12 @@
 
 #include <memory>
 
+Interfaces
+operator|(Interfaces l, Interfaces r)
+{
+  return static_cast<Interfaces>(static_cast<unsigned int>(l) | static_cast<unsigned int>(r));
+}
+
 std::string
 printAttribs(const std::vector<Attribute> & attribs)
 {
