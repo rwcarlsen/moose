@@ -337,9 +337,13 @@ TheWarehouse::~TheWarehouse(){};
 static std::mutex obj_mutex;
 static std::mutex cache_mutex;
 
+void isValid(MooseObject * obj);
+
 void
 TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 {
+  isValid(obj.get());
+
   std::vector<Attribute> attribs;
   readAttribs(obj.get(), system, attribs);
   int obj_id = 0;
@@ -456,14 +460,20 @@ TheWarehouse::readAttribs(const MooseObject * obj,
   auto blk = dynamic_cast<const BlockRestrictable *>(obj);
   if (blk)
   {
-    for (auto id : blk->blockIDs())
-      attribs.push_back({AttributeId::Subdomain, id, ""});
+    if (blk->blockRestricted())
+      for (auto id : blk->blockIDs())
+        attribs.push_back({AttributeId::Subdomain, id, ""});
+    else
+      attribs.push_back({AttributeId::Subdomain, Moose::ANY_BLOCK_ID, ""});
   }
   auto bnd = dynamic_cast<const BoundaryRestrictable *>(obj);
-  if (bnd)
+  if (bnd && bnd->boundaryRestricted())
   {
-    for (auto & bound : bnd->boundaryIDs())
-      attribs.push_back({AttributeId::Boundary, bound, ""});
+    if (bnd->boundaryRestricted())
+      for (auto & bound : bnd->boundaryIDs())
+        attribs.push_back({AttributeId::Boundary, bound, ""});
+    else
+      attribs.push_back({AttributeId::Boundary, Moose::ANY_BOUNDARY_ID, ""});
   }
   auto sup = dynamic_cast<const SetupInterface *>(obj);
   if (sup)
@@ -476,5 +486,38 @@ TheWarehouse::readAttribs(const MooseObject * obj,
       if (e.contains(on))
         attribs.push_back({AttributeId::ExecOn, on, ""});
     }
+  }
+}
+
+void
+isValid(MooseObject * obj)
+{
+  auto blk = dynamic_cast<BlockRestrictable *>(obj);
+  if (!blk)
+    return;
+
+  // Check variables
+  auto c_ptr = dynamic_cast<Coupleable *>(obj);
+  if (c_ptr)
+    for (MooseVariableFEBase * var : c_ptr->getCoupledMooseVars())
+      blk->checkVariable(*var);
+
+  const InputParameters & parameters = obj->parameters();
+
+  SubProblem & problem = *parameters.get<SubProblem *>("_subproblem");
+
+  THREAD_ID tid = parameters.get<THREAD_ID>("_tid");
+
+  if (parameters.isParamValid("variable"))
+  {
+    // Try the scalar version first
+    std::string variable_name = parameters.getMooseType("variable");
+    if (variable_name == "")
+      // When using vector variables, we are only going to use the first one in the list at the
+      // interface level...
+      variable_name = parameters.getVecMooseType("variable")[0];
+
+    blk->checkVariable(problem.getVariable(
+        tid, variable_name, Moose::VarKindType::VAR_ANY, Moose::VarFieldType::VAR_FIELD_ANY));
   }
 }

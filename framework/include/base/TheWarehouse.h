@@ -51,14 +51,14 @@ enum class AttributeId
 
 enum class Interfaces
 {
-  ElementUserObject = 1 << 1,
-  SideUserObject = 1 << 2,
-  InternalSideUserObject = 1 << 3,
-  NodalUserObject = 1 << 4,
-  GeneralUserObject = 1 << 5,
-  ShapeElementUserObject = 1 << 6,
-  ShapeSideUserObject = 1 << 7,
-  UserObject = 1 << 8,
+  UserObject = 1 << 1,
+  ElementUserObject = 1 << 2,
+  SideUserObject = 1 << 3,
+  InternalSideUserObject = 1 << 4,
+  NodalUserObject = 1 << 5,
+  GeneralUserObject = 1 << 6,
+  ShapeElementUserObject = 1 << 7,
+  ShapeSideUserObject = 1 << 8,
   Postprocessor = 1 << 9,
   VectorPostprocessor = 1 << 10,
   NonlocalKernel = 1 << 11,

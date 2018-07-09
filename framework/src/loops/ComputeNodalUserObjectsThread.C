@@ -43,12 +43,13 @@ ComputeNodalUserObjectsThread::onNode(ConstNodeRange::const_iterator & node_it)
   for (const auto & bnd : nodeset_ids)
   {
     std::vector<NodalUserObject *> objs;
-    _query.thread(_tid).interfaces(Interfaces::NodalUserObject).boundary(bnd).queryInto(objs);
-    if (objs.size() > 0)
-    {
-      for (const auto & uo : objs)
-        uo->execute();
-    }
+    _query.clone()
+        .thread(_tid)
+        .interfaces(Interfaces::NodalUserObject)
+        .boundary(bnd)
+        .queryInto(objs);
+    for (const auto & uo : objs)
+      uo->execute();
   }
 
   // Block Restricted
@@ -64,7 +65,11 @@ ComputeNodalUserObjectsThread::onNode(ConstNodeRange::const_iterator & node_it)
   for (const auto & block : block_ids)
   {
     std::vector<NodalUserObject *> objs;
-    _query.thread(_tid).interfaces(Interfaces::NodalUserObject).subdomain(block).queryInto(objs);
+    _query.clone()
+        .thread(_tid)
+        .interfaces(Interfaces::NodalUserObject)
+        .subdomain(block)
+        .queryInto(objs);
 
     for (const auto & uo : objs)
       if (!uo->isUniqueNodeExecute() || computed.count(uo) == 0)

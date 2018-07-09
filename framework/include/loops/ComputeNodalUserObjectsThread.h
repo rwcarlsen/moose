@@ -32,7 +32,7 @@ public:
   void join(const ComputeNodalUserObjectsThread & /*y*/);
 
 private:
-  TheWarehouse::Builder _query;
+  const TheWarehouse::Builder _query;
 };
 
 #endif // COMPUTENODALUserObjectsTHREAD_H
