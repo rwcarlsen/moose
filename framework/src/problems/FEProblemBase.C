@@ -511,6 +511,8 @@ FEProblemBase::initialSetup()
   for (auto obj : userobjs)
     obj->initialSetup();
 
+  // TODO: this sorting use to occur *before* initialSetup was called on general user objects -
+  // now it is occuring after - fix this.
   std::vector<GeneralUserObject *> gen_objs;
   w.build().interfaces(Interfaces::GeneralUserObject).queryInto(gen_objs);
   try
@@ -2874,14 +2876,15 @@ void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
   auto & w = theWarehouse();
-  std::vector<GeneralUserObject *> genobjs;
-  w.build().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
 
   TheWarehouse::Builder query = w.build().system("UserObject").exec_on(type);
   if (group == Moose::PRE_IC)
     query.pre_ic(true);
   else
     query.pre_aux(group == Moose::PRE_AUX);
+
+  std::vector<GeneralUserObject *> genobjs;
+  query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
 
   std::vector<UserObject *> userobjs;
   query.queryInto(userobjs);
@@ -2927,13 +2930,13 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   // Execute NodalUserObjects
-  if (w.build().interfaces(Interfaces::NodalUserObject).count() > 0)
+  if (query.clone().interfaces(Interfaces::NodalUserObject).count() > 0)
   {
     ComputeNodalUserObjectsThread cnppt(*this, query);
     Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cnppt);
   }
 
-  // Finalize, threadJoin, and update PP values of Elemental/Side/InternalSideUserObjects
+  // Finalize, threadJoin, and update PP values of Elemental/Nodal/Side/InternalSideUserObjects
   for (auto obj : userobjs)
   {
     if (obj->primaryThreadCopy())
@@ -2953,12 +2956,12 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   std::vector<Postprocessor *> pps;
-  w.build().thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
+  query.clone().thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
   for (auto pp : pps)
     _pps_data.storeValue(pp->PPName(), pp->getValue());
 
   std::vector<VectorPostprocessor *> vpps;
-  w.build().thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
+  query.clone().thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
   for (auto vpp : vpps)
   {
     std::cout << "BROADCASTING " << vpp->PPName() << "\n";
