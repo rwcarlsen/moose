@@ -2946,26 +2946,36 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   std::vector<UserObject *> userobjs_thread0;
   nongen_query.thread(0).queryInto(userobjs_thread0);
   for (auto obj : userobjs_thread0)
+  {
     obj->finalize();
+
+    // These have to be stored here/now because general postprocessors (which run after all these
+    // userobjects) might depend on them being stored.  This wouldn't be a problem if all
+    // userobjects satisfied the dependency resolver interface and could be sorted appropriately
+    // with the general userobjects, but they don't.
+    auto pp = dynamic_cast<Postprocessor *>(obj);
+    if (pp)
+      _pps_data.storeValue(pp->PPName(), pp->getValue());
+    auto vpp = dynamic_cast<VectorPostprocessor *>(obj);
+    if (vpp)
+      _vpps_data.broadcastScatterVectors(vpp->PPName());
+  }
 
   for (auto obj : genobjs)
   {
     obj->initialize();
     obj->execute();
     obj->finalize();
-  }
 
-  std::vector<Postprocessor *> pps;
-  query.clone().thread(0).interfaces(Interfaces::Postprocessor).queryInto(pps);
-  for (auto pp : pps)
-    _pps_data.storeValue(pp->PPName(), pp->getValue());
-
-  std::vector<VectorPostprocessor *> vpps;
-  query.clone().thread(0).interfaces(Interfaces::VectorPostprocessor).queryInto(vpps);
-  for (auto vpp : vpps)
-  {
-    std::cout << "BROADCASTING " << vpp->PPName() << "\n";
-    _vpps_data.broadcastScatterVectors(vpp->PPName());
+    // Because general user objects might depend on each other - including the data FEPRoblem
+    // reads out of them via the code right here, their results must be immediately stored here -
+    // rather than collected after the objects have all been executed.
+    auto pp = dynamic_cast<Postprocessor *>(obj);
+    if (pp)
+      _pps_data.storeValue(pp->PPName(), pp->getValue());
+    auto vpp = dynamic_cast<VectorPostprocessor *>(obj);
+    if (vpp)
+      _vpps_data.broadcastScatterVectors(vpp->PPName());
   }
 
   Moose::perf_log.pop(compute_uo_tag, "Execution");
