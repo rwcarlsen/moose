@@ -384,6 +384,34 @@ TheWarehouse::prepare(const std::vector<Attribute> & conds)
   for (auto & id : obj_ids)
     vec.push_back(_objects[id].get());
 
+  if (!vec.empty() && dynamic_cast<DependencyResolverInterface *>(vec[0]))
+  {
+    std::vector<DependencyResolverInterface *> dependers;
+    for (auto obj : vec)
+    {
+      auto d = dynamic_cast<DependencyResolverInterface *>(obj);
+      if (!d)
+      {
+        dependers.clear();
+        break;
+      }
+      dependers.push_back(d);
+    }
+
+    try
+    {
+      DependencyResolverInterface::sort(dependers);
+    }
+    catch (CyclicDependencyException<GeneralUserObject *> & e)
+    {
+      DependencyResolverInterface::cyclicDependencyError<GeneralUserObject *>(
+          e, "Cyclic dependency detected in object ordering");
+    }
+
+    for (unsigned int i = 0; i < dependers.size(); i++)
+      vec[i] = dynamic_cast<MooseObject *>(dependers[i]);
+  }
+
   std::cout << "prepared query " << query_id << " ";
   std::cout << printAttribs(conds);
   return query_id;

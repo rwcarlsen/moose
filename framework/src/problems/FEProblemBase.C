@@ -511,20 +511,6 @@ FEProblemBase::initialSetup()
   for (auto obj : userobjs)
     obj->initialSetup();
 
-  // TODO: this sorting use to occur *before* initialSetup was called on general user objects -
-  // now it is occuring after - fix this.
-  std::vector<GeneralUserObject *> gen_objs;
-  w.build().interfaces(Interfaces::GeneralUserObject).queryInto(gen_objs);
-  try
-  {
-    DependencyResolverInterface::sort(gen_objs);
-  }
-  catch (CyclicDependencyException<GeneralUserObject *> & e)
-  {
-    DependencyResolverInterface::cyclicDependencyError<GeneralUserObject *>(
-        e, "Cyclic dependency detected in object ordering");
-  }
-
   // check if jacobian calculation is done in userobject
   for (THREAD_ID tid = 0; tid < n_threads; ++tid)
     checkUserObjectJacobianRequirement(tid);
