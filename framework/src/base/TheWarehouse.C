@@ -31,6 +31,7 @@
 #include "ShapeElementUserObject.h"
 
 #include <memory>
+#include <mutex>
 
 Interfaces
 operator|(Interfaces l, Interfaces r)
