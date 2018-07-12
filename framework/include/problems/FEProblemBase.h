@@ -651,7 +651,7 @@ public:
    * @return Const reference to the user object
    */
   template <class T>
-  const T & getUserObject(const std::string & name, unsigned int tid = 0) const
+  T & getUserObject(const std::string & name, unsigned int tid = 0) const
   {
     std::vector<T *> objs;
     theWarehouse().build().thread(tid).name(name).queryInto(objs);
