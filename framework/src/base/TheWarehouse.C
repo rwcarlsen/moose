@@ -330,8 +330,8 @@ private:
   std::vector<Data> _data;
 };
 
-TheWarehouse::TheWarehouse() : _store(new VecStore()){};
-TheWarehouse::~TheWarehouse(){};
+TheWarehouse::TheWarehouse() : _store(new VecStore()) {}
+TheWarehouse::~TheWarehouse() {}
 
 static std::mutex obj_mutex;
 static std::mutex cache_mutex;
