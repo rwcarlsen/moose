@@ -127,7 +127,7 @@ public:
       _attribs.push_back({AttributeId::Name, 0, name});
       return *this;
     }
-    Builder interfaces(int ifaces)
+    Builder interfaces(unsigned int ifaces)
     {
       _attribs.push_back({AttributeId::Interfaces, ifaces, ""});
       return *this;
@@ -137,7 +137,7 @@ public:
       _attribs.push_back({AttributeId::Interfaces, (int)ifaces, ""});
       return *this;
     }
-    Builder subdomain(int id)
+    Builder subdomain(unsigned int id)
     {
       _attribs.push_back({AttributeId::Subdomain, id, ""});
       return *this;
@@ -231,7 +231,7 @@ private:
 
   std::unique_ptr<Storage> _store;
   std::vector<std::shared_ptr<MooseObject>> _objects;
-  std::unordered_map<MooseObject *, int> _obj_ids;
+  std::unordered_map<MooseObject *, size_t> _obj_ids;
 
   std::vector<std::vector<MooseObject *>> _obj_cache;
   std::map<std::vector<Attribute>, int> _query_cache;

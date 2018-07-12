@@ -110,9 +110,9 @@ class Storage
 public:
   virtual ~Storage() = default;
 
-  virtual void add(int obj_id, const std::vector<Attribute> & attribs) = 0;
-  virtual std::vector<int> query(const std::vector<Attribute> & conds) = 0;
-  virtual void set(int obj_id, const std::vector<Attribute> & attribs) = 0;
+  virtual void add(size_t obj_id, const std::vector<Attribute> & attribs) = 0;
+  virtual std::vector<size_t> query(const std::vector<Attribute> & conds) = 0;
+  virtual void set(size_t obj_id, const std::vector<Attribute> & attribs) = 0;
 };
 
 class VecStore : public Storage
@@ -120,7 +120,7 @@ class VecStore : public Storage
 private:
   struct Data
   {
-    int id;
+    size_t id;
     std::string name;
     std::string system;
     int thread = 0;
@@ -138,7 +138,7 @@ private:
   };
 
 public:
-  virtual void add(int obj_id, const std::vector<Attribute> & attribs) override
+  virtual void add(size_t obj_id, const std::vector<Attribute> & attribs) override
   {
     std::lock_guard<std::mutex> l(_mutex);
     if (obj_id < _data.size())
@@ -150,10 +150,10 @@ public:
     set(d, attribs);
   }
 
-  virtual std::vector<int> query(const std::vector<Attribute> & conds) override
+  virtual std::vector<size_t> query(const std::vector<Attribute> & conds) override
   {
-    std::vector<int> objs;
-    for (unsigned int i = 0; i < _data.size(); i++)
+    std::vector<size_t> objs;
+    for (size_t i = 0; i < _data.size(); i++)
     {
       Data * d = nullptr;
       {
@@ -252,7 +252,7 @@ public:
     return objs;
   }
 
-  virtual void set(int obj_id, const std::vector<Attribute> & attribs) override
+  virtual void set(size_t obj_id, const std::vector<Attribute> & attribs) override
   {
     std::lock_guard<std::mutex> l(_mutex);
     Data * dat = nullptr;
@@ -345,7 +345,7 @@ TheWarehouse::add(std::shared_ptr<MooseObject> obj, const std::string & system)
 
   std::vector<Attribute> attribs;
   readAttribs(obj.get(), system, attribs);
-  int obj_id = 0;
+  size_t obj_id = 0;
   {
     std::lock_guard<std::mutex> lock(obj_mutex);
     _objects.push_back(obj);
@@ -416,7 +416,7 @@ TheWarehouse::prepare(const std::vector<Attribute> & conds)
 const std::vector<MooseObject *>
 TheWarehouse::query(int query_id)
 {
-  if (query_id >= _obj_cache.size())
+  if (static_cast<size_t>(query_id) >= _obj_cache.size())
     throw std::runtime_error("unknown query id");
   std::lock_guard<std::mutex> lock(cache_mutex);
   return _obj_cache[query_id];
@@ -426,7 +426,7 @@ size_t
 TheWarehouse::count(const std::vector<Attribute> & conds)
 {
   auto query_id = prepare(conds);
-  if (query_id >= _obj_cache.size())
+  if (static_cast<size_t>(query_id) >= _obj_cache.size())
     throw std::runtime_error("unknown query id");
   std::lock_guard<std::mutex> lock(cache_mutex);
   auto & objs = _obj_cache[query_id];
