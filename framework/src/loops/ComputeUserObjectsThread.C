@@ -114,6 +114,11 @@ ComputeUserObjectsThread::onElement(const Elem * elem)
 void
 ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id)
 {
+  std::vector<UserObject *> userobjs;
+  queryBoundary(Interfaces::SideUserObject, bnd_id, userobjs);
+  if (userobjs.size() == 0)
+    return;
+
   _fe_problem.reinitElemFace(elem, side, bnd_id, _tid);
 
   // Set up Sentinel class so that, even if reinitMaterialsFace() throws, we
@@ -122,11 +127,8 @@ ComputeUserObjectsThread::onBoundary(const Elem * elem, unsigned int side, Bound
   _fe_problem.reinitMaterialsFace(_subdomain, _tid);
   _fe_problem.reinitMaterialsBoundary(bnd_id, _tid);
 
-  std::vector<UserObject *> userobjs;
-  queryBoundary(Interfaces::SideUserObject, bnd_id, userobjs);
   for (const auto & uo : userobjs)
     uo->execute();
-  std::cout << "got " << userobjs.size() << " side userobjs\n";
 
   // UserObject Jacobians
   std::vector<ShapeSideUserObject *> shapers;
