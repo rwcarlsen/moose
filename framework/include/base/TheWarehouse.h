@@ -208,7 +208,6 @@ private:
   template <typename T>
   std::vector<T *> & queryInto(int query_id, std::vector<T *> & results, bool show_all = false)
   {
-    std::cout << "    * querying query_id=" << query_id << "\n";
     auto objs = query(query_id);
     results.resize(0);
     for (unsigned int i = 0; i < objs.size(); i++)

@@ -2604,7 +2604,6 @@ FEProblemBase::getUserObjectBase(const std::string & name) const
 {
   std::vector<UserObject *> objs;
   theWarehouse().build().thread(0).name(name).queryInto(objs);
-  std::cout << "looking2 for " << name << ", found " << objs.size() << " objects\n";
   if (objs.empty())
     mooseError("Unable to find user object with name '" + name + "'");
   return *(objs[0]);
@@ -2878,9 +2877,6 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
       query.clone().interfaces(Interfaces::ElementUserObject | Interfaces::NodalUserObject |
                                Interfaces::SideUserObject | Interfaces::InternalSideUserObject);
   nongen_query.queryInto(userobjs);
-
-  std::cout << "COMPUTE: time=" << _time << ", execflag=" << type << ", auxgroup=" << group
-            << ", n_userobjs=" << userobjs.size() << "\n";
 
   if (userobjs.empty() && genobjs.empty())
     return;

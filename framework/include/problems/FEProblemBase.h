@@ -655,7 +655,6 @@ public:
   {
     std::vector<T *> objs;
     theWarehouse().build().thread(tid).name(name).queryInto(objs);
-    std::cout << "looking for " << name << ", found " << objs.size() << " objects\n";
     if (objs.empty())
       mooseError("Unable to find user object with name '" + name + "'");
     return *(objs[0]);
