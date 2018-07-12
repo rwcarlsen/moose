@@ -175,6 +175,8 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
         "neighbor_material_props", &_mesh)),
     _pps_data(*this),
     _vpps_data(*this),
+    // TODO: delete the following line after apps have been updated to not call getUserObjects
+    _all_user_objects(_app.getExecuteOnEnum()),
     _multi_apps(_app.getExecuteOnEnum()),
     _transient_multi_apps(_app.getExecuteOnEnum()),
     _transfers(_app.getExecuteOnEnum(), /*threaded=*/false),
@@ -2575,6 +2577,9 @@ FEProblemBase::addUserObject(std::string user_object_name,
       primary = user_object.get();
     else
       user_object->setPrimaryThreadCopy(primary);
+
+    // TODO: delete this line after apps have been updated to not call getUserObjects
+    _all_user_objects.addObject(user_object, tid);
 
     theWarehouse().add(user_object, "UserObject");
 
