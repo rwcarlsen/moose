@@ -365,6 +365,9 @@ TheWarehouse::update(MooseObject * obj, const std::vector<Attribute> & extras /*
   readAttribs(obj, "", attribs);
   attribs.insert(attribs.end(), extras.begin(), extras.end());
   _store->set(_obj_ids[obj], attribs);
+
+  _obj_cache.clear();
+  _query_cache.clear();
 }
 
 int

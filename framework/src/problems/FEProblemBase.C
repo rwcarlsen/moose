@@ -2862,6 +2862,49 @@ FEProblemBase::computeAuxiliaryKernels(const ExecFlagType & type)
   _aux->compute(type);
 }
 
+// Finalize, threadJoin, and update PP values of Elemental/Nodal/Side/InternalSideUserObjects
+void
+FEProblemBase::joinAndFinalize(TheWarehouse::Builder query, bool isgen)
+{
+  std::vector<UserObject *> objs;
+  query.queryInto(objs);
+  if (!isgen)
+  {
+    // join all threaded user objects (i.e. not regular general user objects) to the primary thread
+    for (auto obj : objs)
+      if (obj->primaryThreadCopy())
+        obj->primaryThreadCopy()->threadJoin(*obj);
+  }
+
+  if (!isgen)
+    query.thread(0).queryInto(objs);
+
+  // finalize objects and retrieve/store any postproessor values
+  for (auto obj : objs)
+  {
+    if (isgen)
+    {
+      // general user objects are not run in their own threaded loop object - so run them here
+      obj->initialize();
+      obj->execute();
+    }
+
+    obj->finalize();
+
+    // These have to be stored piecemeal (with every call to this function) because general
+    // postprocessors (which run last after other userobjects have been completed) might depend on
+    // them being stored.  This wouldn't be a problem if all userobjects satisfied the dependency
+    // resolver interface and could be sorted appropriately with the general userobjects, but they
+    // don't.
+    auto pp = dynamic_cast<Postprocessor *>(obj);
+    if (pp)
+      _pps_data.storeValue(pp->PPName(), pp->getValue());
+    auto vpp = dynamic_cast<VectorPostprocessor *>(obj);
+    if (vpp)
+      _vpps_data.broadcastScatterVectors(vpp->PPName());
+  }
+}
+
 void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
@@ -2877,7 +2920,6 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
 
   std::vector<UserObject *> userobjs;
-  query.queryInto(userobjs);
   auto nongen_query =
       query.clone().interfaces(Interfaces::ElementUserObject | Interfaces::NodalUserObject |
                                Interfaces::SideUserObject | Interfaces::InternalSideUserObject);
@@ -2914,56 +2956,26 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   {
     ComputeUserObjectsThread cppt(*this, getNonlinearSystemBase(), query);
     Threads::parallel_reduce(*_mesh.getActiveLocalElementRange(), cppt);
+
+    // non-nodal user objects have to be finalized separately before the nodal user objects run
+    // because some nodal user objects (NodalNormal related) depend on elemental user objects :-(
+    joinAndFinalize(query.clone().interfaces(Interfaces::ElementUserObject |
+                                             Interfaces::SideUserObject |
+                                             Interfaces::InternalSideUserObject));
   }
 
   // Execute NodalUserObjects
-  if (query.clone().interfaces(Interfaces::NodalUserObject).count() > 0)
+  std::vector<UserObject *> nodalobjs;
+  query.clone().interfaces(Interfaces::NodalUserObject).queryInto(nodalobjs);
+  if (!nodalobjs.empty())
   {
     ComputeNodalUserObjectsThread cnppt(*this, query);
     Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cnppt);
+
+    joinAndFinalize(query.clone().interfaces(Interfaces::NodalUserObject));
   }
 
-  // Finalize, threadJoin, and update PP values of Elemental/Nodal/Side/InternalSideUserObjects
-  for (auto obj : userobjs)
-  {
-    if (obj->primaryThreadCopy())
-      obj->primaryThreadCopy()->threadJoin(*obj);
-  }
-
-  std::vector<UserObject *> userobjs_thread0;
-  nongen_query.thread(0).queryInto(userobjs_thread0);
-  for (auto obj : userobjs_thread0)
-  {
-    obj->finalize();
-
-    // These have to be stored here/now because general postprocessors (which run after all these
-    // userobjects) might depend on them being stored.  This wouldn't be a problem if all
-    // userobjects satisfied the dependency resolver interface and could be sorted appropriately
-    // with the general userobjects, but they don't.
-    auto pp = dynamic_cast<Postprocessor *>(obj);
-    if (pp)
-      _pps_data.storeValue(pp->PPName(), pp->getValue());
-    auto vpp = dynamic_cast<VectorPostprocessor *>(obj);
-    if (vpp)
-      _vpps_data.broadcastScatterVectors(vpp->PPName());
-  }
-
-  for (auto obj : genobjs)
-  {
-    obj->initialize();
-    obj->execute();
-    obj->finalize();
-
-    // Because general user objects might depend on each other - including the data FEPRoblem
-    // reads out of them via the code right here, their results must be immediately stored here -
-    // rather than collected after the objects have all been executed.
-    auto pp = dynamic_cast<Postprocessor *>(obj);
-    if (pp)
-      _pps_data.storeValue(pp->PPName(), pp->getValue());
-    auto vpp = dynamic_cast<VectorPostprocessor *>(obj);
-    if (vpp)
-      _vpps_data.broadcastScatterVectors(vpp->PPName());
-  }
+  joinAndFinalize(query.clone().interfaces(Interfaces::GeneralUserObject), true);
 
   Moose::perf_log.pop(compute_uo_tag, "Execution");
 }

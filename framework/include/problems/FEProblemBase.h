@@ -1697,6 +1697,8 @@ protected:
   std::shared_ptr<LineSearch> _line_search;
 
 private:
+  void joinAndFinalize(TheWarehouse::Builder query, bool isgen = false);
+
   bool _error_on_jacobian_nonzero_reallocation;
   bool _ignore_zeros_in_jacobian;
   bool _force_restart;
