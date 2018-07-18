@@ -505,10 +505,9 @@ FEProblemBase::initialSetup()
   std::set<std::string> depend_objects_aux = _aux->getDependObjects();
 
   // This replaces all prior updateDependObjects calls on the old user object warehouses.
-  auto & w = theWarehouse();
   std::vector<UserObject *> userobjs;
-  w.build().system("UserObject").queryInto(userobjs);
-  groupUserObjects(w, userobjs, depend_objects_ic, depend_objects_aux);
+  theWarehouse().build().system("UserObject").queryInto(userobjs);
+  groupUserObjects(theWarehouse(), userobjs, depend_objects_ic, depend_objects_aux);
 
   for (auto obj : userobjs)
     obj->initialSetup();
@@ -2876,8 +2875,7 @@ FEProblemBase::joinAndFinalize(TheWarehouse::Builder query, bool isgen)
         obj->primaryThreadCopy()->threadJoin(*obj);
   }
 
-  if (!isgen)
-    query.thread(0).queryInto(objs);
+  query.thread(0).queryInto(objs);
 
   // finalize objects and retrieve/store any postproessor values
   for (auto obj : objs)
@@ -2908,9 +2906,7 @@ FEProblemBase::joinAndFinalize(TheWarehouse::Builder query, bool isgen)
 void
 FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGroup & group)
 {
-  auto & w = theWarehouse();
-
-  TheWarehouse::Builder query = w.build().system("UserObject").exec_on(type);
+  TheWarehouse::Builder query = theWarehouse().build().system("UserObject").exec_on(type);
   if (group == Moose::PRE_IC)
     query.pre_ic(true);
   else
@@ -2920,10 +2916,10 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   query.clone().interfaces(Interfaces::GeneralUserObject).queryInto(genobjs);
 
   std::vector<UserObject *> userobjs;
-  auto nongen_query =
-      query.clone().interfaces(Interfaces::ElementUserObject | Interfaces::NodalUserObject |
-                               Interfaces::SideUserObject | Interfaces::InternalSideUserObject);
-  nongen_query.queryInto(userobjs);
+  query.clone()
+      .interfaces(Interfaces::ElementUserObject | Interfaces::NodalUserObject |
+                  Interfaces::SideUserObject | Interfaces::InternalSideUserObject)
+      .queryInto(userobjs);
 
   if (userobjs.empty() && genobjs.empty())
     return;
@@ -2965,13 +2961,10 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
   }
 
   // Execute NodalUserObjects
-  std::vector<UserObject *> nodalobjs;
-  query.clone().interfaces(Interfaces::NodalUserObject).queryInto(nodalobjs);
-  if (!nodalobjs.empty())
+  if (query.clone().interfaces(Interfaces::NodalUserObject).count() > 0)
   {
     ComputeNodalUserObjectsThread cnppt(*this, query);
     Threads::parallel_reduce(*_mesh.getLocalNodeRange(), cnppt);
-
     joinAndFinalize(query.clone().interfaces(Interfaces::NodalUserObject));
   }
 
