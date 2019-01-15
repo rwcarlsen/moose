@@ -7,6 +7,8 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
+#include "gperftools/profiler.h"
+
 // MOOSE includes
 #include "MooseRevision.h"
 #include "AppFactory.h"
@@ -316,6 +318,9 @@ MooseApp::MooseApp(InputParameters parameters)
     _create_minimal_app_timer(_perf_graph.registerSection("MooseApp::createMinimalApp", 3)),
     _automatic_automatic_scaling(getParam<bool>("automatic_automatic_scaling"))
 {
+  static std::string fname = std::string("cpu") + std::to_string(_comm->rank()) + ".prof";
+  ProfilerStart(fname.c_str());
+
   Registry::addKnownLabel(_type);
   Moose::registerAll(_factory, _action_factory, _syntax);
 
@@ -416,6 +421,7 @@ MooseApp::checkRegistryLabels()
 
 MooseApp::~MooseApp()
 {
+  ProfilerStop();
   _action_warehouse.clear();
   _executioner.reset();
   _the_warehouse.reset();
