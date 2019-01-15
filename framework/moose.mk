@@ -107,6 +107,7 @@ endif
 moose_INC_DIRS += $(shell find $(FRAMEWORK_DIR)/contrib/*/include -type d)
 moose_INC_DIRS += "$(gtest_DIR)"
 moose_INC_DIRS += "$(hit_DIR)"
+moose_INC_DIRS += "$(HOME)/.local/include"
 moose_INCLUDE  := $(foreach i, $(moose_INC_DIRS), -I$(i))
 
 #libmesh_INCLUDE := $(moose_INCLUDE) $(libmesh_INCLUDE)
