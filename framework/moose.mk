@@ -223,6 +223,8 @@ libmesh_submodule_status:
 
 moose: $(moose_LIB)
 
+libmesh_CXXFLAGS += -fsanitize=thread
+
 # [JWP] With libtool, there is only one link command, it should work whether you are creating
 # shared or static libraries, and it should be portable across Linux and Mac...
 $(pcre_LIB): $(pcre_objects)
