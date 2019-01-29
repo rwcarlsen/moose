@@ -9,6 +9,11 @@
 
 #include "SinglePhaseFluidProperties.h"
 
+#include "DualReal.h"
+#include "metaphysicl/numberarray.h"
+#include "metaphysicl/dualnumber.h"
+#include "MooseVariableFE.h"
+
 template <>
 InputParameters
 validParams<SinglePhaseFluidProperties>()
@@ -22,6 +27,41 @@ SinglePhaseFluidProperties::SinglePhaseFluidProperties(const InputParameters & p
   : FluidProperties(parameters), _R(8.3144598), _T_c2k(273.15)
 {
 }
+
+// Example code for calculating ADReal for fluid props:
+//
+//    template <ComputeStage compute_stage>
+//    ADReal
+//    MyFluidPropClass::p_from_v_t(Real v, Real t, unsigned int qp)
+//    {
+//      ADReal p = ...;
+//      auto dpdv = ...;
+//      auto dpdt = ...;
+//      calcPropertyDerivs(p, qp, dpdv, _volume_var);
+//      calcPropertyDerivs(p, qp, dpdt, _temperature_var);
+//      return p;
+//    }
+//
+// where _volume_var and _temperature_var must have been appropriately specified/set earlier by
+// the user of this class.
+
+// This function needs to go in some generic utils location and be defined in a header for many
+// objects to use.
+//
+void
+calcPropertyDerivs(DualReal & n, unsigned int qp, Real dudq, const MooseVariable & var)
+{
+  auto offset = var.number() * var.sys().getMaxVarNDofsPerElem();
+  auto & phi = var.phi();
+  for (size_t i = 0; i < var.numberOfDofs(); i++)
+  {
+    auto phi_i = phi[i][qp];
+    n.derivatives()[offset + i] = phi_i * dudq;
+  }
+}
+
+void
+calcPropertyDerivs(Real & /*n*/, unsigned int /*qp*/, Real /*dudq*/, const MooseVariable & /*var*/) { }
 
 SinglePhaseFluidProperties::~SinglePhaseFluidProperties() {}
 

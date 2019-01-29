@@ -52,7 +52,7 @@ public:
   /**
    * Get the system this variable is part of.
    */
-  SystemBase & sys() { return _sys; }
+  SystemBase & sys() const { return _sys; }
 
   /**
    * Get the variable name
@@ -95,7 +95,7 @@ public:
 
   const std::vector<dof_id_type> & dofIndices() const { return _dof_indices; }
 
-  unsigned int numberOfDofs() { return _dof_indices.size(); }
+  unsigned int numberOfDofs() const { return _dof_indices.size(); }
 
   /**
    * Is this variable nodal

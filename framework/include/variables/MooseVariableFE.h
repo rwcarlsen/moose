@@ -188,7 +188,7 @@ public:
 
   virtual void prepareIC() override;
 
-  const FieldVariablePhiValue & phi() { return _phi; }
+  const FieldVariablePhiValue & phi() const { return _phi; }
   const FieldVariablePhiGradient & gradPhi() { return _grad_phi; }
   const FieldVariablePhiSecond & secondPhi()
   {
