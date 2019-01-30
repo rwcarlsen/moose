@@ -40,6 +40,8 @@ public:
    */
   virtual Real p_from_v_e(Real v, Real e) const;
 
+  virtual Real p_from_v_e(Real v, Real e) const;
+
   /**
    * Pressure and its derivatives from specific volume and specific internal energy
    *
