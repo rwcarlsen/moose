@@ -558,7 +558,7 @@ public:
 
   /**
    * Isochoric specific heat
-   * @param pressure fluid pressure (Pa)
+
    * @param temperature fluid temperature (K)
    * @return cv (J/kg/K)
    */
