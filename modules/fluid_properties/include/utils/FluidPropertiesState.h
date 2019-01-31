@@ -57,14 +57,16 @@ enum class Var
 // derivatives w.r.t. the first variable in each pair.
 enum class Combo
 {
+  // imply pT formulation
   pT,
   ph,
   ps,
-  prho,
+  pv,
+  // imply ve formulation
+  vp,
   ve,
   vh,
-  Tv,
-  hs
+  vT,
 };
 
 // clang-format off
@@ -79,13 +81,14 @@ class SinglePhaseState
     case pT:
     case ph:
     case ps:
-    case prho:
+    case pv:
       _given1 = Var::p;
       break;
+    case vp:
     case ve:
     case vh:
     case vT:
-      _given1 = Var::T;
+      _given1 = Var::v;
       break;
     }
   }
@@ -167,8 +170,7 @@ protected:
     switch (dvar)
     {
       case Var::p:
-        dudq = 1;
-        return dudq;
+        return 1;
       case Var::v:
         _spp.p_from_v_e(_v(), _e(), dummy1, dudq, dummy2);
         return dudq;
@@ -189,6 +191,8 @@ protected:
       case Var::v:
         _spp.T_from_v_e(_v(), _e(), dummy1, dudq, dummy2);
         return dudq;
+      case Var::T:
+        return 1;
       default:
         mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
     }
@@ -204,6 +208,8 @@ protected:
       case Var::v:
         _spp.e_from_v_h(_v(), _h(), dummy1, dudq, dummy2);
         return dudq;
+      case Var::e:
+        return 1;
       default:
         mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
     }
@@ -216,17 +222,10 @@ protected:
       case Var::p:
         _spp.rho_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
         return dudq;
-      case Var::T:
-        _spp.rho_from_p_T(_p(), _T(), dummy1, dummy2, dudq);
-        return dudq;
       case Var::v:
-        _spp.rho_from_p_T(_p(), _T(), dummy1, dudq, dummy1);
-        _spp.p_from_v_e(_v(), _e(), dummy1, dummy2, dummy1);
-        return dudq * dummy2;
-      case Var::h:
-        _spp.rho_from_p_T(_p(), _T(), dummy1, dudq, dummy1);
-        _spp.p_from_h_s(_h(), _s(), dummy1, dummy2, dummy1);
-        return dudq;
+        return -1/_v()/_v();
+      case Var::rho:
+        return 1;
       default:
         mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
     }
@@ -239,15 +238,11 @@ protected:
       case Var::p:
         _spp.h_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
         return dudq;
-      case Var::T:
-        _spp.h_from_p_T(_p(), _T(), dummy1, dummy1, dudq);
-        return dudq;
       case Var::v:
         _spp.h_from_T_v(_T(), _v(), dummy1, dummy1, dudq);
         return dudq;
       case Var::h:
-        dudq = 1;
-        return dudq;
+        return 1;
       default:
         mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
     }
@@ -260,16 +255,11 @@ protected:
       case Var::p:
         _spp.s_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
         return dudq;
-      case Var::T:
-        _spp.s_from_p_T(_p(), _T(), dummy1, dummy1, dudq);
-        return dudq;
       case Var::v:
-        _spp.s_from_T_v(_T(), _v(), dummy1, dummy1, dudq);
+        _spp.s_from_v_e(_T(), _v(), dummy1, dudq, dummy2);
         return dudq;
-      case Var::h:
-        _spp.s_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
-        _spp.p_from_h_s(_h(), _s(), dummy1, dummy2, dummy1);
-        return dudq * dummy2;
+      case Var::s:
+        return 1;
       default:
         mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
     }
@@ -282,16 +272,10 @@ protected:
       case Var::p:
         _spp.v_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
         return dudq;
-      case Var::T:
-        _spp.v_from_p_T(_p(), _T(), dummy1, dummy2, dudq);
-        return dudq;
       case Var::v:
-        dudq = 1
-        return dudq;
-      case Var::h:
-        _spp.v_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
-        _spp.p_from_h_s(_h(), _s(), dummy1, dummy2, dummy1);
-        return dudq * dummy2;
+        return 1;
+      case Var::rho:
+        return -1/_rho()/_rho();
       default:
         mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
     }
@@ -301,39 +285,46 @@ protected:
     Real dummy1 = 0, dummy2 = 0, dudq = 0;
     switch (dvar)
     {
-      case Var::p:
-        _spp.v_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
-        return dudq;
-      case Var::T:
-        _spp.v_from_p_T(_p(), _T(), dummy1, dummy2, dudq);
-        return dudq;
-      case Var::v:
-        dudq = 1
-        return dudq;
-      case Var::h:
-        _spp.v_from_p_T(_p(), _T(), dummy1, dudq, dummy2);
-        _spp.p_from_h_s(_h(), _s(), dummy1, dummy2, dummy1);
-        return dudq * dummy2;
       default:
-        mooseError("fluidprops state does not support T derivative w.r.t. var ", dvar);
+        mooseError("fluidprops state does not support cp derivative w.r.t. var ", dvar);
     }
   }
   Real dcv(Var dvar)
   {
+    Real dummy1 = 0, dummy2 = 0, dudq = 0;
+    switch (dvar)
+    {
+      default:
+        mooseError("fluidprops state does not support cv derivative w.r.t. var ", dvar);
+    }
   }
   Real dmu(Var dvar)
   {
+    Real dummy1 = 0, dummy2 = 0, dudq = 0;
+    switch (dvar)
+    {
+      default:
+        mooseError("fluidprops state does not support mu derivative w.r.t. var ", dvar);
+    }
   }
   Real dg(Var dvar)
   {
+    Real dummy1 = 0, dummy2 = 0, dudq = 0;
+    switch (dvar)
+    {
+      default:
+        mooseError("fluidprops state does not support g derivative w.r.t. var ", dvar);
+    }
   }
   Real dbeta(Var dvar)
   {
+    Real dummy1 = 0, dummy2 = 0, dudq = 0;
+    switch (dvar)
+    {
+      default:
+        mooseError("fluidprops state does not support beta derivative w.r.t. var ", dvar);
+    }
   }
-
-#define propcase(want, from1, from2)                                                               \
-  case Combo::from1##from2:                                                                        \
-    return _spp.want##_from_##from1##_##from2(prop1(), prop2())
 
   // clang-format off
   Real _p()
@@ -343,18 +334,101 @@ protected:
       case Combo::pT:
       case Combo::ph:
       case Combo::ps:
-      case Combo::prho:
+      case Combo::pv:
         return prop1();
-      propcase(p, v, e);
-      propcase(p, v, h);
-      propcase(p, T, v);
-      propcase(p, h, s);
+      case Combo::vp:
+        return prop2();
+      case ve:
+      case vh:
+      case vT:
+        return _spp.p_from_v_e(prop1(), _e());
     }
   }
-  Real _e();
-  Real _h();
-  Real _s();
-  Real _v();
+  Real _e()
+  {
+    switch (_given)
+    {
+      case Combo::ve:
+        return prop2();
+      case Combo::ps:
+      case Combo::pT:
+      case Combo::ph:
+      case Combo::pv:
+        return _spp.e_from_p_T(prop1(), _T());
+      case Combo::vp:
+      case Combo::vh:
+      case Combo::vT:
+        return _spp.e_from_T_v(_T(), prop1());
+    }
+  }
+  Real _h()
+  {
+    switch (_given)
+    {
+      case Combo::ph:
+      case Combo::vh:
+        return prop2();
+      case Combo::pT:
+      case Combo::ps:
+      case Combo::pv:
+        return _spp.h_from_p_T(prop1(), _T());
+      case Combo::vp:
+      case Combo::ve:
+      case Combo::vT:
+        return _spp.h_from_p_T(_p(), _T());
+    }
+  }
+  Real _T()
+  {
+    switch (_given)
+    {
+      case Combo::vT:
+      case Combo::pT:
+        return prop2();
+      case Combo::ph:
+      case Combo::ps:
+      case Combo::pv:
+        return _spp.T_from_v_e(_v(), _e());
+      case Combo::vh:
+      case Combo::vp:
+      case Combo::ve:
+        return _spp.T_from_v_e(prop1(), _e());
+    }
+  }
+  Real _s()
+  {
+    switch (_given)
+    {
+      case Combo::ps:
+        return prop2();
+      case Combo::pT:
+      case Combo::ph:
+      case Combo::pv:
+        return _spp.s_from_p_T(prop1(), _T());
+      case Combo::vp:
+      case Combo::ve:
+      case Combo::vh:
+      case Combo::vT:
+        return _spp.s_from_v_e(prop1(), _e());
+    }
+  }
+  Real _v()
+  {
+    switch (_given)
+    {
+      case Combo::pT:
+      case Combo::ph:
+      case Combo::ps:
+        return _spp.v_from_p_T(prop1(), _T());
+      case Combo::pv:
+        return prop2();
+      case Combo::vT:
+      case Combo::vh:
+      case Combo::vp:
+      case Combo::ve:
+        return prop1();
+    }
+  }
   Real _cp();
   Real _cv();
   Real _mu();
