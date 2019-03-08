@@ -347,7 +347,15 @@ Parser::walkRaw(std::string /*fullpath*/, std::string /*nodepath*/, hit::Node * 
 
     params.set<ActionWarehouse *>("awh") = &_action_wh;
 
-    extractParams(curr_identifier, params);
+    Moose::_throw_on_error = true;
+    try
+    {
+      extractParams(curr_identifier, params);
+    }
+    catch (...)
+    {
+      return;
+    }
 
     // Add the parsed syntax to the parameters object for consumption by the Action
     params.set<std::string>("task") = it->second._task;
@@ -367,7 +375,15 @@ Parser::walkRaw(std::string /*fullpath*/, std::string /*nodepath*/, hit::Node * 
       {
         object_action->getObjectParams().blockLocation() = params.blockLocation();
         object_action->getObjectParams().blockFullpath() = params.blockFullpath();
-        extractParams(curr_identifier, object_action->getObjectParams());
+
+        try
+        {
+          extractParams(curr_identifier, object_action->getObjectParams());
+        }
+        catch (...)
+        {
+          return;
+        }
         object_action->getObjectParams()
             .set<std::vector<std::string>>("control_tags")
             .push_back(MooseUtils::baseName(curr_identifier));
@@ -520,7 +536,7 @@ Parser::parse(const std::string & input_filename)
   exw.registerEvaler("env", env);
   exw.registerEvaler("fparse", fparse_ev);
   exw.registerEvaler("replace", repl);
-  _root->walk(&exw);
+  //_root->walk(&exw);
   for (auto & var : exw.used)
     _extracted_vars.insert(var);
   for (auto & msg : exw.errors)
@@ -568,6 +584,34 @@ Parser::parse(const std::string & input_filename)
       walkRaw(n->parent()->fullpath(), n->path(), n);
   }
   _root->walk(this, hit::NodeType::Section);
+
+  auto varmat = new hit::Section("varmat");
+  varmat->addChild(new hit::Field("type", hit::Field::Kind::String, "PronghornVarMaterial"));
+  varmat->addChild(new hit::Field("rho", hit::Field::Kind::String, "rho"));
+  varmat->addChild(new hit::Field("rho_et", hit::Field::Kind::String, "rho_et"));
+  varmat->addChild(new hit::Field("rho_u", hit::Field::Kind::String, "rho_u"));
+  varmat->addChild(new hit::Field("rho_v", hit::Field::Kind::String, "rho_v"));
+  varmat->addChild(new hit::Field("rho_w", hit::Field::Kind::String, "rho_w"));
+  varmat->addChild(new hit::Field("pressure", hit::Field::Kind::String, "pressure"));
+  varmat->addChild(new hit::Field("T_fluid", hit::Field::Kind::String, "T_fluid"));
+  varmat->addChild(new hit::Field("vel_x", hit::Field::Kind::String, "vel_x"));
+  varmat->addChild(new hit::Field("vel_y", hit::Field::Kind::String, "vel_y"));
+  varmat->addChild(new hit::Field("vel_z", hit::Field::Kind::String, "vel_z"));
+  _fluid_mat->parent()->addChild(varmat);
+  auto tp = dynamic_cast<hit::Field *>(_fluid_mat->find("type"));
+  tp->setVal("PronghornFluidProps");
+  std::set<std::string> keep = {"fluid", "porosity", "pebble_diameter", "type"};
+  for (auto child : _fluid_mat->children())
+  {
+    if (keep.count(child->path()) == 0)
+      delete child;
+  }
+  hit::Formatter fmt;
+  fmt.canonical_section_markers = false;
+  std::ofstream out(_input_filename);
+  out << fmt.format(_root.get());
+  out.close();
+  mooseError("abort");
 
   if (_errmsg.size() > 0)
     mooseError(_errmsg);
@@ -965,6 +1009,11 @@ Parser::extractParams(const std::string & prefix, InputParameters & p)
   // in the extraction routines
   _current_params = &p;
   _current_error_stream = &error_stream;
+
+  auto sec = _root->find(prefix);
+  if (sec->find("type") && sec->param<std::string>("type") == "PronghornFluidMaterial")
+    _fluid_mat = _root->find(prefix);
+
   for (const auto & it : p)
   {
     bool found = false;
@@ -987,8 +1036,12 @@ Parser::extractParams(const std::string & prefix, InputParameters & p)
     else if (global_params_block)
     {
       full_name = global_params_block_name + "/" + it.first;
-      if (_root->find(full_name))
+      auto field = _root->find(full_name);
+      if (field)
       {
+        if (_root->find(prefix)->param<std::string>("type") == "PronghornFluidMaterial")
+          _root->find(prefix)->addChild(field->clone());
+
         p.set_attributes(it.first, false);
         _extracted_vars.insert(
             full_name); // Keep track of all variables extracted from the input file

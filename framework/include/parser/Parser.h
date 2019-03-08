@@ -247,6 +247,8 @@ protected:
   /// Object for holding the syntax parse tree
   std::unique_ptr<SyntaxTree> _syntax_formatter;
 
+  hit::Node * _fluid_mat = nullptr;
+
   /// The input file name that is used for parameter extraction
   std::string _input_filename;
 

@@ -492,6 +492,8 @@ public:
   /// Formats the given input hit text (using fname to report better syntax errors) and returns
   /// the text formatted as specified by the formatter's configuration.
   std::string format(const std::string & fname, const std::string & input);
+  /// Formats the given hit syntax tree as specified by the formatter's configuration.
+  std::string format(hit::Node * n);
   /// Add a sorting pattern to the formatter.  section is a regex that must match a section's
   /// full path (as returned by a section node's fullpath function). order is a list of regexes
   /// that partial match field names identifying the order of fields for sections that match the

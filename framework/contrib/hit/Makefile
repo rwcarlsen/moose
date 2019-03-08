@@ -13,12 +13,12 @@ PYTHONLDFLAGS ?= `$(pyconfig) --ldflags`
 hit: main.cc parse.cc lex.cc braceexpr.cc braceexpr.h lex.h parse.h
 	$(CXX) -std=c++11 -g $(CXXFLAGS) $< parse.cc lex.cc braceexpr.cc -o $@
 
-rewrite: rewrite.cc parse.cc lex.cc lex.h parse.h
-	$(CXX) -std=c++11 -g $(CXXFLAGS) $< parse.cc lex.cc -o $@
+rewrite: rewrite.cc parse.cc lex.cc lex.h parse.h braceexpr.h
+	$(CXX) -std=c++11 -g $(CXXFLAGS) $< parse.cc lex.cc braceexpr.cc -o $@
 
 bindings: hit.so
 
-hit.so: parse.cc lex.cc hit.cpp
+hit.so: parse.cc lex.cc braceexpr.cc hit.cpp
 	$(CXX) -std=c++11 -w -fPIC -lstdc++ -shared -L$(PYTHONPREFIX)/lib $(PYTHONCFLAGS) $(PYTHONLDFLAGS) $^ -o $@
 
 hit.cpp: hit.pyx chit.pxd

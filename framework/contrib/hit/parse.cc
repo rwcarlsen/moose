@@ -1066,17 +1066,21 @@ Formatter::Formatter(const std::string & fname, const std::string & hit_config)
     walkPatternConfig("", root->find("format/sorting"));
 }
 
+std::string Formatter::format(hit::Node * n)
+{
+  TokenClearer tc;
+  if (canonical_section_markers)
+    n->walk(&tc, hit::NodeType::Section);
+
+  n->walk(this, hit::NodeType::All);
+  return n->render(0, indent_string, line_length);
+}
+
 std::string
 Formatter::format(const std::string & fname, const std::string & input)
 {
   std::unique_ptr<hit::Node> root(hit::parse(fname, input));
-
-  TokenClearer tc;
-  if (canonical_section_markers)
-    root->walk(&tc, hit::NodeType::Section);
-
-  root->walk(this, hit::NodeType::All);
-  return root->render(0, indent_string, line_length);
+  return format(root.get());
 }
 
 void
