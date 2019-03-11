@@ -48,6 +48,8 @@
 #include <algorithm>
 #include <cstdlib>
 
+const static bool rewrite = true;
+
 Parser::Parser(MooseApp & app, ActionWarehouse & action_wh)
   : ConsoleStreamInterface(app),
     _app(app),
@@ -347,7 +349,8 @@ Parser::walkRaw(std::string /*fullpath*/, std::string /*nodepath*/, hit::Node * 
 
     params.set<ActionWarehouse *>("awh") = &_action_wh;
 
-    Moose::_throw_on_error = true;
+    if (rewrite)
+      Moose::_throw_on_error = true;
     try
     {
       extractParams(curr_identifier, params);
@@ -536,7 +539,9 @@ Parser::parse(const std::string & input_filename)
   exw.registerEvaler("env", env);
   exw.registerEvaler("fparse", fparse_ev);
   exw.registerEvaler("replace", repl);
-  //_root->walk(&exw);
+
+  if (!rewrite)
+    _root->walk(&exw);
   for (auto & var : exw.used)
     _extracted_vars.insert(var);
   for (auto & msg : exw.errors)
@@ -585,33 +590,194 @@ Parser::parse(const std::string & input_filename)
   }
   _root->walk(this, hit::NodeType::Section);
 
-  auto varmat = new hit::Section("varmat");
-  varmat->addChild(new hit::Field("type", hit::Field::Kind::String, "PronghornVarMaterial"));
-  varmat->addChild(new hit::Field("rho", hit::Field::Kind::String, "rho"));
-  varmat->addChild(new hit::Field("rho_et", hit::Field::Kind::String, "rho_et"));
-  varmat->addChild(new hit::Field("rho_u", hit::Field::Kind::String, "rho_u"));
-  varmat->addChild(new hit::Field("rho_v", hit::Field::Kind::String, "rho_v"));
-  varmat->addChild(new hit::Field("rho_w", hit::Field::Kind::String, "rho_w"));
-  varmat->addChild(new hit::Field("pressure", hit::Field::Kind::String, "pressure"));
-  varmat->addChild(new hit::Field("T_fluid", hit::Field::Kind::String, "T_fluid"));
-  varmat->addChild(new hit::Field("vel_x", hit::Field::Kind::String, "vel_x"));
-  varmat->addChild(new hit::Field("vel_y", hit::Field::Kind::String, "vel_y"));
-  varmat->addChild(new hit::Field("vel_z", hit::Field::Kind::String, "vel_z"));
-  _fluid_mat->parent()->addChild(varmat);
-  auto tp = dynamic_cast<hit::Field *>(_fluid_mat->find("type"));
-  tp->setVal("PronghornFluidProps");
-  std::set<std::string> keep = {"fluid", "porosity", "pebble_diameter", "type"};
-  for (auto child : _fluid_mat->children())
+  if (rewrite && _fluid_mat)
   {
-    if (keep.count(child->path()) == 0)
-      delete child;
+    // PTV
+    std::set<std::string> ptv_pressure = {"pressure_nl_var", "pressure"};
+    std::set<std::string> ptv_temp = {"T_fluid",
+                                      "Tf",
+                                      "T",
+                                      "Ts_nl_var",
+                                      "temperature_nl_var",
+                                      "temp_fluid",
+                                      "temperature_auxvar"};
+    std::set<std::string> ptv_vel_x = {"vel_x", "u", "vel_x_auxvar"};
+    std::set<std::string> ptv_vel_y = {"vel_y", "v", "vel_y_auxvar"};
+    std::set<std::string> ptv_vel_z = {"vel_z", "w", "vel_z_auxvar"};
+    // conserved
+    std::set<std::string> conserved_rho = {"rho", "rho_auxvar"};
+    std::set<std::string> conserved_rhoE = {"rho_et"};
+    std::set<std::string> conserved_rhou = {"rho_u", "rhou_nl_var", "mom_x"};
+    std::set<std::string> conserved_rhov = {"rho_v", "rhov_nl_var", "mom_y"};
+    std::set<std::string> conserved_rhow = {"rho_w", "rhow_nl_var"};
+
+    std::string var_p = "FIXMEVAR";
+    std::string var_Tf = "FIXMEVAR";
+    std::string var_vx = "FIXMEVAR";
+    std::string var_vy;
+    std::string var_vz;
+    std::string var_rho = "FIXMEVAR";
+    std::string var_rhoE = "FIXMEVAR";
+    std::string var_rhou = "FIXMEVAR";
+    std::string var_rhov;
+    std::string var_rhow;
+
+    bool pvt = false;
+    bool conserved = false;
+
+    for (auto & var : _nonlinvars)
+    {
+      if (ptv_pressure.count(var) > 0)
+      {
+        pvt = true;
+        var_p = var;
+      }
+      else if (ptv_temp.count(var) > 0)
+      {
+        pvt = true;
+        var_Tf = var;
+      }
+      else if (ptv_vel_x.count(var) > 0)
+      {
+        pvt = true;
+        var_vx = var;
+      }
+      else if (ptv_vel_y.count(var) > 0)
+      {
+        pvt = true;
+        var_vy = var;
+      }
+      else if (ptv_vel_z.count(var) > 0)
+      {
+        pvt = true;
+        var_vz = var;
+      }
+      else if (conserved_rho.count(var) > 0)
+      {
+        conserved = true;
+        var_rho = var;
+      }
+      else if (conserved_rhoE.count(var) > 0)
+      {
+        conserved = true;
+        var_rhoE = var;
+      }
+      else if (conserved_rhou.count(var) > 0)
+      {
+        conserved = true;
+        var_rhou = var;
+      }
+      else if (conserved_rhov.count(var) > 0)
+      {
+        conserved = true;
+        var_rhov = var;
+      }
+      else if (conserved_rhow.count(var) > 0)
+      {
+        conserved = true;
+        var_rhow = var;
+      }
+    }
+
+    for (auto & var : _auxvars)
+    {
+      if (ptv_pressure.count(var) > 0)
+        var_p = var;
+      else if (ptv_temp.count(var) > 0)
+        var_Tf = var;
+      else if (ptv_vel_x.count(var) > 0)
+        var_vx = var;
+      else if (ptv_vel_y.count(var) > 0)
+        var_vy = var;
+      else if (ptv_vel_z.count(var) > 0)
+        var_vz = var;
+      else if (conserved_rho.count(var) > 0)
+        var_rho = var;
+      else if (conserved_rhoE.count(var) > 0)
+        var_rhoE = var;
+      else if (conserved_rhou.count(var) > 0)
+        var_rhou = var;
+      else if (conserved_rhov.count(var) > 0)
+        var_rhov = var;
+      else if (conserved_rhow.count(var) > 0)
+        var_rhow = var;
+    }
+
+    if (pvt && conserved)
+    {
+      std::ofstream outfile;
+      outfile.open("mixed-formulation.log", std::ios_base::app);
+      outfile << _input_filename << "\n";
+      outfile << "    nonlinearvars:\n";
+      for (auto & var : _nonlinvars)
+        outfile << "        " << var << "\n";
+      outfile << "    auxvars:\n";
+      for (auto & var : _auxvars)
+        outfile << "        " << var << "\n";
+      outfile.close();
+    }
+
+    std::string tot;
+    if (conserved)
+      tot = var_rho + var_rhoE + var_rhou;
+    else if (pvt)
+      tot = var_p + var_Tf + var_vx;
+    if (tot.find("FIXMEVAR") < tot.size())
+    {
+      std::ofstream outfile;
+      outfile.open("missing-req-var.log", std::ios_base::app);
+      outfile << _input_filename << "\n";
+      outfile << "    nonlinearvars:\n";
+      for (auto & var : _nonlinvars)
+        outfile << "        " << var << "\n";
+      outfile << "    auxvars:\n";
+      for (auto & var : _auxvars)
+        outfile << "        " << var << "\n";
+      outfile.close();
+      mooseError("missing required var");
+    }
+
+    auto varmat = new hit::Section("varmat");
+    if (pvt)
+    {
+      varmat->addChild(new hit::Field("type", hit::Field::Kind::String, "PronghornVarMaterialPT"));
+      varmat->addChild(new hit::Field("pressure", hit::Field::Kind::String, var_p));
+      varmat->addChild(new hit::Field("T_fluid", hit::Field::Kind::String, var_Tf));
+      varmat->addChild(new hit::Field("vel_x", hit::Field::Kind::String, var_vx));
+      if (!var_vy.empty())
+        varmat->addChild(new hit::Field("vel_y", hit::Field::Kind::String, var_vy));
+      if (!var_vz.empty())
+        varmat->addChild(new hit::Field("vel_z", hit::Field::Kind::String, var_vz));
+    }
+    else if (conserved)
+    {
+      varmat->addChild(new hit::Field("type", hit::Field::Kind::String, "PronghornVarMaterial"));
+      varmat->addChild(new hit::Field("rho", hit::Field::Kind::String, var_rho));
+      varmat->addChild(new hit::Field("rho_et", hit::Field::Kind::String, var_rhoE));
+      varmat->addChild(new hit::Field("rho_u", hit::Field::Kind::String, var_rhou));
+      if (!var_rhov.empty())
+        varmat->addChild(new hit::Field("rho_v", hit::Field::Kind::String, var_rhov));
+      if (!var_rhow.empty())
+        varmat->addChild(new hit::Field("rho_w", hit::Field::Kind::String, var_rhow));
+    }
+
+    _fluid_mat->parent()->addChild(varmat);
+    auto tp = dynamic_cast<hit::Field *>(_fluid_mat->find("type"));
+    tp->setVal("PronghornFluidProps");
+    std::set<std::string> keep = {"fp", "fluid", "porosity", "pebble_diameter", "type"};
+    for (auto child : _fluid_mat->children())
+    {
+      if (keep.count(child->path()) == 0)
+        delete child;
+    }
+    hit::Formatter fmt;
+    fmt.canonical_section_markers = false;
+    std::ofstream out(_input_filename);
+    out << fmt.format(_root.get());
+    out.close();
   }
-  hit::Formatter fmt;
-  fmt.canonical_section_markers = false;
-  std::ofstream out(_input_filename);
-  out << fmt.format(_root.get());
-  out.close();
-  mooseError("abort");
+  if (rewrite)
+    mooseError("abort");
 
   if (_errmsg.size() > 0)
     mooseError(_errmsg);
@@ -1010,7 +1176,34 @@ Parser::extractParams(const std::string & prefix, InputParameters & p)
   _current_params = &p;
   _current_error_stream = &error_stream;
 
-  auto sec = _root->find(prefix);
+  auto sec = _root->find(prefix)->parent();
+  static bool done = false;
+  if (!done && sec->path() == "Variables")
+  {
+    done = true;
+    std::ofstream outfile;
+    outfile.open("vars.log", std::ios_base::app);
+    outfile << "===== Set (" << _input_filename << ") =====\n";
+    for (auto child : sec->children())
+    {
+      _nonlinvars.insert(child->path());
+      outfile << "Variable: " << child->path() << "\n";
+    }
+  }
+  static bool done2 = false;
+  if (!done2 && sec->path() == "AuxVariables")
+  {
+    done = true;
+    std::ofstream outfile;
+    outfile.open("auxvars.log", std::ios_base::app);
+    outfile << "===== Set (" << _input_filename << ") =====\n";
+    for (auto child : sec->children())
+    {
+      _auxvars.insert(child->path());
+      outfile << "AuxVariable: " << child->path() << "\n";
+    }
+  }
+  sec = _root->find(prefix);
   if (sec->find("type") && sec->param<std::string>("type") == "PronghornFluidMaterial")
     _fluid_mat = _root->find(prefix);
 
