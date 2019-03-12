@@ -48,7 +48,7 @@
 #include <algorithm>
 #include <cstdlib>
 
-const static bool rewrite = true;
+const static bool rewrite = false;
 
 Parser::Parser(MooseApp & app, ActionWarehouse & action_wh)
   : ConsoleStreamInterface(app),
@@ -734,7 +734,6 @@ Parser::parse(const std::string & input_filename)
       for (auto & var : _auxvars)
         outfile << "        " << var << "\n";
       outfile.close();
-      mooseError("missing required var");
     }
 
     auto varmat = new hit::Section("varmat");
@@ -773,7 +772,7 @@ Parser::parse(const std::string & input_filename)
     hit::Formatter fmt;
     fmt.canonical_section_markers = false;
     std::ofstream out(_input_filename);
-    out << fmt.format(_root.get());
+    out << fmt.format(_root.get()) << "\n";
     out.close();
   }
   if (rewrite)
