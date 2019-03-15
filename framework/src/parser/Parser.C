@@ -48,7 +48,7 @@
 #include <algorithm>
 #include <cstdlib>
 
-const static bool rewrite = false;
+const static bool rewrite = true;
 
 Parser::Parser(MooseApp & app, ActionWarehouse & action_wh)
   : ConsoleStreamInterface(app),
@@ -624,6 +624,7 @@ Parser::parse(const std::string & input_filename)
 
     bool pvt = false;
     bool conserved = false;
+    bool prhout = true;
 
     for (auto & var : _nonlinvars)
     {
@@ -640,26 +641,31 @@ Parser::parse(const std::string & input_filename)
       else if (ptv_vel_x.count(var) > 0)
       {
         pvt = true;
+        prhout = false;
         var_vx = var;
       }
       else if (ptv_vel_y.count(var) > 0)
       {
         pvt = true;
+        prhout = false;
         var_vy = var;
       }
       else if (ptv_vel_z.count(var) > 0)
       {
         pvt = true;
+        prhout = false;
         var_vz = var;
       }
       else if (conserved_rho.count(var) > 0)
       {
         conserved = true;
+        prhout = false;
         var_rho = var;
       }
       else if (conserved_rhoE.count(var) > 0)
       {
         conserved = true;
+        prhout = false;
         var_rhoE = var;
       }
       else if (conserved_rhou.count(var) > 0)
@@ -703,7 +709,7 @@ Parser::parse(const std::string & input_filename)
         var_rhow = var;
     }
 
-    if (pvt && conserved)
+    if (pvt && conserved && !prhout)
     {
       std::ofstream outfile;
       outfile.open("mixed-formulation.log", std::ios_base::app);
@@ -718,10 +724,22 @@ Parser::parse(const std::string & input_filename)
     }
 
     std::string tot;
-    if (conserved)
+    if (prhout)
+    {
+      tot = var_p + var_Tf + var_rhou;
+      auto tot2 = var_p + var_Tf + var_vx;
+      if (tot.find("FIXMEVAR") < tot.size() && tot2.find("FIXMEVAR") >= tot2.size())
+      {
+        // we have p and T, but vx is an aux and rhou is not - so we actually have pvt formulation
+        tot = tot2;
+        prhout = false;
+      }
+    }
+    else if (conserved)
       tot = var_rho + var_rhoE + var_rhou;
     else if (pvt)
       tot = var_p + var_Tf + var_vx;
+
     if (tot.find("FIXMEVAR") < tot.size())
     {
       std::ofstream outfile;
@@ -737,7 +755,19 @@ Parser::parse(const std::string & input_filename)
     }
 
     auto varmat = new hit::Section("varmat");
-    if (pvt)
+    if (prhout)
+    {
+      varmat->addChild(
+          new hit::Field("type", hit::Field::Kind::String, "PronghornVarMaterialMixed"));
+      varmat->addChild(new hit::Field("pressure", hit::Field::Kind::String, var_p));
+      varmat->addChild(new hit::Field("T_fluid", hit::Field::Kind::String, var_Tf));
+      varmat->addChild(new hit::Field("rho_u", hit::Field::Kind::String, var_rhou));
+      if (!var_rhov.empty())
+        varmat->addChild(new hit::Field("rho_v", hit::Field::Kind::String, var_rhov));
+      if (!var_rhow.empty())
+        varmat->addChild(new hit::Field("rho_w", hit::Field::Kind::String, var_rhow));
+    }
+    else if (pvt)
     {
       varmat->addChild(new hit::Field("type", hit::Field::Kind::String, "PronghornVarMaterialPT"));
       varmat->addChild(new hit::Field("pressure", hit::Field::Kind::String, var_p));
@@ -1203,7 +1233,8 @@ Parser::extractParams(const std::string & prefix, InputParameters & p)
     }
   }
   sec = _root->find(prefix);
-  if (sec->find("type") && sec->param<std::string>("type") == "PronghornFluidMaterial")
+  if (sec->find("type") && (sec->param<std::string>("type") == "PronghornFluidMaterial" ||
+                            sec->param<std::string>("type") == "PronghornFluidMaterialPT"))
     _fluid_mat = _root->find(prefix);
 
   for (const auto & it : p)
