@@ -220,6 +220,22 @@ _LexFunc lexNumber(Lexer *);
 _LexFunc lexString(Lexer *);
 
 _LexFunc
+lexDirective(Lexer * l)
+{
+  l->acceptRun(identchars);
+  l->emit(TokType::Ident);
+
+  l->acceptRun(space);
+  l->ignore();
+
+  while (!charIn(l->peek(), newline))
+    l->next();
+  l->emit(TokType::DirectiveBody);
+
+  return lexHit;
+}
+
+_LexFunc
 lexPath(Lexer * l)
 {
   l->acceptRun(space);
@@ -318,11 +334,6 @@ lexEq(Lexer * l)
 
   l->acceptRun(allspace);
   l->ignore();
-
-  // uncomment this to allow commentw between '=' and field value
-  // lexComments(l);
-  // l->acceptRun(allspace);
-  // l->ignore();
 
   if (charIn(l->peek(), digits + "-+.eE"))
     return lexNumber;
@@ -458,6 +469,11 @@ lexHit(Lexer * l)
   {
     l->emit(TokType::LeftBracket);
     return lexPath;
+  }
+  else if (c == '+')
+  {
+    l->emit(TokType::Plus);
+    return lexDirective;
   }
   else if (charIn(c, identchars))
   {

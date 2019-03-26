@@ -21,6 +21,8 @@ enum class TokType
   LeftBracket,
   RightBracket,
   Ident,
+  DirectiveBody,
+  Plus,
   Path,
   Number,
   String,

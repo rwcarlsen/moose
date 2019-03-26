@@ -12,26 +12,6 @@
 namespace hit
 {
 
-inline std::string
-errormsg(std::string /*fname*/, Node * /*n*/)
-{
-  return "";
-}
-
-template <typename T, typename... Args>
-std::string
-errormsg(std::string fname, Node * n, T arg, Args... args)
-{
-  std::stringstream ss;
-  if (n && fname.size() > 0)
-    ss << fname << ":" << n->line() << ": ";
-  else if (fname.size() > 0)
-    ss << fname << ":0: ";
-  ss << arg;
-  ss << errormsg("", nullptr, args...);
-  return ss.str();
-}
-
 class BraceNode
 {
 public:

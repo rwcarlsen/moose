@@ -7,6 +7,8 @@
 #include <iterator>
 #include <memory>
 #include <regex>
+#include <limits.h>
+#include <fstream>
 
 #include "parse.h"
 
@@ -304,7 +306,9 @@ Node::walk(Walker * w, NodeType t)
 {
   if (_type == t || t == NodeType::All)
     w->walk(fullpath(), pathNorm(path()), this);
-  for (auto child : _children)
+  // this allows _children to be modified during the walking process and still not have things break
+  std::vector<Node *> children_copy = _children;
+  for (auto child : children_copy)
     child->walk(w, t);
 }
 
@@ -725,6 +729,16 @@ void parseEnterPath(Parser * p, Node * n);
 void parseExitPath(Parser * p, Node * n);
 
 void
+parseDirective(Parser * p, Node * n)
+{
+  p->ignore();
+  p->require(TokType::Plus, "unexpected token for directive");
+  auto nametok = p->require(TokType::Ident, "unexpected token for directive");
+  auto bodytok = p->require(TokType::DirectiveBody, "unexpected token for directive body");
+  n->addChild(p->emit(new Directive(nametok.val, bodytok.val)));
+}
+
+void
 parseExitPath(Parser * p, Node * n)
 {
   auto secOpenToks = p->scope()->tokens();
@@ -777,6 +791,8 @@ parseSectionBody(Parser * p, Node * n)
     }
     else if (tok.type == TokType::Ident)
       parseField(p, n);
+    else if (tok.type == TokType::Plus)
+      parseDirective(p, n);
     else if (tok.type == TokType::Comment || tok.type == TokType::InlineComment)
       parseComment(p, n);
     else if (tok.type == TokType::LeftBracket)
@@ -788,7 +804,6 @@ parseSectionBody(Parser * p, Node * n)
       else // found section closing - we are done here
         return;
     }
-
     else if (tok.type == TokType::Error)
       p->error(tok, tok.val);
     else if (tok.type == TokType::EOF)
@@ -953,6 +968,103 @@ merge(Node * from, Node * into)
   MergeSectionWalker sw(into);
   from->walk(&fw, NodeType::Field);
   from->walk(&sw, NodeType::Section);
+}
+
+void expandIncludesInner(const std::string & fname,
+                         const std::string & block,
+                         Node * n,
+                         std::set<std::string> & curr_includes,
+                         Node * curr);
+
+// IncludeWalker is used to expand +include directives with contents
+class IncludeWalker : public Walker
+{
+public:
+  IncludeWalker(const std::string & fname,
+                const std::string & block,
+                std::set<std::string> & curr_includes,
+                Node * curr = nullptr)
+    : _block(block), _curr_includes(curr_includes)
+  {
+    char abspath[PATH_MAX + 1];
+    realpath(fname.c_str(), abspath);
+    _fname = std::string(abspath);
+
+    auto canonical = _fname + ":" + _block;
+    if (curr && _curr_includes.count(canonical) > 0)
+      throw Error(errormsg(_fname, curr, "cyclical +includes detected"));
+    _curr_includes.insert(canonical);
+  }
+  ~IncludeWalker() { _curr_includes.erase(_fname + ":" + _block); }
+  void walk(const std::string & /*fullpath*/, const std::string & /*nodepath*/, Node * n)
+  {
+    auto d = dynamic_cast<Directive *>(n);
+    if (!d)
+      throw Error(errormsg(_fname, n, "include expansion walk was passed a non-directive node"));
+
+    auto name = d->name();
+    auto body = d->body();
+
+    auto offset = body.find(":");
+    if (offset == std::string::npos)
+      throw Error(errormsg(_fname, n, "missing ':' in +include directive body"));
+
+    std::string filesub = body.substr(offset);
+    std::string blocksub = body.substr(offset + 1, std::string::npos);
+
+    if (filesub.size() > 0)
+    {
+      char abspath[PATH_MAX + 1];
+      realpath(filesub.c_str(), abspath);
+      filesub = std::string(abspath);
+    }
+    else
+      filesub = _fname;
+
+    // parse the file we are including from
+    std::ifstream f(filesub);
+    std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    std::unique_ptr<hit::Node> root(parse(filesub, input));
+
+    Node * curr = root.get();
+    if (blocksub.size() > 0)
+      curr = root->find(blocksub);
+
+    // recursively expand includes only for the sub-block we care about
+    expandIncludesInner(filesub, blocksub, curr, _curr_includes, n);
+
+    // copy all child nodes of the included block into our main tree
+    for (auto child : curr->children())
+    {
+      auto copy = child->clone();
+      copy->tokens() = child->tokens();
+      n->parent()->addChild(copy);
+    }
+    delete n;
+  }
+
+private:
+  std::string _fname;
+  std::string _block;
+  std::set<std::string> & _curr_includes;
+};
+
+void
+expandIncludesInner(const std::string & fname,
+                    const std::string & block,
+                    Node * n,
+                    std::set<std::string> & curr_includes,
+                    Node * curr = nullptr)
+{
+  IncludeWalker w(fname, block, curr_includes, curr);
+  n->walk(&w, NodeType::Directive);
+}
+
+void
+expandIncludes(const std::string & fname, Node * n)
+{
+  std::set<std::string> curr_includes;
+  expandIncludesInner(fname, "", n, curr_includes);
 }
 
 Node *

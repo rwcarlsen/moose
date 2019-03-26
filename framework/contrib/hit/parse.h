@@ -8,6 +8,7 @@
 #include <typeinfo>
 #include <cstdint>
 #include <iostream>
+#include <sstream>
 
 #include "lex.h"
 
@@ -22,17 +23,24 @@
 ///     section_entry => parameter | section
 ///     parameter => PATH EQUALS param_value
 ///     param_value => string | NUMBER | BOOL
-///     string => UNQUOTED_STRING_BODY
+///     brace_expr => BRACE_OPEN brace_body BRACE_CLOSE
+///     brace_body => brace_arg brace_body | brace_arg
+///     brace_arg => brace_expr | BRACE_ITEM
+///     string => brace_expr
+///             | UNQUOTED_STRING_BODY
 ///             | SINGLE_QUOTE SINGLE_QUOTE_BODY SINGLE_QUOTE
 ///             | DOUBLE_QUOTE DOUBLE_QUOTE_BODY DOUBLE_QUOTE
 ///
 /// Where the terminals are defined as:
 ///
+///     BRACE_OPEN = "${"
+///     BRACE_CLOSE = "}"
+///     BRACE_ITEM = [^\t\n }]+
 ///     LEFT_BRACKET = "["
 ///     RIGHT_BRACKET = "]"
 ///     EQUALS = "="
 ///     NUMBER = [+-]?[0-9]*(\.[0-9]*)?([eE][+-][0-9]+)?
-///     PATH = [a-zA-Z0-9_./:<>+\-]+
+///     PATH = [a-zA-Z0-9_./:<>\-][a-zA-Z0-9_./:<>+\-]*
 ///     CLOSING_PATH = "../" | ""
 ///     BOOL = TRUE|true|YES|yes|ON|on|FALSE|false|NO|no|OFF|off
 ///     UNQUOTED_STRING_BODY = [^ \t\n\[]+
@@ -64,12 +72,13 @@ bool toBool(const std::string & val, bool * dst);
 /// NodeType represents every element type in a parsed hit tree.
 enum class NodeType
 {
-  All,     /// Used for tree-traversal/manipulation to indicate all functions.
-  Root,    /// Represents the root, most un-nested node of a parsed hit tree.
-  Section, /// Represents hit sections (i.e. "[pathname]...[../]").
-  Comment, /// Represents comments that are not directly part of the actual hit document.
-  Field,   /// Represents field-value pairs (i.e. paramname=val).
-  Blank,   /// Represents a blank line
+  All,       /// Used for tree-traversal/manipulation to indicate all functions.
+  Root,      /// Represents the root, most un-nested node of a parsed hit tree.
+  Section,   /// Represents hit sections (i.e. "[pathname]...[../]").
+  Comment,   /// Represents comments that are not directly part of the actual hit document.
+  Field,     /// Represents field-value pairs (i.e. paramname=val).
+  Blank,     /// Represents a blank line
+  Directive, /// Represents a special syntax directive
 };
 
 /// nodeTypeName returns a human-readable string representing a name for the give node type.
@@ -316,6 +325,26 @@ Node::paramInner(Node * n)
   return n->vecStrVal();
 }
 
+inline std::string
+errormsg(std::string /*fname*/, Node * /*n*/)
+{
+  return "";
+}
+
+template <typename T, typename... Args>
+std::string
+errormsg(std::string fname, Node * n, T arg, Args... args)
+{
+  std::stringstream ss;
+  if (n && fname.size() > 0)
+    ss << fname << ":" << n->line() << ": ";
+  else if (fname.size() > 0)
+    ss << fname << ":0: ";
+  ss << arg;
+  ss << errormsg("", nullptr, args...);
+  return ss.str();
+}
+
 /// Comment repsents an in-file comment (i.e. "# some comment text...")
 class Comment : public Node
 {
@@ -345,6 +374,29 @@ public:
     return "\n";
   }
   virtual Node * clone() override { return new Blank(); };
+};
+
+/// Directive represents a special syntax directive.
+class Directive : public Node
+{
+public:
+  Directive(const std::string & name, const std::string & body)
+    : Node(NodeType::Directive), _name(name), _body(body)
+  {
+  }
+  virtual std::string render(int indent = 0,
+                             const std::string & indent_text = default_indent,
+                             int /*maxlen*/ = 0) override
+  {
+    return "\n" + strRepeat(indent_text, indent) + "+" + _name + " " + _body;
+  }
+  virtual Node * clone() override { return new Directive(_name, _body); };
+  std::string name() { return _name; }
+  std::string body() { return _body; }
+
+private:
+  std::string _name;
+  std::string _body;
 };
 
 /// Section represents a hit section including the section header path and all entries inside
@@ -445,6 +497,8 @@ void merge(Node * from, Node * into);
 /// exist in the tree, the fields will be moved into them rather than new sections created.  The
 /// returned node is the root of the exploded tree.
 Node * explode(Node * n);
+
+void expandIncludes(Node * n);
 
 // Formatter is used to automatically format hit syntax/input to be uniform in a specified style.
 // After creating a formatter object and configuring it as desired by modifying/calling its members
