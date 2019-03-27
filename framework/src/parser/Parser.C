@@ -497,6 +497,7 @@ Parser::parse(const std::string & input_filename)
   try
   {
     _root.reset(hit::parse(_input_filename, input));
+    hit::expandIncludes(_root.get());
     auto cli_input = hitCLIFilter(_app.name(), _app.commandLine()->getArguments());
 
     _cli_root.reset(hit::parse("CLI_ARGS", cli_input));
@@ -987,8 +988,7 @@ Parser::extractParams(const std::string & prefix, InputParameters & p)
       _extracted_vars.insert(
           full_name); // Keep track of all variables extracted from the input file
       found = true;
-      p.inputLocation(it.first) =
-          _input_filename + ":" + std::to_string(_root->find(full_name)->line());
+      p.inputLocation(it.first) = hit::errormsg(_root->find(full_name), "");
       p.paramFullpath(it.first) = full_name;
     }
     // Wait! Check the GlobalParams section
@@ -1002,8 +1002,7 @@ Parser::extractParams(const std::string & prefix, InputParameters & p)
             full_name); // Keep track of all variables extracted from the input file
         found = true;
         in_global = true;
-        p.inputLocation(it.first) =
-            _input_filename + ":" + std::to_string(_root->find(full_name)->line());
+        p.inputLocation(it.first) = hit::errormsg(_root->find(full_name), "");
         p.paramFullpath(it.first) = full_name;
       }
     }

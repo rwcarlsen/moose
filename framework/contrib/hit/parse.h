@@ -169,6 +169,28 @@ public:
   virtual std::vector<int> vecIntVal();
   virtual std::vector<std::string> vecStrVal();
 
+  /// file returns the path to the file from which this node was read/parsed from if any.
+  std::string file() { return _fname; }
+  /// setFile sets the path to the file from which this node was read/parsed from. It also sets
+  /// the file for all this node's children recursively to the same value.
+  void setFile(const std::string & fname)
+  {
+    _fname = fname;
+    for (auto child : _children)
+      child->setFile(fname);
+  }
+
+  /// include returns the "[filepath]:[block]" for the include directive, if any, that caused this
+  /// node to be inserted in its present location - or an empty string otherwise.
+  const std::vector<std::string> & includes() { return _includes; }
+  /// setInclude sets the value returned by the include function.
+  void addInclude(const std::string & includestr)
+  {
+    _includes.push_back(includestr);
+    for (auto child : _children)
+      child->addInclude(includestr);
+  }
+
   /// addChild adds a node to the ordered set of this node's children.  This node assumes/takes
   /// ownership of the memory of the passed child.
   void addChild(Node * child);
@@ -181,6 +203,15 @@ public:
   /// clone returns a complete (deep) copy of this node.  The caller will be responsible for
   /// managing the memory/deallocation of the returned clone node.
   virtual Node * clone() = 0;
+
+  // clonePropsInto copies member variables of this instance into n.  Other node subclasses' clone
+  // functions should call this function.
+  void clonePropsInto(Node * n)
+  {
+    n->_fname = _fname;
+    n->_includes = _includes;
+    n->_toks = _toks;
+  }
 
   /// render builds an hit syntax/text that is equivalent to the hit tree starting at this
   /// node (and downward) - i.e. parsing this function's returned string would yield a node tree
@@ -239,6 +270,8 @@ private:
     throw Error("unsupported c++ type '" + std::string(typeid(T).name()) + "'");
   }
 
+  std::string _fname;
+  std::vector<std::string> _includes;
   std::vector<Token> _toks;
   Node * _parent = nullptr;
   std::vector<Node *> _children;
@@ -325,23 +358,43 @@ Node::paramInner(Node * n)
   return n->vecStrVal();
 }
 
+template <typename T, typename... Args>
+std::string
+errormsg(std::string /*fname*/, Node * n, T arg, Args... args)
+{
+  return errormsg(n, arg, args...);
+}
+
 inline std::string
-errormsg(std::string /*fname*/, Node * /*n*/)
+errormsg(Node * /*n*/)
 {
   return "";
 }
 
 template <typename T, typename... Args>
 std::string
-errormsg(std::string fname, Node * n, T arg, Args... args)
+errormsg(Node * n, T arg, Args... args)
 {
   std::stringstream ss;
-  if (n && fname.size() > 0)
-    ss << fname << ":" << n->line() << ": ";
-  else if (fname.size() > 0)
-    ss << fname << ":0: ";
+  if (n && n->file().size() > 0)
+  {
+    std::string prefix = n->file() + ":" + std::to_string(n->line());
+    if (n->includes().size() > 0)
+    {
+      std::string indent = "    ";
+      for (auto & incl : n->includes())
+      {
+        prefix += "\n" + indent + "which is included by\n" + indent + incl;
+        indent += "    ";
+      }
+      prefix += ":\n" + indent;
+    }
+    else
+      prefix += ": ";
+    ss << prefix;
+  }
   ss << arg;
-  ss << errormsg("", nullptr, args...);
+  ss << errormsg(nullptr, args...);
   return ss.str();
 }
 
@@ -373,7 +426,12 @@ public:
   {
     return "\n";
   }
-  virtual Node * clone() override { return new Blank(); };
+  virtual Node * clone() override
+  {
+    auto n = new Blank();
+    clonePropsInto(n);
+    return n;
+  };
 };
 
 /// Directive represents a special syntax directive.
@@ -390,7 +448,12 @@ public:
   {
     return "\n" + strRepeat(indent_text, indent) + "+" + _name + " " + _body;
   }
-  virtual Node * clone() override { return new Directive(_name, _body); };
+  virtual Node * clone() override
+  {
+    auto n = new Directive(_name, _body);
+    clonePropsInto(n);
+    return n;
+  };
   std::string name() { return _name; }
   std::string body() { return _body; }
 

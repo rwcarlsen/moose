@@ -413,7 +413,7 @@ InputParameters::mooseObjectSyntaxVisibility() const
 
 #define checkMooseType(param_type, name)                                                           \
   if (have_parameter<param_type>(name) || have_parameter<std::vector<param_type>>(name))           \
-    oss << inputLocation(param_name) << ": non-controllable type '" << type(name)                  \
+    oss << inputLocation(param_name) << "non-controllable type '" << type(name)                    \
         << "' for parameter '" << paramFullpath(param_name) << "' marked controllable";
 
 void
@@ -447,7 +447,7 @@ InputParameters::checkParams(const std::string & parsing_syntax)
   for (const auto & param_name : getControllableParameters())
   {
     if (isPrivate(param_name))
-      oss << inputLocation(param_name) << ": private parameter '" << paramFullpath(param_name)
+      oss << inputLocation(param_name) << "private parameter '" << paramFullpath(param_name)
           << "' marked controllable";
 
     checkMooseType(NonlinearVariableName, param_name);

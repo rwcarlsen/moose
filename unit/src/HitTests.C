@@ -608,3 +608,71 @@ TEST(HitTests, Formatter_sorting)
     EXPECT_EQ(test.want, got) << "case " << i + 1 << " FAIL (" << test.name << ")";
   }
 }
+
+TEST(HitTests, IncludeDirectives)
+{
+  ValCase cases[] = {
+      {"local", "[hello]foo=42[] +include :hello", "foo", "42", hit::Field::Kind::Int},
+      {"local cyclical", "[hello]foo=42[] +include :", "foo", "42", hit::Field::Kind::None},
+      {"local recursive",
+       "[hello]+include :world\n[] [world]foo=42[]+include :hello",
+       "foo",
+       "42",
+       hit::Field::Kind::Int},
+      {"local recursive",
+       "[hello]+include :world\n[] [world]+include :hello\n[]+include :hello",
+       "foo",
+       "42",
+       hit::Field::Kind::None},
+  };
+
+  for (size_t i = 0; i < sizeof(cases) / sizeof(ValCase); i++)
+  {
+    auto test = cases[i];
+    hit::Node * root = nullptr;
+    try
+    {
+      root = hit::parse("TEST", test.input);
+      try
+      {
+        hit::expandIncludes(root);
+        if (test.kind == hit::Field::Kind::None)
+        {
+          FAIL() << "case " << i + 1 << " missing expected error\n";
+          continue;
+        }
+      }
+      catch (std::exception & err)
+      {
+        if (test.kind != hit::Field::Kind::None)
+          FAIL() << "case " << i + 1 << " unexpected error: " << err.what() << "\n";
+        continue;
+      }
+    }
+    catch (std::exception & err)
+    {
+      FAIL() << "case " << i + 1 << " unexpected error: " << err.what() << "\n";
+      continue;
+    }
+
+    auto n = root->find(test.key);
+    if (!n)
+    {
+      FAIL() << "case " << i + 1 << " failed to find key '" << test.key << "'\n";
+      continue;
+    }
+    if (n->strVal() != test.val)
+    {
+      FAIL() << "case " << i + 1 << " wrong value (key=" << test.key << "): got '" << n->strVal()
+             << "', want '" << test.val << "'\n";
+      continue;
+    }
+
+    auto f = dynamic_cast<hit::Field *>(n);
+    if (!f)
+      FAIL() << "case " << i + 1 << " node type is not NodeType::Field";
+    else if (test.kind != hit::Field::Kind::None && f->kind() != test.kind)
+      FAIL() << "case " << i + 1 << " wrong kind (key=" << test.key << "): got '"
+             << strkind(f->kind()) << "', want '" << strkind(test.kind) << "'\n";
+  }
+}

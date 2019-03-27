@@ -373,7 +373,9 @@ Comment::render(int indent, const std::string & indent_text, int /*maxlen*/)
 Node *
 Comment::clone()
 {
-  return new Comment(_text, _isinline);
+  auto n = new Comment(_text, _isinline);
+  clonePropsInto(n);
+  return n;
 }
 
 Section::Section(const std::string & path) : Node(NodeType::Section), _path(pathNorm(path)) {}
@@ -414,9 +416,7 @@ Node *
 Section::clone()
 {
   auto n = new Section(_path);
-  // Although we don't usually copy over tokens for cloned nodes, we make an exception here
-  // in order to "remember" whether or not the user used the legacy "../" section closing marker.
-  n->tokens() = tokens();
+  clonePropsInto(n);
   for (auto child : children())
     n->addChild(child->clone());
   return n;
@@ -496,7 +496,9 @@ Field::render(int indent, const std::string & indent_text, int maxlen)
 Node *
 Field::clone()
 {
-  return new Field(_field, _kind, _val);
+  auto n = new Field(_field, _kind, _val);
+  clonePropsInto(n);
+  return n;
 }
 
 Field::Kind
@@ -910,6 +912,11 @@ parse(const std::string & fname, const std::string & input)
   Parser parser(fname, input, tokens);
   std::unique_ptr<Node> root(new Section(""));
   parseSectionBody(&parser, root.get());
+
+  char abspath[PATH_MAX + 1];
+  realpath(fname.c_str(), abspath);
+  root->setFile(std::string(abspath));
+
   return root.release();
 }
 
@@ -970,47 +977,49 @@ merge(Node * from, Node * into)
   from->walk(&sw, NodeType::Section);
 }
 
-void expandIncludesInner(const std::string & fname,
-                         const std::string & block,
-                         Node * n,
-                         std::set<std::string> & curr_includes,
-                         Node * curr);
+void
+expandIncludesInner(const std::string & block, Node * n, std::set<std::string> & curr_includes);
 
 // IncludeWalker is used to expand +include directives with contents
 class IncludeWalker : public Walker
 {
 public:
-  IncludeWalker(const std::string & fname,
-                const std::string & block,
-                std::set<std::string> & curr_includes,
-                Node * curr = nullptr)
+  IncludeWalker(Node * start, const std::string & block, std::set<std::string> & curr_includes)
     : _block(block), _curr_includes(curr_includes)
   {
     char abspath[PATH_MAX + 1];
-    realpath(fname.c_str(), abspath);
+    realpath(start->file().c_str(), abspath);
     _fname = std::string(abspath);
 
     auto canonical = _fname + ":" + _block;
-    if (curr && _curr_includes.count(canonical) > 0)
-      throw Error(errormsg(_fname, curr, "cyclical +includes detected"));
     _curr_includes.insert(canonical);
   }
-  ~IncludeWalker() { _curr_includes.erase(_fname + ":" + _block); }
+  ~IncludeWalker()
+  {
+    auto canonical = _fname + ":" + _block;
+    _curr_includes.erase(canonical);
+  }
   void walk(const std::string & /*fullpath*/, const std::string & /*nodepath*/, Node * n)
   {
     auto d = dynamic_cast<Directive *>(n);
     if (!d)
-      throw Error(errormsg(_fname, n, "include expansion walk was passed a non-directive node"));
+      throw Error(errormsg(n, "include expansion walk was passed a non-directive node"));
+    else if (d->name() != "include") // not an include directive
+      return;
 
-    auto name = d->name();
     auto body = d->body();
-
     auto offset = body.find(":");
     if (offset == std::string::npos)
-      throw Error(errormsg(_fname, n, "missing ':' in +include directive body"));
+      throw Error(errormsg(n, "missing ':' in +include directive body"));
 
-    std::string filesub = body.substr(offset);
+    std::string filesub = body.substr(0, offset);
     std::string blocksub = body.substr(offset + 1, std::string::npos);
+
+    // trim off any space from right side of block path
+    blocksub.erase(
+        std::find_if(blocksub.rbegin(), blocksub.rend(), [](int ch) { return !std::isspace(ch); })
+            .base(),
+        blocksub.end());
 
     if (filesub.size() > 0)
     {
@@ -1021,23 +1030,50 @@ public:
     else
       filesub = _fname;
 
-    // parse the file we are including from
-    std::ifstream f(filesub);
-    std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    std::unique_ptr<hit::Node> root(parse(filesub, input));
+    // get the hit tree for the the file we are including from
+    Node * root = nullptr;
 
-    Node * curr = root.get();
+    // we can't stuff the existing local tree into a new smart pointer - then it will be deleted
+    // twice.
+    std::unique_ptr<Node> externalroot;
+    if (filesub == _fname) // including locally from the current file/tree
+      root = n->root();
+    else // including from a new external file/tree
+    {
+      std::ifstream f(filesub);
+      if (!f)
+        throw Error(errormsg(n, "include failure - file '", filesub, "' not found"));
+      std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+      externalroot.reset(parse(filesub, input));
+      root = externalroot.get();
+    }
+
+    Node * curr = root;
     if (blocksub.size() > 0)
+    {
+      auto subnode = root->find(blocksub);
+      if (!subnode)
+        throw Error(errormsg(n, "include failure - block '", blocksub, "' not found in ", filesub));
       curr = root->find(blocksub);
+    }
+
+    for (auto child : curr->children())
+    {
+      child->addInclude(n->file() + ":" + std::to_string(n->line()));
+      for (auto & incl : n->includes())
+        child->addInclude(incl);
+    }
 
     // recursively expand includes only for the sub-block we care about
-    expandIncludesInner(filesub, blocksub, curr, _curr_includes, n);
+    auto canonical = filesub + ":" + blocksub;
+    if (_curr_includes.count(canonical) > 0)
+      throw Error(errormsg(n, "cyclical +includes detected"));
+    expandIncludesInner(blocksub, curr, _curr_includes);
 
     // copy all child nodes of the included block into our main tree
     for (auto child : curr->children())
     {
       auto copy = child->clone();
-      copy->tokens() = child->tokens();
       n->parent()->addChild(copy);
     }
     delete n;
@@ -1050,21 +1086,18 @@ private:
 };
 
 void
-expandIncludesInner(const std::string & fname,
-                    const std::string & block,
-                    Node * n,
-                    std::set<std::string> & curr_includes,
-                    Node * curr = nullptr)
+expandIncludesInner(const std::string & block, Node * n, std::set<std::string> & curr_includes)
+
 {
-  IncludeWalker w(fname, block, curr_includes, curr);
+  IncludeWalker w(n, block, curr_includes);
   n->walk(&w, NodeType::Directive);
 }
 
 void
-expandIncludes(const std::string & fname, Node * n)
+expandIncludes(Node * n)
 {
   std::set<std::string> curr_includes;
-  expandIncludesInner(fname, "", n, curr_includes);
+  expandIncludesInner("", n, curr_includes);
 }
 
 Node *

@@ -228,7 +228,7 @@ lexDirective(Lexer * l)
   l->acceptRun(space);
   l->ignore();
 
-  while (!charIn(l->peek(), newline))
+  while (!charIn(l->peek(), newline) && l->peek() != '\0')
     l->next();
   l->emit(TokType::DirectiveBody);
 
