@@ -1016,10 +1016,16 @@ public:
     std::string blocksub = body.substr(offset + 1, std::string::npos);
 
     // trim off any space from right side of block path
-    blocksub.erase(
-        std::find_if(blocksub.rbegin(), blocksub.rend(), [](int ch) { return !std::isspace(ch); })
-            .base(),
-        blocksub.end());
+    blocksub = trim(blocksub);
+
+    // track whether we include the contents of named block or the block itself
+    bool include_block = true;
+    auto last_two = blocksub.substr(blocksub.size() - 2, std::string::npos);
+    if (last_two == "/*")
+    {
+      include_block = false;
+      blocksub = blocksub.substr(0, blocksub.size() - 2);
+    }
 
     if (filesub.size() > 0)
     {
@@ -1057,11 +1063,20 @@ public:
       curr = root->find(blocksub);
     }
 
-    for (auto child : curr->children())
+    if (include_block)
     {
-      child->addInclude(n->file() + ":" + std::to_string(n->line()));
+      curr->addInclude(n->file() + ":" + std::to_string(n->line()));
       for (auto & incl : n->includes())
-        child->addInclude(incl);
+        curr->addInclude(incl);
+    }
+    else
+    {
+      for (auto child : curr->children())
+      {
+        child->addInclude(n->file() + ":" + std::to_string(n->line()));
+        for (auto & incl : n->includes())
+          child->addInclude(incl);
+      }
     }
 
     // recursively expand includes only for the sub-block we care about
@@ -1071,10 +1086,18 @@ public:
     expandIncludesInner(blocksub, curr, _curr_includes);
 
     // copy all child nodes of the included block into our main tree
-    for (auto child : curr->children())
+    if (include_block)
     {
-      auto copy = child->clone();
+      auto copy = curr->clone();
       n->parent()->addChild(copy);
+    }
+    else
+    {
+      for (auto child : curr->children())
+      {
+        auto copy = child->clone();
+        n->parent()->addChild(copy);
+      }
     }
     delete n;
   }

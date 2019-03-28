@@ -180,10 +180,13 @@ public:
       child->setFile(fname);
   }
 
-  /// include returns the "[filepath]:[block]" for the include directive, if any, that caused this
-  /// node to be inserted in its present location - or an empty string otherwise.
+  /// includes returns a list of "[filepath]:[line]" describing the sequence of include
+  /// directives, if any, that caused this node to be inserted in its present location - or an
+  /// empty string otherwise.
   const std::vector<std::string> & includes() { return _includes; }
-  /// setInclude sets the value returned by the include function.
+  /// addInclude adds an entry to the list of "[filepath]:[line]" entries describing for how this
+  /// node got in its current tree placement. It also adds the includestr for all this node's
+  /// children recursively.
   void addInclude(const std::string & includestr)
   {
     _includes.push_back(includestr);
