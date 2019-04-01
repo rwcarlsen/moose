@@ -1042,6 +1042,15 @@ public:
     std::string filesub = body.substr(0, offset);
     std::string blocksub = body.substr(offset + 1, std::string::npos);
 
+    // get pragma args if any
+    auto argoffset = blocksub.find_first_of(" \t");
+    std::string argstr;
+    if (argoffset != std::string::npos)
+    {
+      argstr = trim(blocksub.substr(argoffset, std::string::npos));
+      blocksub = blocksub.substr(0, argoffset);
+    }
+
     // trim off any space from right side of block path
     blocksub = trim(blocksub);
 
@@ -1105,6 +1114,13 @@ public:
         for (auto & incl : n->includes())
           child->addInclude(incl);
       }
+    }
+
+    // parse include directive args as a tree of param overrides. Then merge it into the current
+    // tree.
+    {
+      std::unique_ptr<hit::Node> argnode(hit::parse(_fname, argstr));
+      hit::merge(argnode.get(), curr);
     }
 
     // recursively expand includes only for the sub-block we care about

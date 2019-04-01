@@ -643,6 +643,11 @@ TEST(HitTests, IncludeDirectives)
        "42",
        hit::Field::Kind::None},
       // check we call explode on included content
+      {"directive args override",
+       "[hello]foo=42[] +include :hello/* foo=43",
+       "foo",
+       "43",
+       hit::Field::Kind::Int},
   };
 
   for (size_t i = 0; i < sizeof(cases) / sizeof(ValCase); i++)
