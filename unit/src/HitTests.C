@@ -496,6 +496,7 @@ TEST(HitTests, RenderCases)
 
 TEST(HitTests, MergeTree)
 {
+  // make sure new sections are created correctly in dst tree
   {
     auto root1 = hit::parse("TESTCASE", "[foo]bar=42[]");
     auto root2 = hit::parse("TESTCASE", "foo/baz/boo=42");
@@ -504,6 +505,8 @@ TEST(HitTests, MergeTree)
     EXPECT_EQ("[foo]\n  bar = 42\n  [baz]\n    boo = 42\n  []\n[]", root1->render());
   }
 
+  // Make sure incompatible type kind's override correctly: i.e. that the the from type overrides
+  // the into type on merge.
   {
     auto root1 = hit::parse("TESTCASE", "foo/bar=baz");
     auto root2 = hit::parse("TESTCASE", "foo/bar=42");
@@ -513,9 +516,19 @@ TEST(HitTests, MergeTree)
     if (!f)
       FAIL() << "merge case node type is not NodeType::Field";
 
-    // Make sure that the the from type overrides the into type on merge
     else if (f->kind() != hit::Field::Kind::Int)
-      FAIL() << "merge case kind type is not overridden (string)";
+      FAIL() << "merge case kind type is not overridden from string to int";
+  }
+
+  // make sure we can merge a sub-node on two trees and all outer nodes are left unmodified
+  {
+    auto root1 = hit::parse("TESTCASE", "[foo] [bar] baz = 42 [][]");
+    // extra=23 should *not* be copied/merged into root1 since we only merge "foo/bar" paths
+    auto root2 = hit::parse("TESTCASE", "[foo] extra = 23 [bar] baz = 43 [][]");
+    auto dst = root1->find("foo/bar");
+    auto src = root2->find("foo/bar");
+    hit::merge(src, dst);
+    EXPECT_EQ("[foo]\n  [bar]\n    baz = 43\n  []\n[]", root1->render());
   }
 }
 
@@ -629,6 +642,7 @@ TEST(HitTests, IncludeDirectives)
        "foo",
        "42",
        hit::Field::Kind::None},
+      // check we call explode on included content
   };
 
   for (size_t i = 0; i < sizeof(cases) / sizeof(ValCase); i++)

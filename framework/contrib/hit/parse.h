@@ -114,6 +114,16 @@ public:
   /// section name for Section nodes and field/parameter name for Field nodes.  n is the actual
   /// node.
   virtual void walk(const std::string & fullpath, const std::string & nodepath, Node * n) = 0;
+
+  /// should generally only be called/used by hit internally.
+  void setStart(Node * n) { _start = n; }
+
+  /// returns the node this recursive walk started on - i.e. the node for which node->walk(walker,...)
+  /// was called.
+  Node * start() {return _start;}
+
+private:
+  Node * _start = nullptr;
 };
 
 /// strRepeat returns a string of s repeated n times.
@@ -143,8 +153,8 @@ public:
   /// is the section name, for field nodes, this is the field/parameter name, for other nodes this
   /// is empty.
   virtual std::string path();
-  /// fullpath returns the full hit path to this node (including all parent sections
-  /// recursively) starting from the tree's root node.
+  /// pathfrom returns the relative hit path from root down to this node.
+  std::string pathfrom(Node * root);
   std::string fullpath();
   /// tokens returns all raw lexer tokens that this node was generated from.  This can be useful
   /// for determining locations in the original file of different tree nodes/elements.
@@ -266,6 +276,8 @@ protected:
 
 private:
   Node * findInner(const std::string & path, const std::string & prefix);
+
+  void walkInner(Walker * w, NodeType t);
 
   template <typename T>
   T paramInner(Node *)

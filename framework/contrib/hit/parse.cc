@@ -301,15 +301,35 @@ Node::fullpath()
   return _parent->fullpath() + "/" + path();
 }
 
+std::string Node::pathfrom(Node * root)
+{
+  if (this == root)
+    return "";
+  else if (_parent == nullptr)
+    throw Error("no relative path between '" + root->fullpath() + "' and '" + fullpath() + "'");
+
+  auto prefix = _parent->pathfrom(root);
+  if (!prefix.empty())
+    prefix += "/";
+  return prefix + path();
+}
+
 void
-Node::walk(Walker * w, NodeType t)
+Node::walkInner(Walker * w, NodeType t)
 {
   if (_type == t || t == NodeType::All)
     w->walk(fullpath(), pathNorm(path()), this);
   // this allows _children to be modified during the walking process and still not have things break
   std::vector<Node *> children_copy = _children;
   for (auto child : children_copy)
-    child->walk(w, t);
+    child->walkInner(w, t);
+}
+
+void
+Node::walk(Walker * w, NodeType t)
+{
+  w->setStart(this);
+  walkInner(w, t);
 }
 
 Node *
@@ -925,13 +945,15 @@ class MergeFieldWalker : public Walker
 {
 public:
   MergeFieldWalker(Node * orig) : _orig(orig) {}
-  void walk(const std::string & fullpath, const std::string & /*nodepath*/, Node * n)
+  void walk(const std::string & /*fullpath*/, const std::string & /*nodepath*/, Node * n)
   {
-    auto result = _orig->find(fullpath);
+    // pathfrom usage allows merge to work correctly for cases where the _orig/dst node is not
+    // the root of its tree.
+    auto result = _orig->find(n->pathfrom(start()));
     if (!result)
     {
-      if (n->parent() && _orig->find(n->parent()->fullpath())) // add node to existing section
-        _orig->find(n->parent()->fullpath())->addChild(n->clone());
+      if (n->parent() && _orig->find(n->parent()->pathfrom(start()))) // add node to existing section
+        _orig->find(n->parent()->pathfrom(start()))->addChild(n->clone());
       return;
     }
     else if (result->type() == NodeType::Field)
@@ -954,10 +976,15 @@ public:
   MergeSectionWalker(Node * orig) : _orig(orig) {}
   void walk(const std::string & /*fullpath*/, const std::string & /*nodepath*/, Node * n)
   {
-    auto result = _orig->find(n->fullpath());
+    if (n == start()) // top level start section already exists in both src and dst implicitly
+      return;
+
+    // pathfrom usage allows merge to work correctly for cases where the _orig/dst node is not
+    // the root of its tree.
+    auto result = _orig->find(n->pathfrom(start()));
     if (!result && n->parent())
     {
-      auto anchor = _orig->find(n->parent()->fullpath());
+      auto anchor = _orig->find(n->parent()->pathfrom(start()));
       if (anchor)
         anchor->addChild(n->clone());
     }
@@ -1052,6 +1079,7 @@ public:
       std::string input((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
       externalroot.reset(parse(filesub, input));
       root = externalroot.get();
+      explode(root);
     }
 
     Node * curr = root;
