@@ -167,12 +167,24 @@ template <typename T, ComputeStage compute_stage>
 void
 ADKernelTempl<T, compute_stage>::computeADOffDiagJacobian()
 {
-  std::vector<DualReal> residuals(_test.size(), 0);
+  if (_residuals.size() != _test.size())
+    _residuals.resize(_test.size(), 0);
+  for (auto & r : _residuals)
+    r = 0;
 
   precalculateResidual();
+  ADResidual tmp;
   for (_qp = 0; _qp < _qrule->n_points(); _qp++)
+  {
+    tmp = _ad_JxW[_qp];
+    tmp *= _ad_coord[_qp];
     for (_i = 0; _i < _test.size(); _i++)
-      residuals[_i] += _ad_JxW[_qp] * _ad_coord[_qp] * computeQpResidual();
+    {
+      _r = tmp;
+      _r *= computeQpResidual();
+      _residuals[_i] += _r;
+    }
+  }
 
   std::vector<std::pair<MooseVariableFEBase *, MooseVariableFEBase *>> & ce =
       _assembly.couplingEntries();
@@ -197,7 +209,7 @@ ADKernelTempl<T, compute_stage>::computeADOffDiagJacobian()
     precalculateResidual();
     for (_i = 0; _i < _test.size(); _i++)
       for (_j = 0; _j < jvariable.phiSize(); _j++)
-        _local_ke(_i, _j) += residuals[_i].derivatives()[ad_offset + _j];
+        _local_ke(_i, _j) += _residuals[_i].derivatives()[ad_offset + _j];
 
     accumulateTaggedLocalMatrix();
   }
