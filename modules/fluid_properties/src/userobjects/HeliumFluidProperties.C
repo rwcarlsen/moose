@@ -44,6 +44,22 @@ HeliumFluidProperties::p_from_v_e(Real v, Real e, Real & p, Real & dp_dv, Real &
   dp_de = dp_dT * dT_de;
 }
 
+void
+HeliumFluidProperties::p_from_v_e(
+    const DualReal & v, const DualReal & e, DualReal & p, DualReal & dp_dv, DualReal & dp_de) const
+{
+  p = SinglePhaseFluidProperties::p_from_v_e(v, e);
+
+  DualReal T, dT_dv, dT_de;
+  T_from_v_e(v, e, T, dT_dv, dT_de);
+
+  auto val = 48.14 * v - 0.4446 / std::pow(T, 0.2);
+  auto dp_dT = 1.0e5 / val - 0.4446 * 0.2e5 * std::pow(T, -0.2) / (val * val);
+
+  dp_dv = -48.14e5 * T / (val * val); // taking advantage of dT_dv = 0.0;
+  dp_de = dp_dT * dT_de;
+}
+
 Real
 HeliumFluidProperties::T_from_v_e(Real /*v*/, Real e) const
 {
@@ -54,6 +70,15 @@ void
 HeliumFluidProperties::T_from_v_e(Real v, Real e, Real & T, Real & dT_dv, Real & dT_de) const
 {
   T = T_from_v_e(v, e);
+  dT_dv = 0.0;
+  dT_de = 1.0 / _cv;
+}
+
+void
+HeliumFluidProperties::T_from_v_e(
+    const DualReal & v, const DualReal & e, DualReal & T, DualReal & dT_dv, DualReal & dT_de) const
+{
+  T = SinglePhaseFluidProperties::T_from_v_e(v, e);
   dT_dv = 0.0;
   dT_de = 1.0 / _cv;
 }
@@ -129,6 +154,20 @@ HeliumFluidProperties::rho_from_p_T(
 {
   rho = rho_from_p_T(pressure, temperature);
   Real val = 1.0 / (temperature + 0.4446e-5 * pressure / std::pow(temperature, 0.2));
+  drho_dp = 48.14e-5 * (val - 0.4446e-5 * pressure * val * val / std::pow(temperature, 0.2));
+  drho_dT =
+      -48.14e-5 * pressure * val * val * (1.0 - 0.08892e-5 * pressure / std::pow(temperature, 1.2));
+}
+
+void
+HeliumFluidProperties::rho_from_p_T(const DualReal & pressure,
+                                    const DualReal & temperature,
+                                    DualReal & rho,
+                                    DualReal & drho_dp,
+                                    DualReal & drho_dT) const
+{
+  rho = SinglePhaseFluidProperties::rho_from_p_T(pressure, temperature);
+  auto val = 1.0 / (temperature + 0.4446e-5 * pressure / std::pow(temperature, 0.2));
   drho_dp = 48.14e-5 * (val - 0.4446e-5 * pressure * val * val / std::pow(temperature, 0.2));
   drho_dT =
       -48.14e-5 * pressure * val * val * (1.0 - 0.08892e-5 * pressure / std::pow(temperature, 1.2));
