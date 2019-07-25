@@ -166,6 +166,8 @@ HeliumFluidProperties::beta_from_p_T(Real pressure, Real temperature) const
 Real
 HeliumFluidProperties::rho_from_p_T(Real pressure, Real temperature) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   Real p_in_bar = pressure * 1.0e-5;
   return 48.14 * p_in_bar / (temperature + 0.4446 * p_in_bar / std::pow(temperature, 0.2));
 }
@@ -174,6 +176,8 @@ void
 HeliumFluidProperties::rho_from_p_T(
     Real pressure, Real temperature, Real & rho, Real & drho_dp, Real & drho_dT) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   rho = rho_from_p_T(pressure, temperature);
   Real val = 1.0 / (temperature + 0.4446e-5 * pressure / std::pow(temperature, 0.2));
   drho_dp = 48.14e-5 * (val - 0.4446e-5 * pressure * val * val / std::pow(temperature, 0.2));
@@ -188,16 +192,25 @@ HeliumFluidProperties::rho_from_p_T(const DualReal & pressure,
                                     DualReal & drho_dp,
                                     DualReal & drho_dT) const
 {
-  rho = SinglePhaseFluidProperties::rho_from_p_T(pressure, temperature);
-  auto val = 1.0 / (temperature + 0.4446e-5 * pressure / std::pow(temperature, 0.2));
-  drho_dp = 48.14e-5 * (val - 0.4446e-5 * pressure * val * val / std::pow(temperature, 0.2));
+  auto tmptemp = temperature;
+  if (tmptemp < 1e-3)
+  {
+    tmptemp = 1e-3;
+    tmptemp.derivatives() = temperature.derivatives();
+  }
+
+  rho = SinglePhaseFluidProperties::rho_from_p_T(pressure, tmptemp);
+  auto val = 1.0 / (tmptemp + 0.4446e-5 * pressure / std::pow(tmptemp, 0.2));
+  drho_dp = 48.14e-5 * (val - 0.4446e-5 * pressure * val * val / std::pow(tmptemp, 0.2));
   drho_dT =
-      -48.14e-5 * pressure * val * val * (1.0 - 0.08892e-5 * pressure / std::pow(temperature, 1.2));
+      -48.14e-5 * pressure * val * val * (1.0 - 0.08892e-5 * pressure / std::pow(tmptemp, 1.2));
 }
 
 Real
 HeliumFluidProperties::e_from_p_T(Real /*pressure*/, Real temperature) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   return _cv * temperature;
 }
 
@@ -213,6 +226,8 @@ HeliumFluidProperties::e_from_p_T(
 Real
 HeliumFluidProperties::h_from_p_T(Real /*pressure*/, Real temperature) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   return _cp * temperature;
 }
 
@@ -262,6 +277,8 @@ HeliumFluidProperties::cv_from_p_T(
 Real
 HeliumFluidProperties::mu_from_p_T(Real /*pressure*/, Real temperature) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   return 3.674e-7 * std::pow(temperature, 0.7);
 }
 
@@ -269,6 +286,8 @@ void
 HeliumFluidProperties::mu_from_p_T(
     Real pressure, Real temperature, Real & mu, Real & dmu_dp, Real & dmu_dT) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   mu = mu_from_p_T(pressure, temperature);
   dmu_dp = 0.0;
   dmu_dT = 3.674e-7 * 0.7 * std::pow(temperature, -0.3);
@@ -277,6 +296,8 @@ HeliumFluidProperties::mu_from_p_T(
 Real
 HeliumFluidProperties::k_from_p_T(Real pressure, Real temperature) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   return 2.682e-3 * (1.0 + 1.123e-8 * pressure) *
          std::pow(temperature, 0.71 * (1.0 - 2.0e-9 * pressure));
 }
@@ -285,6 +306,8 @@ void
 HeliumFluidProperties::k_from_p_T(
     Real pressure, Real temperature, Real & k, Real & dk_dp, Real & dk_dT) const
 {
+  if (temperature < 1e-3)
+    temperature = 1e-3;
   k = k_from_p_T(pressure, temperature);
 
   Real term = 1.0 + 1.123e-8 * pressure;
