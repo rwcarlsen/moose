@@ -34,6 +34,7 @@ HeliumFluidProperties::fluidName() const
 Real
 HeliumFluidProperties::p_from_v_e(Real v, Real e) const
 {
+  mooseAssert(e > 0, "cannot compute p_from_v_e with negative energy");
   Real T = T_from_v_e(v, e);
   return T / (48.14 * v - 0.4446 / std::pow(T, 0.2)) * 1.0e5;
 }
@@ -175,6 +176,7 @@ HeliumFluidProperties::beta_from_p_T(Real pressure, Real temperature) const
 Real
 HeliumFluidProperties::rho_from_p_T(Real pressure, Real temperature) const
 {
+  mooseAssert(temperature > 0, "cannot compute rho_from_p_T with negative temperature");
   Real p_in_bar = pressure * 1.0e-5;
   return 48.14 * p_in_bar / (temperature + 0.4446 * p_in_bar / std::pow(temperature, 0.2));
 }
@@ -271,6 +273,7 @@ HeliumFluidProperties::cv_from_p_T(
 Real
 HeliumFluidProperties::mu_from_p_T(Real /*pressure*/, Real temperature) const
 {
+  mooseAssert(temperature > 0, "cannot compute mu_from_p_T with negative temperature");
   return 3.674e-7 * std::pow(temperature, 0.7);
 }
 
@@ -286,6 +289,7 @@ HeliumFluidProperties::mu_from_p_T(
 Real
 HeliumFluidProperties::k_from_p_T(Real pressure, Real temperature) const
 {
+  mooseAssert(temperature > 0, "cannot compute k_from_p_T with negative temperature");
   return 2.682e-3 * (1.0 + 1.123e-8 * pressure) *
          std::pow(temperature, 0.71 * (1.0 - 2.0e-9 * pressure));
 }
@@ -298,6 +302,26 @@ HeliumFluidProperties::k_from_p_T(
 
   Real term = 1.0 + 1.123e-8 * pressure;
   Real exp = 0.71 * (1.0 - 2.0e-9 * pressure);
+
+  dk_dp = 2.682e-3 * (term * 0.71 * (-2.0e-9) * std::log(temperature) * std::pow(temperature, exp) +
+                      std::pow(temperature, exp) * 1.123e-8);
+
+  dk_dT = 2.682e-3 * term * exp * std::pow(temperature, exp - 1.0);
+}
+
+void
+HeliumFluidProperties::k_from_p_T(const DualReal & pressure,
+                                  const DualReal & temperature,
+                                  DualReal & k,
+                                  DualReal & dk_dp,
+                                  DualReal & dk_dT) const
+{
+  mooseAssert(temperature > 0, "cannot compute k_from_p_T with negative temperature");
+
+  k = SinglePhaseFluidProperties::k_from_p_T(pressure, temperature);
+
+  DualReal term = 1.0 + 1.123e-8 * pressure;
+  DualReal exp = 0.71 * (1.0 - 2.0e-9 * pressure);
 
   dk_dp = 2.682e-3 * (term * 0.71 * (-2.0e-9) * std::log(temperature) * std::pow(temperature, exp) +
                       std::pow(temperature, exp) * 1.123e-8);

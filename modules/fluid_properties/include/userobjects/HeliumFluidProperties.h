@@ -303,6 +303,12 @@ public:
    */
   virtual void k_from_p_T(Real p, Real T, Real & k, Real & dk_dp, Real & dk_dT) const override;
 
+  void k_from_p_T(const DualReal & pressure,
+                  const DualReal & temperature,
+                  DualReal & k,
+                  DualReal & dk_dp,
+                  DualReal & dk_dT) const override;
+
   /**
    * Dynamic viscosity from pressure and temperature
    *
