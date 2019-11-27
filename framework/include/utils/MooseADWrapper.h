@@ -117,9 +117,15 @@ public:
 
   typedef DualReal DNType;
 
+  void synchronize();
+
   const Real & value() const { return _val; }
 
-  Real & value() { return _val; }
+  Real & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const DualReal & dn(bool = true) const;
 
@@ -151,7 +157,11 @@ public:
 
   const VectorValue<Real> & value() const { return _val; }
 
-  VectorValue<Real> & value() { return _val; }
+  VectorValue<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const VectorValue<DualReal> & dn(bool = true) const;
 
@@ -185,7 +195,11 @@ public:
 
   const TensorValue<Real> & value() const { return _val; }
 
-  TensorValue<Real> & value() { return _val; }
+  TensorValue<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const TensorValue<DualReal> & dn(bool = true) const;
 
@@ -219,7 +233,11 @@ public:
 
   const RankTwoTensorTempl<Real> & value() const { return _val; }
 
-  RankTwoTensorTempl<Real> & value() { return _val; }
+  RankTwoTensorTempl<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const RankTwoTensorTempl<DualReal> & dn(bool = true) const;
 
@@ -257,7 +275,11 @@ public:
 
   const RankThreeTensorTempl<Real> & value() const { return _val; }
 
-  RankThreeTensorTempl<Real> & value() { return _val; }
+  RankThreeTensorTempl<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const RankThreeTensorTempl<DualReal> & dn(bool = true) const;
 
@@ -295,7 +317,11 @@ public:
 
   const RankFourTensorTempl<Real> & value() const { return _val; }
 
-  RankFourTensorTempl<Real> & value() { return _val; }
+  RankFourTensorTempl<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const RankFourTensorTempl<DualReal> & dn(bool = true) const;
 
@@ -333,7 +359,11 @@ public:
 
   const DenseVector<Real> & value() const { return _val; }
 
-  DenseVector<Real> & value() { return _val; }
+  DenseVector<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const DenseVector<DualReal> & dn(bool = true) const;
 
@@ -367,7 +397,11 @@ public:
 
   const DenseMatrix<Real> & value() const { return _val; }
 
-  DenseMatrix<Real> & value() { return _val; }
+  DenseMatrix<Real> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const DenseMatrix<DualReal> & dn(bool = true) const;
 
@@ -401,7 +435,11 @@ public:
 
   const std::vector<DenseMatrix<Real>> & value() const { return _val; }
 
-  std::vector<DenseMatrix<Real>> & value() { return _val; }
+  std::vector<DenseMatrix<Real>> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const std::vector<DenseMatrix<DualReal>> & dn(bool = true) const;
 
@@ -437,7 +475,11 @@ public:
 
   const std::vector<DenseVector<Real>> & value() const { return _val; }
 
-  std::vector<DenseVector<Real>> & value() { return _val; }
+  std::vector<DenseVector<Real>> & value()
+  {
+    _dual_number = nullptr;
+    return _val;
+  }
 
   const std::vector<DenseVector<DualReal>> & dn(bool = true) const;
 
