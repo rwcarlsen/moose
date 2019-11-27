@@ -256,6 +256,18 @@ HeliumFluidProperties::cp_from_p_T(
   dcp_dT = 0.0;
 }
 
+void
+HeliumFluidProperties::cp_from_p_T(const DualReal & pressure,
+                                   const DualReal & temperature,
+                                   DualReal & cp,
+                                   DualReal & dcp_dp,
+                                   DualReal & dcp_dT) const
+{
+  cp = SinglePhaseFluidProperties::cp_from_p_T(pressure, temperature);
+  dcp_dp = 0.0;
+  dcp_dT = 0.0;
+}
+
 Real HeliumFluidProperties::cv_from_p_T(Real /*pressure*/, Real /*temperature*/) const
 {
   return _cv;
@@ -282,6 +294,18 @@ HeliumFluidProperties::mu_from_p_T(
     Real pressure, Real temperature, Real & mu, Real & dmu_dp, Real & dmu_dT) const
 {
   mu = mu_from_p_T(pressure, temperature);
+  dmu_dp = 0.0;
+  dmu_dT = 3.674e-7 * 0.7 * std::pow(temperature, -0.3);
+}
+
+void
+HeliumFluidProperties::mu_from_p_T(const DualReal & pressure,
+                                   const DualReal & temperature,
+                                   DualReal & mu,
+                                   DualReal & dmu_dp,
+                                   DualReal & dmu_dT) const
+{
+  mu = SinglePhaseFluidProperties::mu_from_p_T(pressure, temperature);
   dmu_dp = 0.0;
   dmu_dT = 3.674e-7 * 0.7 * std::pow(temperature, -0.3);
 }

@@ -262,6 +262,11 @@ public:
    * @param[out] dcp_dT derivative of isobaric specific heat w.r.t. temperature (J/kg/K/K)
    */
   virtual void cp_from_p_T(Real p, Real T, Real & cp, Real & dcp_dp, Real & dcp_dT) const override;
+  virtual void cp_from_p_T(const DualReal & p,
+                           const DualReal & T,
+                           DualReal & cp,
+                           DualReal & dcp_dp,
+                           DualReal & dcp_dT) const override;
 
   /**
    * Isochoric specific heat capacity from pressure and temperature
@@ -329,6 +334,12 @@ public:
    */
   virtual void
   mu_from_p_T(Real p, Real T, Real & mu, Real & dmu_drho, Real & dmu_dT) const override;
+
+  void mu_from_p_T(const DualReal & pressure,
+                   const DualReal & temperature,
+                   DualReal & mu,
+                   DualReal & dmu_dp,
+                   DualReal & dmu_dT) const;
 
 protected:
   /// specific heat at constant volume
