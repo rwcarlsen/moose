@@ -36,7 +36,7 @@ enum class Interfaces
   // adding objects to the warehouse.  Remove these in favor of that approach.
   FVFluxKernel = 1 << 13,
   FVDirichletBC = 1 << 14,
-  FVFluxBC = 1 << 14,
+  FVFluxBC = 1 << 15,
 };
 
 template <>
