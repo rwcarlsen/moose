@@ -86,21 +86,18 @@ template <typename OutputType>
 void
 MooseVariableFE<OutputType>::prepare()
 {
-  _element_data->prepare();
 }
 
 template <typename OutputType>
 void
 MooseVariableFE<OutputType>::prepareNeighbor()
 {
-  _neighbor_data->prepare();
 }
 
 template <typename OutputType>
 void
 MooseVariableFE<OutputType>::prepareLowerD()
 {
-  _lower_data->prepare();
 }
 
 template <typename OutputType>

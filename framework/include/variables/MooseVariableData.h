@@ -17,6 +17,7 @@
 #include "libmesh/tensor_value.h"
 #include "libmesh/type_n_tensor.h"
 #include "libmesh/fe_type.h"
+#include "libmesh/dof_map.h"
 #include "ADUtils.h"
 
 #include <functional>
@@ -228,7 +229,7 @@ public:
   bool isNodal() const { return _is_nodal; }
   const Node * const & node() const { return _node; }
   const dof_id_type & nodalDofIndex() const { return _nodal_dof_index; }
-  bool isNodalDefined() const { return _has_dof_indices; }
+  bool isNodalDefined() const { return _dof_indices.size() > 0; }
 
   /**
    * The current element
@@ -373,14 +374,16 @@ public:
   ///////////////////////////// dof indices ///////////////////////////////////////////////
 
   void getDofIndices(const Elem * elem, std::vector<dof_id_type> & dof_indices) const;
-  const std::vector<dof_id_type> & dofIndices() const { return _dof_indices; }
+  const std::vector<dof_id_type> & dofIndices() const { return initDofIndices(); }
   unsigned int numberOfDofs() const { return _dof_indices.size(); }
-  void clearDofIndices() { _dof_indices.clear(); }
+  void clearDofIndices()
+  {
+    _dof_indices.clear();
+    _prev_elem = nullptr;
+  }
 
-  /**
-   * Get the dof indices corresponding to the current element
-   */
-  void prepare();
+  /// Deprecated - not necessary any more.
+  void prepare() {}
 
   /**
    * setter of _has_dof_values
@@ -474,6 +477,16 @@ public:
   }
 
 private:
+  inline const std::vector<dof_id_type> & initDofIndices() const
+  {
+    if (_prev_elem != _elem)
+    {
+      _dof_map.dof_indices(_elem, _dof_indices, _var_num);
+      _prev_elem = _elem;
+    }
+    return _dof_indices;
+  }
+
   /**
    * Helper methods for assigning nodal values from their corresponding solution values (dof
    * values as they're referred to here in this class). These methods are only truly meaningful
@@ -512,7 +525,7 @@ private:
   unsigned int _count;
 
   /// The dof indices for the current element
-  std::vector<dof_id_type> _dof_indices;
+  mutable std::vector<dof_id_type> _dof_indices;
 
   mutable std::vector<bool> _need_vector_tag_dof_u;
   mutable std::vector<bool> _need_matrix_tag_dof_u;
@@ -617,7 +630,6 @@ private:
   mutable bool _need_dof_du_dot_du;
   mutable bool _need_dof_du_dotdot_du;
 
-  bool _has_dof_indices;
   bool _has_dof_values;
 
   /// local solution values
@@ -776,6 +788,9 @@ private:
   /// changing. If we initialized this to point to one elem, then in the next calculation we would
   /// be pointing to the wrong place!
   const Elem * const & _elem;
+
+  /// used to keep track of when dof indices are out of date
+  mutable const Elem * _prev_elem = nullptr;
 
   /// Whether this variable is being calculated on a displaced system
   const bool _displaced;

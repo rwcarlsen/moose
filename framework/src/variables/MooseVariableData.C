@@ -79,7 +79,6 @@ MooseVariableData<OutputType>::MooseVariableData(const MooseVariableFE<OutputTyp
     _need_dof_values_dotdot_old(false),
     _need_dof_du_dot_du(false),
     _need_dof_du_dotdot_du(false),
-    _has_dof_indices(false),
     _has_dof_values(false),
     _qrule(qrule_in),
     _qrule_face(qrule_face_in),
@@ -483,7 +482,8 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::computeValues()
 {
-  unsigned int num_dofs = _dof_indices.size();
+  auto & dof_indices = dofIndices();
+  unsigned int num_dofs = dof_indices.size();
 
   if (num_dofs > 0)
     fetchDoFValues();
@@ -762,7 +762,7 @@ template <>
 void
 MooseVariableData<RealEigenVector>::computeValues()
 {
-  unsigned int num_dofs = _dof_indices.size();
+  unsigned int num_dofs = dofIndices().size();
 
   if (num_dofs > 0)
     fetchDoFValues();
@@ -1078,7 +1078,8 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::computeMonomialValues()
 {
-  if (_dof_indices.size() == 0)
+  auto & dof_indices = dofIndices();
+  if (dof_indices.size() == 0)
     return;
 
   bool is_transient = _subproblem.isTransient();
@@ -1160,7 +1161,7 @@ MooseVariableData<OutputType>::computeMonomialValues()
       _dof_values_dotdot_old.resize(1);
   }
 
-  const dof_id_type & idx = _dof_indices[0];
+  const dof_id_type & idx = dof_indices[0];
   const Real & soln = (*_sys.currentSolution())(idx);
   Real soln_old = 0;
   Real soln_older = 0;
@@ -1294,6 +1295,7 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::computeAD(const unsigned int num_dofs, const unsigned int nqp)
 {
+  auto & dof_indices = dofIndices();
   // Have to do this because upon construction this won't initialize any of the derivatives
   // (because DualNumber::do_derivatives is false at that time).
   _ad_zero = 0;
@@ -1346,7 +1348,7 @@ MooseVariableData<OutputType>::computeAD(const unsigned int num_dofs, const unsi
 
   for (unsigned int i = 0; i < num_dofs; i++)
   {
-    _ad_dof_values[i] = (*_sys.currentSolution())(_dof_indices[i]);
+    _ad_dof_values[i] = (*_sys.currentSolution())(dof_indices[i]);
 
     // NOTE!  You have to do this AFTER setting the value!
     if (_var.kind() == Moose::VAR_NONLINEAR && _subproblem.currentlyComputingJacobian())
@@ -1355,7 +1357,7 @@ MooseVariableData<OutputType>::computeAD(const unsigned int num_dofs, const unsi
     if (_need_ad_u_dot && _time_integrator && _time_integrator->dt())
     {
       _ad_dofs_dot[i] = _ad_dof_values[i];
-      _time_integrator->computeADTimeDerivatives(_ad_dofs_dot[i], _dof_indices[i]);
+      _time_integrator->computeADTimeDerivatives(_ad_dofs_dot[i], dof_indices[i]);
     }
   }
 
@@ -1619,6 +1621,7 @@ MooseVariableData<OutputType>::insert(NumericVector<Number> & residual)
 {
   if (_has_dof_values)
     residual.insert(&_dof_values[0], _dof_indices);
+  _has_dof_values = false;
 }
 
 template <>
@@ -1644,6 +1647,7 @@ MooseVariableData<RealEigenVector>::insert(NumericVector<Number> & residual)
       }
     }
   }
+  _has_dof_values = false;
 }
 
 template <typename OutputType>
@@ -1652,6 +1656,7 @@ MooseVariableData<OutputType>::add(NumericVector<Number> & residual)
 {
   if (_has_dof_values)
     residual.add_vector(&_dof_values[0], _dof_indices);
+  _has_dof_values = false;
 }
 
 template <>
@@ -1677,6 +1682,7 @@ MooseVariableData<RealEigenVector>::add(NumericVector<Number> & residual)
       }
     }
   }
+  _has_dof_values = false;
 }
 
 template <typename OutputType>
@@ -2079,7 +2085,7 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::computeNodalValues()
 {
-  if (_has_dof_indices)
+  if (_dof_indices.size() > 0)
   {
     fetchDoFValues();
     assignNodalValue();
@@ -2511,21 +2517,6 @@ MooseVariableData<OutputType>::prepareIC()
 
 template <typename OutputType>
 void
-MooseVariableData<OutputType>::prepare()
-{
-  _dof_map.dof_indices(_elem, _dof_indices, _var_num);
-  _has_dof_values = false;
-
-  // FIXME: remove this when the Richard's module is migrated to use the new NodalCoupleable
-  // interface.
-  if (_dof_indices.size() > 0)
-    _has_dof_indices = true;
-  else
-    _has_dof_indices = false;
-}
-
-template <typename OutputType>
-void
 MooseVariableData<OutputType>::prepareAux()
 {
   _has_dof_values = false;
@@ -2543,13 +2534,9 @@ MooseVariableData<OutputType>::reinitNode()
     // For standard variables. _nodal_dof_index is retrieved by nodalDofIndex() which is used in
     // NodalBC for example
     _nodal_dof_index = _dof_indices[0];
-    _has_dof_indices = true;
   }
   else
-  {
     _dof_indices.clear(); // Clear these so Assembly doesn't think there's dofs here
-    _has_dof_indices = false;
-  }
 }
 
 template <typename OutputType>
@@ -2573,14 +2560,8 @@ MooseVariableData<OutputType>::reinitAux()
 
       for (auto & dof_u : _matrix_tags_dof_u)
         dof_u.resize(_dof_indices.size());
-
-      _has_dof_indices = true;
     }
-    else
-      _has_dof_indices = false;
   }
-  else
-    _has_dof_indices = false;
 }
 
 template <typename OutputType>
@@ -2600,11 +2581,6 @@ MooseVariableData<OutputType>::reinitNodes(const std::vector<dof_id_type> & node
       }
     }
   }
-
-  if (_dof_indices.size() > 0)
-    _has_dof_indices = true;
-  else
-    _has_dof_indices = false;
 }
 
 template class MooseVariableData<Real>;
