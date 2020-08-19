@@ -756,6 +756,8 @@ MooseVariableData<OutputType>::computeValues()
   // Automatic differentiation
   if (_need_ad)
     computeAD(num_dofs, nqp);
+
+  clearDofs();
 }
 
 template <>
@@ -1072,6 +1074,7 @@ MooseVariableData<RealEigenVector>::computeValues()
     }
   }
   // No AD support for array variable yet.
+  clearDofs();
 }
 
 template <typename OutputType>
@@ -1281,6 +1284,7 @@ MooseVariableData<OutputType>::computeMonomialValues()
         _u_older[qp] = _u_older[qp];
     }
   }
+  clearDofs();
 }
 
 template <>
@@ -2095,6 +2099,8 @@ MooseVariableData<OutputType>::computeNodalValues()
   }
   else
     zeroSizeDofValues();
+
+  clearDofs();
 }
 
 template <typename OutputType>
@@ -2508,7 +2514,7 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::prepareIC()
 {
-  _dof_map.dof_indices(_elem, _dof_indices, _var_num);
+  initDofIndices();
   _dof_values.resize(_dof_indices.size());
 
   unsigned int nqp = _qrule->n_points();
@@ -2526,6 +2532,7 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::reinitNode()
 {
+  setDofs();
   if (size_t n_dofs = _node->n_dofs(_sys.number(), _var_num))
   {
     _dof_indices.resize(n_dofs);
@@ -2547,7 +2554,7 @@ MooseVariableData<OutputType>::reinitAux()
    * we may want to rename it */
   if (_elem)
   {
-    _dof_map.dof_indices(_elem, _dof_indices, _var_num);
+    initDofIndices();
     if (_elem->n_dofs(_sys.number(), _var_num) > 0)
     {
       // FIXME: check if the following is equivalent with '_nodal_dof_index = _dof_indices[0];'?
@@ -2568,6 +2575,8 @@ template <typename OutputType>
 void
 MooseVariableData<OutputType>::reinitNodes(const std::vector<dof_id_type> & nodes)
 {
+  setDofs();
+
   _dof_indices.clear();
   for (const auto & node_id : nodes)
   {

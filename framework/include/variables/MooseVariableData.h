@@ -379,7 +379,7 @@ public:
   void clearDofIndices()
   {
     _dof_indices.clear();
-    _prev_elem = nullptr;
+    _dofs_set = false;
   }
 
   /// Deprecated - not necessary any more.
@@ -477,12 +477,24 @@ public:
   }
 
 private:
+  inline void clearDofs() const
+  {
+    if (!_dofs_set)
+      mooseError("cannot clear uninitialized dof indices");
+    _dofs_set = false;
+  }
+  inline void setDofs() const
+  {
+    if (_dofs_set)
+      mooseError("overwriting previously initialized/set dof indices");
+    _dofs_set = true;
+  }
   inline const std::vector<dof_id_type> & initDofIndices() const
   {
-    if (_prev_elem != _elem)
+    if (!_dofs_set)
     {
       _dof_map.dof_indices(_elem, _dof_indices, _var_num);
-      _prev_elem = _elem;
+      _dofs_set = true;
     }
     return _dof_indices;
   }
@@ -789,8 +801,7 @@ private:
   /// be pointing to the wrong place!
   const Elem * const & _elem;
 
-  /// used to keep track of when dof indices are out of date
-  mutable const Elem * _prev_elem = nullptr;
+  mutable bool _dofs_set = false;
 
   /// Whether this variable is being calculated on a displaced system
   const bool _displaced;
