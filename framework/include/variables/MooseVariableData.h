@@ -383,7 +383,7 @@ public:
   }
 
   /// Deprecated - not necessary any more.
-  void prepare() {}
+  void prepare() {initDofIndices();}
 
   /**
    * setter of _has_dof_values
