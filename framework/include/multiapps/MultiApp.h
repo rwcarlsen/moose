@@ -40,6 +40,23 @@ class NumericVector;
 template <>
 InputParameters validParams<MultiApp>();
 
+struct LocalAppConfig
+{
+  unsigned int num_local_apps;
+  unsigned int first_local_app_index;
+};
+
+LocalAppConfig rankConfig(unsigned int rank,
+                          unsigned int nprocs,
+                          unsigned int napps,
+                          unsigned int min_app_procs,
+                          unsigned int max_app_procs);
+LocalAppConfig rankConfigDeprecated(unsigned int rank,
+                                    unsigned int nprocs,
+                                    unsigned int napps,
+                                    unsigned int min_app_procs,
+                                    unsigned int max_app_procs);
+
 /**
  * Helper class for holding Sub-app backups
  */
@@ -400,6 +417,9 @@ protected:
 
   /// Maximum number of processors to give to each app
   unsigned int _max_procs_per_app;
+
+  /// Minimum number of processors to give to each app
+  unsigned int _min_procs_per_app;
 
   /// Whether or not to move the output of the MultiApp into position
   bool _output_in_position;
