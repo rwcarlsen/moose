@@ -51,11 +51,6 @@ LocalAppConfig rankConfig(unsigned int rank,
                           unsigned int napps,
                           unsigned int min_app_procs,
                           unsigned int max_app_procs);
-LocalAppConfig rankConfigDeprecated(unsigned int rank,
-                                    unsigned int nprocs,
-                                    unsigned int napps,
-                                    unsigned int min_app_procs,
-                                    unsigned int max_app_procs);
 
 /**
  * Helper class for holding Sub-app backups
