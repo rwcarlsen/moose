@@ -822,11 +822,12 @@ rankConfig(unsigned int rank,
   }
 
   auto slot_num = slot_for_rank[rank];
+  bool am_first_local_rank = rank == 0 || (slot_for_rank[rank - 1] != slot_num);
   auto n_local_apps = apps_per_slot + 1 * (slot_num < leftover_apps);
 
   // ranks assigned a negative slot don't have any apps running on them.
   if (slot_num < 0)
-    return {0, 0};
+    return {0, 0, false};
 
   unsigned int app_index = 0;
   for (unsigned int slot = 0; slot < slot_num; slot++)
@@ -835,7 +836,7 @@ rankConfig(unsigned int rank,
     app_index += num_slot_apps;
   }
 
-  return {n_local_apps, app_index};
+  return {n_local_apps, app_index, am_first_local_rank};
 }
 
 void
