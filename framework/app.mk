@@ -285,6 +285,7 @@ LIBRARY_SUFFIX :=
 $(eval $(call CXX_RULE_TEMPLATE,_with$(app_LIB_SUFFIX)))
 
 # If this is a matching module then build the exec, otherwise fall back and use the variable
+want_exec := $(BUILD_EXEC)
 ifneq (,$(MODULE_NAME))
   ifeq ($(MODULE_NAME),$(APPLICATION_NAME))
     all: $(app_EXEC)
@@ -405,11 +406,8 @@ install_libs: $(install_lib_paths)
 
 
 applibpath = $(dir $(app_LIB))/$(shell grep "dlname='.*'" $(app_LIB) | sed -E "s/dlname='(.*)'/\1/g")
-$(info $(applibpath))
-$(info $(lib_install_dir)/$(notdir $(applibpath)))
-$(info $(app_test_LIB))
 $(lib_install_dir)/$(notdir $(applibpath)): $(applibpath)
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
 	cp $< $@
 	install_name_tool -add_rpath @executable_path/../lib/moose/. $@
 	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $@
@@ -417,10 +415,8 @@ $(lib_install_dir)/$(notdir $(applibpath)): $(applibpath)
 
 ifneq ($(app_test_LIB),)
 apptestlibpath = $(dir $(app_test_LIB))$(shell grep "dlname='.*'" $(app_test_LIB) | sed -E "s/dlname='(.*)'/\1/g")
-$(info $(apptestlibpath))
-$(info $(lib_install_dir)/$(notdir $(apptestlibpath)))
 $(lib_install_dir)/$(notdir $(apptestlibpath)): $(apptestlibpath)
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
 	cp $< $@
 endif
 
@@ -432,12 +428,16 @@ bin_install_dir = $(PREFIX)/bin
 bindst = $(bin_install_dir)/$(notdir $(app_EXEC))
 
 $(bindst): $(app_EXEC)
-	mkdir -p $(bin_install_dir)
+	@mkdir -p $(bin_install_dir)
 	cp $< $@
 	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
 	for lib in $(libpaths); do install_name_tool -change $$lib @rpath/$$(basename $$lib) $@; done
 
+ifeq ($(want_exec),yes)
 install_bin: $(bindst)
+else
+install_bin:
+endif
 
 # Clang static analyzer
 sa: $(app_analyzer)
