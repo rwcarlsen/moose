@@ -364,24 +364,43 @@ $(exodiff_APP): $(exodiff_objects)
 lib_DIRS         := $(dir $(app_LIBS))
 install: install_libs install_bin
 
+libname_framework = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/libmoose-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libname_test = $(shell grep "dlname='.*'" $(MOOSE_DIR)/test/lib/libmoose_test-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libname_hit = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/hit/libhit-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libname_pcre = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/pcre/libpcre-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+
+libpath_framework = $(MOOSE_DIR)/framework/$(libname_framework)
+libpath_test = $(MOOSE_DIR)/test/lib/$(libname_test)
+libpath_hit = $(MOOSE_DIR)/framework/contrib/hit/$(libname_hit)
+libpath_pcre = $(MOOSE_DIR)/framework/contrib/pcre/$(libname_pcre)
+
+lib_install_dir = $(PREFIX)/lib/moose
+bin_install_dir = $(PREFIX)/bin
+
+binname = moose_test-$(METHOD)
+binpath = $(MOOSE_DIR)/test/$(binname)
+bindst = $(bin_install_dir)/$(binname)
+
 install_libs: all | install_make_dir
-	@(ret_val=0; \
-	for lib in $(app_LIBS); \
-	do \
-		echo Installing Library $${lib}...; \
-		${libmesh_LIBTOOL} --mode=install --warning=none --quiet install $${lib} ${PREFIX} || ret_val=1; \
-	done; \
-	exit $$ret_val;)
-	@$(libmesh_LIBTOOL) --mode=finish --quiet $(lib_DIRS)
+	mkdir -p $(lib_install_dir)
+	cp $(libpath_test) $(lib_install_dir)/
+	cp $(libpath_hit) $(lib_install_dir)/
+	cp $(libpath_pcre) $(lib_install_dir)/
+	cp $(libpath_framework) $(lib_install_dir)/
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(lib_install_dir)/$(libname_framework)
+	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $(lib_install_dir)/$(libname_framework)
+	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(lib_install_dir)/$(libname_framework)
+
 
 install_bin: all | install_make_dir
-	@(ret_val=0; \
-	for exec in $(app_EXEC); \
-	do \
-		echo Installing Executable $${exec}...; \
-		${libmesh_LIBTOOL} --mode=install --warning=none --quiet install $${exec} ${PREFIX} || ret_val=1; \
-	done; \
-	exit $$ret_val;)
+	mkdir -p $(bin_install_dir)
+	cp $(binpath) $(bin_install_dir)/
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
+	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $(bindst)
+	install_name_tool -change $(libpath_test) @rpath/$(libname_test) $(bindst)
+	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(bindst)
+	install_name_tool -change $(libpath_hit) @rpath/$(libname_hit) $(bindst)
+
 install_make_dir:
 	@echo "Prefix Install Directory $(PREFIX)"
 	@$(shell mkdir -p $(PREFIX))
