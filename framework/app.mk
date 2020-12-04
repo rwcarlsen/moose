@@ -394,6 +394,51 @@ $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object) $(app_test_LIB) $(depend
 	  $(libmesh_CXX) $(CXXFLAGS) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(depend_test_libs_flags) $(applibs) $(ADDITIONAL_LIBS) $(libmesh_LDFLAGS) $(libmesh_LIBS) $(EXTERNAL_FLAGS)
 	@$(codesign)
 
+###### generic install stuff #############
+install: install_libs install_bin
+
+libnames = $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) | sed -E "s/dlname='(.*)'/\1/g"))
+libpaths = $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) | sed -E "s/dlname='(.*)'/\1/g"))
+install_lib_paths = $(foreach lib,$(libnames),$(lib_install_dir)/$(lib))
+
+install_libs: $(install_lib_paths)
+
+
+applibpath = $(dir $(app_LIB))/$(shell grep "dlname='.*'" $(app_LIB) | sed -E "s/dlname='(.*)'/\1/g")
+$(info $(applibpath))
+$(info $(lib_install_dir)/$(notdir $(applibpath)))
+$(info $(app_test_LIB))
+$(lib_install_dir)/$(notdir $(applibpath)): $(applibpath)
+	mkdir -p $(dir $@)
+	cp $< $@
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $@
+	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $@
+	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $@
+
+ifneq ($(app_test_LIB),)
+apptestlibpath = $(dir $(app_test_LIB))$(shell grep "dlname='.*'" $(app_test_LIB) | sed -E "s/dlname='(.*)'/\1/g")
+$(info $(apptestlibpath))
+$(info $(lib_install_dir)/$(notdir $(apptestlibpath)))
+$(lib_install_dir)/$(notdir $(apptestlibpath)): $(apptestlibpath)
+	mkdir -p $(dir $@)
+	cp $< $@
+endif
+
+####### install bin stuff ##############
+libname_test = $(shell grep "dlname='.*'" $(MOOSE_DIR)/test/lib/libmoose_test-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libpath_test = $(MOOSE_DIR)/test/lib/$(libname_test)
+
+bin_install_dir = $(PREFIX)/bin
+bindst = $(bin_install_dir)/$(notdir $(app_EXEC))
+
+$(bindst): $(app_EXEC)
+	mkdir -p $(bin_install_dir)
+	cp $< $@
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
+	for lib in $(libpaths); do install_name_tool -change $$lib @rpath/$$(basename $$lib) $@; done
+
+install_bin: $(bindst)
+
 # Clang static analyzer
 sa: $(app_analyzer)
 

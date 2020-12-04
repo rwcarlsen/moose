@@ -358,52 +358,28 @@ $(exodiff_APP): $(exodiff_objects)
 
 -include $(wildcard $(exodiff_DIR)/*.d)
 
-#
-# Install targets
-#
-lib_DIRS         := $(dir $(app_LIBS))
-install: install_libs install_bin
+####### install lib stuff ##############
+lib_install_dir = $(PREFIX)/lib/moose
 
 libname_framework = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/libmoose-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
-libname_test = $(shell grep "dlname='.*'" $(MOOSE_DIR)/test/lib/libmoose_test-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
-libname_hit = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/hit/libhit-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
-libname_pcre = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/pcre/libpcre-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
-
 libpath_framework = $(MOOSE_DIR)/framework/$(libname_framework)
-libpath_test = $(MOOSE_DIR)/test/lib/$(libname_test)
-libpath_hit = $(MOOSE_DIR)/framework/contrib/hit/$(libname_hit)
+$(lib_install_dir)/$(libname_framework): $(libpath_framework) $(libpath_hit) $(libpath_pcre)
+	mkdir -p $(dir $@)
+	cp $< $@
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $@
+	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $@
+
+libname_pcre = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/pcre/libpcre-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
 libpath_pcre = $(MOOSE_DIR)/framework/contrib/pcre/$(libname_pcre)
+$(lib_install_dir)/$(libname_pcre): $(libpath_pcre)
+	mkdir -p $(dir $@)
+	cp $< $@
 
-lib_install_dir = $(PREFIX)/lib/moose
-bin_install_dir = $(PREFIX)/bin
-
-binname = moose_test-$(METHOD)
-binpath = $(MOOSE_DIR)/test/$(binname)
-bindst = $(bin_install_dir)/$(binname)
-
-install_libs: all | install_make_dir
-	mkdir -p $(lib_install_dir)
-	cp $(libpath_test) $(lib_install_dir)/
-	cp $(libpath_hit) $(lib_install_dir)/
-	cp $(libpath_pcre) $(lib_install_dir)/
-	cp $(libpath_framework) $(lib_install_dir)/
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $(lib_install_dir)/$(libname_framework)
-	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $(lib_install_dir)/$(libname_framework)
-	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(lib_install_dir)/$(libname_framework)
-
-
-install_bin: all | install_make_dir
-	mkdir -p $(bin_install_dir)
-	cp $(binpath) $(bin_install_dir)/
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
-	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $(bindst)
-	install_name_tool -change $(libpath_test) @rpath/$(libname_test) $(bindst)
-	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(bindst)
-	install_name_tool -change $(libpath_hit) @rpath/$(libname_hit) $(bindst)
-
-install_make_dir:
-	@echo "Prefix Install Directory $(PREFIX)"
-	@$(shell mkdir -p $(PREFIX))
+libname_hit = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/hit/libhit-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libpath_hit = $(MOOSE_DIR)/framework/contrib/hit/$(libname_hit)
+$(lib_install_dir)/$(libname_hit): $(libpath_hit)
+	mkdir -p $(dir $@)
+	cp $< $@
 
 #
 # Clean targets
