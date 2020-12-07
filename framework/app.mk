@@ -395,34 +395,30 @@ $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object) $(app_test_LIB) $(depend
 	  $(libmesh_CXX) $(CXXFLAGS) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(depend_test_libs_flags) $(applibs) $(ADDITIONAL_LIBS) $(libmesh_LDFLAGS) $(libmesh_LIBS) $(EXTERNAL_FLAGS)
 	@$(codesign)
 
-###### generic install stuff #############
+###### install stuff #############
 install: install_libs install_bin
 
-libnames = $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) | sed -E "s/dlname='(.*)'/\1/g"))
-libpaths = $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) | sed -E "s/dlname='(.*)'/\1/g"))
-install_lib_paths = $(foreach lib,$(libnames),$(lib_install_dir)/$(lib))
-
-install_libs: $(install_lib_paths)
-
-
-applibpath = $(dir $(app_LIB))/$(shell grep "dlname='.*'" $(app_LIB) | sed -E "s/dlname='(.*)'/\1/g")
-$(lib_install_dir)/$(notdir $(applibpath)): $(applibpath)
-	@mkdir -p $(dir $@)
-	cp $< $@
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $@
-	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $@
-	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $@
-
+lib_install_targets = $(foreach lib,$(applibs),install_lib_$(notdir  $(lib)))
 ifneq ($(app_test_LIB),)
-apptestlibpath = $(dir $(app_test_LIB))$(shell grep "dlname='.*'" $(app_test_LIB) | sed -E "s/dlname='(.*)'/\1/g")
-$(lib_install_dir)/$(notdir $(apptestlibpath)): $(apptestlibpath)
-	@mkdir -p $(dir $@)
-	cp $< $@
+	lib_install_targets += install_lib_$(notdir $(app_test_LIB))
 endif
 
-####### install bin stuff ##############
-libname_test = $(shell grep "dlname='.*'" $(MOOSE_DIR)/test/lib/libmoose_test-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
-libpath_test = $(MOOSE_DIR)/test/lib/$(libname_test)
+install_libs: $(lib_install_targets) install_lib_$(notdir $(moose_LIB)) install_lib_$(notdir $(pcre_LIB)) install_lib_$(notdir $(hit_LIB))
+
+install_lib_$(notdir $(app_LIB)): $(app_LIB)
+	@mkdir -p $(lib_install_dir)
+	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
+	$(eval libdst := $(lib_install_dir)/$(libname))
+	cp $(dir $<)/$(libname) $(libdst)
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
+	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $(libdst)
+	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(libdst)
+
+install_lib_$(notdir $(app_test_LIB)): $(app_test_LIB)
+	@mkdir -p $(lib_install_dir)
+	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
+	$(eval libdst := $(lib_install_dir)/$(libname))
+	cp $(dir $<)/$(libname) $(libdst)
 
 bin_install_dir = $(PREFIX)/bin
 bindst = $(bin_install_dir)/$(notdir $(app_EXEC))
@@ -431,6 +427,8 @@ $(bindst): $(app_EXEC)
 	@mkdir -p $(bin_install_dir)
 	cp $< $@
 	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
+	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
+	$(eval libpaths := $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	for lib in $(libpaths); do install_name_tool -change $$lib @rpath/$$(basename $$lib) $@; done
 
 ifeq ($(want_exec),yes)
@@ -438,6 +436,7 @@ install_bin: $(bindst)
 else
 install_bin:
 endif
+####### end install stuff ##############
 
 # Clang static analyzer
 sa: $(app_analyzer)

@@ -361,25 +361,32 @@ $(exodiff_APP): $(exodiff_objects)
 ####### install lib stuff ##############
 lib_install_dir = $(PREFIX)/lib/moose
 
-libname_framework = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/libmoose-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libname_framework = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/libmoose-$(METHOD).la 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")
 libpath_framework = $(MOOSE_DIR)/framework/$(libname_framework)
-$(lib_install_dir)/$(libname_framework): $(libpath_framework) $(libpath_hit) $(libpath_pcre)
-	@mkdir -p $(dir $@)
-	cp $< $@
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $@
-	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $@
-
-libname_pcre = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/pcre/libpcre-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libname_pcre = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/pcre/libpcre-$(METHOD).la 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")
 libpath_pcre = $(MOOSE_DIR)/framework/contrib/pcre/$(libname_pcre)
-$(lib_install_dir)/$(libname_pcre): $(libpath_pcre)
-	@mkdir -p $(dir $@)
-	cp $< $@
-
-libname_hit = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/hit/libhit-$(METHOD).la | sed -E "s/dlname='(.*)'/\1/g")
+libname_hit = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/hit/libhit-$(METHOD).la 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")
 libpath_hit = $(MOOSE_DIR)/framework/contrib/hit/$(libname_hit)
-$(lib_install_dir)/$(libname_hit): $(libpath_hit)
-	@mkdir -p $(dir $@)
-	cp $< $@
+
+install_lib_$(notdir $(moose_LIB)): $(moose_LIB)
+	@mkdir -p $(lib_install_dir)
+	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
+	$(eval libdst := $(lib_install_dir)/$(libname))
+	cp $(dir $<)/$(libname) $(libdst)
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
+	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(libdst)
+
+install_lib_$(notdir $(pcre_LIB)): $(pcre_LIB)
+	@mkdir -p $(lib_install_dir)
+	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
+	$(eval libdst := $(lib_install_dir)/$(libname))
+	cp $(dir $<)/$(libname) $(libdst)
+
+install_lib_$(notdir $(hit_LIB)): $(hit_LIB)
+	@mkdir -p $(lib_install_dir)
+	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
+	$(eval libdst := $(lib_install_dir)/$(libname))
+	cp $(dir $<)/$(libname) $(libdst)
 
 #
 # Clean targets
