@@ -372,7 +372,7 @@ install_lib_$(notdir $(moose_LIB)): $(moose_LIB)
 	@mkdir -p $(lib_install_dir)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
-	cp $(dir $<)/$(libname) $(libdst)
+	cp $(dir $<)$(libname) $(libdst)
 	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
 	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(libdst)
 
@@ -380,13 +380,15 @@ install_lib_$(notdir $(pcre_LIB)): $(pcre_LIB)
 	@mkdir -p $(lib_install_dir)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
-	cp $(dir $<)/$(libname) $(libdst)
+	cp $(dir $<)$(libname) $(libdst)
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
 
 install_lib_$(notdir $(hit_LIB)): $(hit_LIB)
 	@mkdir -p $(lib_install_dir)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
-	cp $(dir $<)/$(libname) $(libdst)
+	cp $(dir $<)$(libname) $(libdst)
+	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
 
 #
 # Clean targets
