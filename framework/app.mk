@@ -431,7 +431,7 @@ $(bindst): $(app_EXEC)
 	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
 	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	$(eval libpaths := $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
-	for lib in $(libpaths); do install_name_tool -change $$lib @rpath/$$(basename $$lib) $@; done
+	for lib in $(libpaths); do install_name_tool -change $$lib @rpath/$$(basename $$lib) $@ && echo "$$lib"; done
 
 ifeq ($(want_exec),yes)
 install_bin: $(bindst)
