@@ -365,8 +365,8 @@ ifneq (,$(findstring darwin,$(libmesh_HOST)))
   patch_relink = install_name_tool -change $(2) @rpath/$(3) $(1)
   patch_rpath = install_name_tool -add_rpath @executable_path/$(2) $(1)
 else
-  patch_relink = patchelf --replace-needed $(2) $(3) $(1)
-  patch_rpath = patchelf --set-rpath $$ORIGIN/$(2) $(1)
+  patch_relink = :
+  patch_rpath = patchelf --set-rpath '$$ORIGIN'/$(2):$$(patchelf --print-rpath $(1)) $(1)
 endif
 
 libname_framework = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/libmoose-$(METHOD).la 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")
