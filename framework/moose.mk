@@ -361,6 +361,14 @@ $(exodiff_APP): $(exodiff_objects)
 ####### install lib stuff ##############
 lib_install_dir = $(PREFIX)/lib/moose
 
+ifneq (,$(findstring darwin,$(libmesh_HOST)))
+  patch_relink = install_name_tool -change $(2) @rpath/$(3) $(1)
+  patch_rpath = install_name_tool -add_rpath @executable_path/$(2) $(1)
+else
+  patch_relink = patchelf --replace-needed $(2) $(3) $(1)
+  patch_rpath = patchelf --set-rpath $$ORIGIN/$(2) $(1)
+endif
+
 libname_framework = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/libmoose-$(METHOD).la 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")
 libpath_framework = $(MOOSE_DIR)/framework/$(libname_framework)
 libname_pcre = $(shell grep "dlname='.*'" $(MOOSE_DIR)/framework/contrib/pcre/libpcre-$(METHOD).la 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")
@@ -371,23 +379,20 @@ install_lib_$(notdir $(moose_LIB)): $(moose_LIB)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
-	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(libdst)
-	install_name_tool -id $(libname) $(libdst)
+	$(call patch_rpath,$(libdst),../lib/moose)
+	$(call patch_relink,$(libdst),$(libpath_pcre),$(libname_pcre))
 
 install_lib_$(notdir $(pcre_LIB)): $(pcre_LIB)
 	@mkdir -p $(lib_install_dir)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	install_name_tool -id $(libname) $(libdst)
 
 install_lib_$(notdir $(hit_LIB)): $(hit_LIB)
 	@mkdir -p $(lib_install_dir)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	install_name_tool -id $(libname) $(libdst)
 
 #
 # Clean targets

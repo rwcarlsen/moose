@@ -410,17 +410,15 @@ install_lib_$(notdir $(app_LIB)): $(app_LIB)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $(libdst)
-	install_name_tool -change $(libpath_framework) @rpath/$(libname_framework) $(libdst)
-	install_name_tool -change $(libpath_pcre) @rpath/$(libname_pcre) $(libdst)
-	install_name_tool -id $(libname) $(libdst)
+	$(call patch_rpath,$(libdst),../lib/moose)
+	$(call patch_relink,$(libdst),$(libpath_pcre),$(libname_pcre))
+	$(call patch_relink,$(libdst),$(libpath_framework),$(libname_framework))
 
 install_lib_$(notdir $(app_test_LIB)): $(app_test_LIB)
 	@mkdir -p $(lib_install_dir)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	install_name_tool -id $(libname) $(libdst)
 
 bin_install_dir = $(PREFIX)/bin
 bindst = $(bin_install_dir)/$(notdir $(app_EXEC))
@@ -428,10 +426,10 @@ bindst = $(bin_install_dir)/$(notdir $(app_EXEC))
 $(bindst): $(app_EXEC)
 	@mkdir -p $(bin_install_dir)
 	cp $< $@
-	install_name_tool -add_rpath @executable_path/../lib/moose/. $(bindst)
+	$(call patch_rpath,$@,../lib/moose/.)
 	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	$(eval libpaths := $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
-	for lib in $(libpaths); do install_name_tool -change $$lib @rpath/$$(basename $$lib) $@ && echo "$$lib"; done
+	for lib in $(libpaths); do $(call patch_relink,$@,$$lib,$$(basename $$lib)) && echo "$$lib"; done
 
 ifeq ($(want_exec),yes)
 install_bin: $(bindst)
