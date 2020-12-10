@@ -429,6 +429,10 @@ $(bindst): $(app_EXEC)
 	$(call patch_rpath,$@,../lib/moose/.)
 	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	$(eval libpaths := $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
+	@echo "applibs $(applibs)"
+	@echo 'applibs $(applibs)'
+	@echo "libnames $(libnames)"
+	@echo 'libnames $(libnames)'
 	for lib in $(libpaths); do $(call patch_relink,$@,$$lib,$$(basename $$lib)) && echo "$$lib"; done
 
 ifeq ($(want_exec),yes)
