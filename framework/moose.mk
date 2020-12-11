@@ -2,6 +2,11 @@
 MOOSE_UNITY ?= true
 MOOSE_HEADER_SYMLINKS ?= true
 
+# this allows us to modify the linked names/rpaths safely later for install targets
+ifneq (,$(findstring darwin,$(libmesh_HOST)))
+	libmesh_LDFLAGS += -headerpad_max_install_names
+endif
+
 #
 # Verify Conda
 #
