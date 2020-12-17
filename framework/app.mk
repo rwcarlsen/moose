@@ -398,9 +398,11 @@ $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object) $(app_test_LIB) $(depend
 	@$(codesign)
 
 ###### install stuff #############
-share_install_dir = $(PREFIX)/share/$(APPLICATION_NAME)
+share_dir = $(PREFIX)/share
+share_install_dir = $(share_dir)/$(APPLICATION_NAME)
 tests_install_dir := $(share_install_dir)/test
 docs_install_dir := $(share_install_dir)/doc
+python_install_dir := $(share_dir)/moose/python
 
 ifeq ($(APPLICATION_NAME),moose_test)
 	test_dir := $(APPLICATION_DIR)
@@ -408,12 +410,7 @@ else
 	test_dir := $(APPLICATION_DIR)/test
 endif
 
-install_tests:
-	mkdir -p $(tests_install_dir)
-	cp -R $(test_dir)/tests $(tests_install_dir)/
-	cp -f $(test_dir)/testroot $(tests_install_dir)/
-
-install: install_libs install_bin install_tests
+install: install_libs install_bin install_tests install_harness
 
 lib_install_targets = $(foreach lib,$(applibs),install_lib_$(notdir  $(lib)))
 ifneq ($(app_test_LIB),)
@@ -453,6 +450,18 @@ $(bindst): $(app_EXEC)
 	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	$(eval libpaths := $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	for lib in $(libpaths); do $(call patch_relink,$@,$$lib,$$(basename $$lib)); done
+
+install_harness:
+	rm -rf $(python_install_dir)
+	mkdir -p $(python_install_dir)
+	cp -R $(MOOSE_DIR)/python/* $(python_install_dir)/
+	cp -f $(MOOSE_DIR)/scripts/moose_test_runner $(bin_install_dir)/moose_test_runner
+
+install_tests:
+	rm -rf $(tests_install_dir)
+	mkdir -p $(tests_install_dir)
+	cp -R $(test_dir)/tests $(tests_install_dir)/
+	cp -f $(test_dir)/testroot $(tests_install_dir)/
 
 ifeq ($(want_exec),yes)
 install_bin: $(bindst)
