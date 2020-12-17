@@ -364,7 +364,8 @@ $(exodiff_APP): $(exodiff_objects)
 -include $(wildcard $(exodiff_DIR)/*.d)
 
 ####### install lib stuff ##############
-lib_install_dir = $(PREFIX)/lib/moose
+lib_install_suffix = lib/$(APPLICATION_NAME)
+lib_install_dir = $(PREFIX)/$(lib_install_suffix)
 
 ifneq (,$(findstring darwin,$(libmesh_HOST)))
   patch_relink = install_name_tool -change $(2) @rpath/$(3) $(1)
@@ -384,7 +385,7 @@ install_lib_$(notdir $(moose_LIB)): $(moose_LIB)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	$(call patch_rpath,$(libdst),../lib/moose)
+	$(call patch_rpath,$(libdst),../$(lib_install_suffix)/.)
 	$(call patch_relink,$(libdst),$(libpath_pcre),$(libname_pcre))
 
 install_lib_$(notdir $(pcre_LIB)): $(pcre_LIB)

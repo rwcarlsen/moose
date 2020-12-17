@@ -45,6 +45,7 @@ TEST_SRC_DIRS    := $(APPLICATION_DIR)/test/src
 SRC_DIRS    := $(APPLICATION_DIR)/src
 PLUGIN_DIR  := $(APPLICATION_DIR)/plugins
 
+
 excluded_srcfiles += main.C
 relative_excluded_srcfiles := $(foreach i, $(excluded_srcfiles), $(shell find $(SRC_DIRS) -name $(i)))
 ifeq ($(LIBRARY_SUFFIX),yes)
@@ -330,6 +331,7 @@ ifeq ($(BUILD_TEST_OBJECTS_LIB),no)
   depend_test_libs :=
   depend_test_libs_flags :=
 else
+
 # Target-specific Variable Values (See GNU-make manual)
 $(app_test_LIB): curr_objs := $(app_test_objects)
 $(app_test_LIB): curr_dir  := $(APPLICATION_DIR)/test
@@ -396,7 +398,22 @@ $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object) $(app_test_LIB) $(depend
 	@$(codesign)
 
 ###### install stuff #############
-install: install_libs install_bin
+share_install_dir = $(PREFIX)/share/$(APPLICATION_NAME)
+tests_install_dir := $(share_install_dir)/test
+docs_install_dir := $(share_install_dir)/doc
+
+ifeq ($(APPLICATION_NAME),moose_test)
+	test_dir := $(APPLICATION_DIR)
+else
+	test_dir := $(APPLICATION_DIR)/test
+endif
+
+install_tests:
+	mkdir -p $(tests_install_dir)
+	cp -R $(test_dir)/tests $(tests_install_dir)/
+	cp -f $(test_dir)/testroot $(tests_install_dir)/
+
+install: install_libs install_bin install_tests
 
 lib_install_targets = $(foreach lib,$(applibs),install_lib_$(notdir  $(lib)))
 ifneq ($(app_test_LIB),)
@@ -410,7 +427,7 @@ install_lib_$(notdir $(app_LIB)): $(app_LIB)
 	$(eval libname := $(shell grep "dlname='.*'" $< | sed -E "s/dlname='(.*)'/\1/g"))
 	$(eval libdst := $(lib_install_dir)/$(libname))
 	cp $(dir $<)$(libname) $(libdst)
-	$(call patch_rpath,$(libdst),../lib/moose)
+	$(call patch_rpath,$(libdst),../$(lib_install_suffix/.))
 	$(call patch_relink,$(libdst),$(libpath_pcre),$(libname_pcre))
 	$(call patch_relink,$(libdst),$(libpath_framework),$(libname_framework))
 	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
@@ -432,7 +449,7 @@ bindst = $(bin_install_dir)/$(notdir $(app_EXEC))
 $(bindst): $(app_EXEC)
 	@mkdir -p $(bin_install_dir)
 	cp $< $@
-	$(call patch_rpath,$@,../lib/moose/.)
+	$(call patch_rpath,$@,../$(lib_install_suffix)/.)
 	$(eval libnames := $(foreach lib,$(applibs),$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	$(eval libpaths := $(foreach lib,$(applibs),$(dir $(lib))$(shell grep "dlname='.*'" $(lib) 2>/dev/null | sed -E "s/dlname='(.*)'/\1/g")))
 	for lib in $(libpaths); do $(call patch_relink,$@,$$lib,$$(basename $$lib)); done
