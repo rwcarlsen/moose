@@ -364,6 +364,27 @@ $(exodiff_APP): $(exodiff_objects)
 -include $(wildcard $(exodiff_DIR)/*.d)
 
 ####### install lib stuff ##############
+moose_include_dir = $(PREFIX)/include/moose
+share_dir = $(PREFIX)/share
+moose_share_dir = $(share_dir)/moose
+python_install_dir = $(moose_share_dir)/python
+
+install: install_libs install_bin install_tests install_harness
+
+install_exodiff:
+	cp $(MOOSE_DIR)/framework/contrib/exodiff/exodiff $
+
+install_harness:
+	rm -rf $(python_install_dir)
+	mkdir -p $(python_install_dir)
+	mkdir -p $(moose_share_dir)/bin
+	mkdir -p $(moose_include_dir)
+	cp -R $(MOOSE_DIR)/python/* $(python_install_dir)/
+	cp -f $(MOOSE_DIR)/scripts/moose_test_runner $(bin_install_dir)/moose_test_runner
+	cp -f $(MOOSE_DIR)/framework/contrib/exodiff/exodiff $(moose_share_dir)/bin/
+	cp -f $(MOOSE_DIR)/framework/include/base/MooseConfig.h $(moose_include_dir)/
+	echo "libmesh_install_dir = '$(LIBMESH_DIR)'" > $(moose_share_dir)/moose_config.py
+
 lib_install_suffix = lib/$(APPLICATION_NAME)
 lib_install_dir = $(PREFIX)/$(lib_install_suffix)
 
