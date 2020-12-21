@@ -190,7 +190,7 @@ class TestHarness:
         else:
             rootdir, app_name, args, root_params = findTestRoot(start=os.getcwd())
 
-        orig_cwd = os.getcwd()
+        self._orig_cwd = os.getcwd()
         os.chdir(rootdir)
         argv = argv[:1] + args + argv[1:]
 
@@ -206,11 +206,11 @@ class TestHarness:
         # Get dependant applications and load dynamic tester plugins
         # If applications have new testers, we expect to find them in <app_dir>/scripts/TestHarness/testers
         dirs = [os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))]
-        sys.path.append(os.path.join(moose_dir, 'framework', 'scripts'))   # For find_dep_apps.py
+        dirs.append(os.path.join(moose_dir, 'share', 'moose', 'python', 'TestHarness', 'testers'))
+        print(dirs)
 
         # Use the find_dep_apps script to get the dependant applications for an app
-        import find_dep_apps
-        depend_app_dirs = find_dep_apps.findDepApps(app_name, use_current_only=True)
+        depend_app_dirs = findDepApps(app_name, use_current_only=True)
         dirs.extend([os.path.join(my_dir, 'scripts', 'TestHarness') for my_dir in depend_app_dirs.split('\n')])
 
         # Finally load the plugins!
@@ -329,7 +329,7 @@ class TestHarness:
 
         self.initialize(argv, app_name)
 
-        os.chdir(orig_cwd)
+        os.chdir(self._orig_cwd)
 
     """
     Recursively walks the current tree looking for tests to run
@@ -348,11 +348,9 @@ class TestHarness:
 
         if self.options.spec_file and os.path.isdir(self.options.spec_file):
             search_dir = self.options.spec_file
-
         elif self.options.spec_file and os.path.isfile(self.options.spec_file):
             search_dir = os.path.dirname(self.options.spec_file)
             self._infiles = [os.path.basename(self.options.spec_file)]
-
         else:
             search_dir = os.getcwd()
 
@@ -381,7 +379,11 @@ class TestHarness:
                             full_app_name = app_name + "-" + self.options.method
                             if platform.system() == 'Windows':
                                 full_app_name += '.exe'
-                            testroot_params["executable"] = os.path.join(dirpath, full_app_name)
+
+                            testroot_params["executable"] = full_app_name
+                            if shutil.which(full_app_name) is None:
+                                testroot_params["executable"] = os.path.join(dirpath, full_app_name)
+
                             testroot_params["testroot_dir"] = dirpath
                             caveats = [full_app_name]
                             if args:
@@ -815,7 +817,8 @@ class TestHarness:
 
     def initialize(self, argv, app_name):
         # Load the scheduler plugins
-        self.factory.loadPlugins([os.path.join(self.moose_dir, 'python', 'TestHarness')], 'schedulers', "IS_SCHEDULER")
+        plugin_paths = [os.path.join(self.moose_dir, 'python', 'TestHarness'), os.path.join(self.moose_dir, 'share', 'moose', 'python', 'TestHarness')]
+        self.factory.loadPlugins(plugin_paths, 'schedulers', "IS_SCHEDULER")
 
         self.options.queueing = False
         if self.options.pbs:
@@ -843,9 +846,11 @@ class TestHarness:
         self.scheduler = self.factory.create(scheduler_plugin, self, plugin_params)
 
         ## Save executable-under-test name to self.executable
-        self.executable = os.getcwd() + '/' + app_name + '-' + self.options.method
-        if platform.system() == 'Windows':
-            self.executable += '.exe'
+        exec_suffix = 'Windows' if platform.system() == 'Windows' else ''
+        self.executable = app_name + '-' + self.options.method + exec_suffix
+        if shutil.which(self.executable) is None:
+            self.executable = os.getcwd() + '/' + exec_path
+        print('exec is ', self.executable)
 
         # Save the output dir since the current working directory changes during tests
         self.output_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), self.options.output_dir)
