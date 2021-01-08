@@ -176,14 +176,18 @@ def findDepApps(dep_names, use_current_only=False):
 class TestHarness:
 
     @staticmethod
-    def buildAndRun(argv, app_name, moose_dir):
-        harness = TestHarness(argv, moose_dir, app_name=app_name)
+    def buildAndRun(argv, app_name, moose_dir, moose_python=None):
+        harness = TestHarness(argv, moose_dir, app_name=app_name, moose_python=moose_python)
         harness.findAndRunTests()
         sys.exit(harness.error_code)
 
-    def __init__(self, argv, moose_dir, app_name=None):
+    def __init__(self, argv, moose_dir, app_name=None, moose_python=None):
+        if moose_python is None:
+            self.moose_python_dir = moose_dir
+        else:
+            self.moose_python_dir = moose_python
         os.environ['MOOSE_DIR'] = moose_dir
-        os.environ['PYTHONPATH'] = os.path.join(moose_dir, 'python') + ':' + os.environ.get('PYTHONPATH', '')
+        os.environ['PYTHONPATH'] = self.moose_python_dir + ':' + os.environ.get('PYTHONPATH', '')
 
         if app_name:
             rootdir, app_name, args, root_params = '.', app_name, [], pyhit.Node()
@@ -504,6 +508,7 @@ class TestHarness:
         params['executable'] = testroot_params.get("executable", self.executable)
         params['hostname'] = self.host_name
         params['moose_dir'] = self.moose_dir
+        params['moose_python_dir'] = self.moose_python_dir
         params['base_dir'] = self.base_dir
         params['first_directory'] = first_directory
         params['root_params'] = testroot_params.get("root_params", self.root_params)
@@ -849,7 +854,7 @@ class TestHarness:
         exec_suffix = 'Windows' if platform.system() == 'Windows' else ''
         self.executable = app_name + '-' + self.options.method + exec_suffix
         if shutil.which(self.executable) is None:
-            self.executable = os.getcwd() + '/' + exec_path
+            self.executable = os.getcwd() + '/' + self.executable
         print('exec is ', self.executable)
 
         # Save the output dir since the current working directory changes during tests
