@@ -402,10 +402,10 @@ share_install_dir = $(share_dir)/$(APPLICATION_NAME)
 tests_install_dir = $(share_install_dir)/test
 docs_install_dir = $(share_install_dir)/doc
 
-ifeq ($(APPLICATION_NAME),moose_test)
-	test_dir := $(APPLICATION_DIR)
-else
+ifneq ($(wildcard $(APPLICATION_DIR)/test/.),)
 	test_dir := $(APPLICATION_DIR)/test
+else
+	test_dir := $(APPLICATION_DIR)
 endif
 
 lib_install_targets = $(foreach lib,$(applibs),install_lib_$(notdir  $(lib)))
