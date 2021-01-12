@@ -453,6 +453,8 @@ install_tests:
 	cp -R $(test_dir)/tests $(tests_install_dir)/
 ifneq (,$(wildcard $(test_dir)/testroot))
 	cp -f $(test_dir)/testroot $(tests_install_dir)/
+else
+	echo "app_name = $(APPLICATION_NAME)" > $(tests_install_dir)/testroot
 endif
 
 ifeq ($(want_exec),yes)
