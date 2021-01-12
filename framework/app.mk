@@ -451,7 +451,9 @@ install_tests:
 	rm -rf $(tests_install_dir)
 	mkdir -p $(tests_install_dir)
 	cp -R $(test_dir)/tests $(tests_install_dir)/
+ifeq (,$(wildcard $(test_dir)/testroot))
 	cp -f $(test_dir)/testroot $(tests_install_dir)/
+endif
 
 ifeq ($(want_exec),yes)
 install_bin: $(bindst)
