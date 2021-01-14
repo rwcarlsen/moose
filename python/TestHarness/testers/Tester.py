@@ -148,6 +148,11 @@ class Tester(MooseObject):
         self.__failed_statuses = [self.fail, self.diff, self.deleted]
         self.__skipped_statuses = [self.skip, self.silent]
 
+        self.env_config = None
+
+    def setEnv(self, env_config):
+        self.env_config = env_config
+
     def getStatus(self):
         return self.test_status.getStatus()
 
@@ -203,11 +208,11 @@ class Tester(MooseObject):
 
     def getMooseDir(self):
         """ return moose directory """
-        return self.specs['moose_dir']
+        return self.env_config.mooseDir()
 
     def getMoosePythonDir(self):
         """ return moose directory """
-        return self.specs['moose_python_dir']
+        return self.env_config.moosePython()
 
     def getTestDir(self):
         """ return directory in which this tester is located """
@@ -405,6 +410,9 @@ class Tester(MooseObject):
         """ Return caveats accumalted by this tester """
         return self.__caveats
 
+    def getExecutable(self):
+        return self.env_config.appExec(for_path=self.getTestDir())
+
     def clearCaveats(self):
         """ Clear any caveats stored in tester """
         self.__caveats = set([])
@@ -502,7 +510,7 @@ class Tester(MooseObject):
             reasons['recover'] = 'NO RECOVER'
 
         # AD size check
-        ad_size = int(util.getMooseConfigOption(self.specs['moose_dir'], 'ad_size').pop())
+        ad_size = int(util.getMooseConfigOption(self.getMooseDir(), 'ad_size').pop())
         min_ad_size = self.specs['min_ad_size']
         if min_ad_size is not None and int(min_ad_size) > ad_size:
             reasons['min_ad_size'] = "Minimum AD size %d needed, but MOOSE is configured with %d" % (int(min_ad_size), ad_size)
@@ -560,12 +568,12 @@ class Tester(MooseObject):
 
         # Check to make sure depend files exist
         for file in self.specs['depend_files']:
-            if not os.path.isfile(os.path.join(self.specs['base_dir'], file)):
+            if not os.path.isfile(os.path.join(self.env_config.testRoot(), file)):
                 reasons['depend_files'] = 'DEPEND FILES'
 
         # We calculate the exe_objects only if we need them
         if self.specs["required_objects"] and checks["exe_objects"] is None:
-            checks["exe_objects"] = util.getExeObjects(self.specs["executable"])
+            checks["exe_objects"] = util.getExeObjects(self.getExecutable())
 
         # Check to see if we have the required object names
         for var in self.specs['required_objects']:
@@ -575,7 +583,7 @@ class Tester(MooseObject):
 
         # We extract the registered apps only if we need them
         if self.specs["required_applications"] and checks["registered_apps"] is None:
-            checks["registered_apps"] = util.getExeRegisteredApps(self.specs["executable"])
+            checks["registered_apps"] = util.getExeRegisteredApps(self.getExecutable())
 
         # Check to see if we have the required application names
         for var in self.specs['required_applications']:

@@ -87,7 +87,7 @@ class RunApp(Tester):
                 self.setStatus(self.skip)
                 return False
 
-        if self.specs.isValid('executable_pattern') and re.search(self.specs['executable_pattern'], self.specs['executable']) == None:
+        if self.specs.isValid('executable_pattern') and re.search(self.specs['executable_pattern'], self.getExecutable()) == None:
             self.addCaveats('EXECUTABLE PATTERN')
             self.setStatus(self.skip)
             return False
@@ -142,7 +142,7 @@ class RunApp(Tester):
         cli_args = list(specs['cli_args'])
 
         # Check for built application
-        if shutil.which(specs['executable']) is None:
+        if shutil.which(self.getExecutable()) is None:
             self.setStatus(self.fail, 'Application not found')
             return ''
 
@@ -190,9 +190,9 @@ class RunApp(Tester):
         if specs['redirect_output'] and ncpus > 1:
             cli_args.append('--keep-cout --redirect-output ' + self.name())
 
-        command = specs['executable'] + ' ' + specs['input_switch'] + ' ' + specs['input'] + ' ' + ' '.join(cli_args)
+        command = self.getExecutable() + ' ' + specs['input_switch'] + ' ' + specs['input'] + ' ' + ' '.join(cli_args)
         if options.valgrind_mode.upper() == specs['valgrind'].upper() or options.valgrind_mode.upper() == 'HEAVY' and specs['valgrind'].upper() == 'NORMAL':
-            command = 'valgrind --suppressions=' + os.path.join(specs['moose_dir'], 'python', 'TestHarness', 'suppressions', 'errors.supp') + ' --leak-check=full --tool=memcheck --dsymutil=yes --track-origins=yes --demangle=yes -v ' + command
+            command = 'valgrind --suppressions=' + os.path.join(self.env_config.moosePython(), 'TestHarness', 'suppressions', 'errors.supp') + ' --leak-check=full --tool=memcheck --dsymutil=yes --track-origins=yes --demangle=yes -v ' + command
         elif nthreads > 1:
             command = command + ' --n-threads=' + str(nthreads)
 

@@ -173,6 +173,81 @@ def findDepApps(dep_names, use_current_only=False):
     moose_dir = os.environ.get('MOOSE_DIR')
     return '\n'.join(dep_dirs)
 
+class TestEnv:
+    def __init__(self, app_name, method, moose_dir, moose_python_dir, libmesh_dir):
+        self._appname = app_name
+        self._method  = method
+        self._moose_dir = moose_dir
+        self._moose_python = moose_python_dir
+        self._libmesh_dir = libmesh_dir
+
+    def setLibmeshDir(self, libmesh_dir):
+        self._libmesh_dir = libmesh_dir
+    def libmeshDir(self):
+        return self._libmesh_dir
+
+    def setMethod(self, method):
+        self._method = method
+    def method(self):
+        return self._method
+
+    def moosePython(self):
+        return self._moose_python
+
+    def mooseDir(self):
+        return self._moose_dir
+
+    def testRoot(self, for_path='.'):
+        try:
+            rootdir, app_name, args, root_params = findTestRoot(start=for_path)
+        except:
+            return None
+        return os.path.abspath(rootdir)
+
+    def testRootParams(self, for_path='.'):
+        try:
+            rootdir, app_name, args, root_params = findTestRoot(start=for_path)
+        except:
+            return None, None
+        return args, root_params
+
+    def appName(self, for_path=None):
+        if for_path is None:
+            return self._appname
+        rootdir, app_name, args, root_params = findTestRoot(start=for_path)
+        if app_name:
+            return app_name
+        return 'NOTFOUND'
+
+    def fullAppName(self, for_path=None):
+        return self.appName(for_path=for_path) + "-" + self.method()
+
+    def appExec(self, for_path=None):
+        app_name = self.fullAppName(for_path=for_path)
+
+        if platform.system() == 'Windows':
+            app_name += '.exe'
+
+        # fallback to cwd if app isn't in path
+        if shutil.which(app_name) is None:
+            path = self.testRoot()
+            if path is None:
+                path = '.'
+            return os.path.abspath(os.path.join(path, app_name))
+        return app_name
+
+    def testerDirs(self):
+        # include the directory with default test harness testers that exists
+        # in the main test harness file's directory:
+        dirs = [os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))]
+
+        # Get dependant applications and load dynamic tester plugins
+        # If applications have new testers, we expect to find them in <app_dir>/scripts/TestHarness/testers
+        # Use the find_dep_apps script to get the dependant applications for an app
+        depend_app_dirs = findDepApps(self.appName(), use_current_only=True)
+        dirs.extend([os.path.join(my_dir, 'scripts', 'TestHarness') for my_dir in depend_app_dirs.split('\n')])
+        return dirs
+
 class TestHarness:
 
     @staticmethod
@@ -183,16 +258,16 @@ class TestHarness:
 
     def __init__(self, argv, moose_dir, app_name=None, moose_python=None):
         if moose_python is None:
-            self.moose_python_dir = moose_dir
-        else:
-            self.moose_python_dir = moose_python
-        os.environ['MOOSE_DIR'] = moose_dir
-        os.environ['PYTHONPATH'] = self.moose_python_dir + ':' + os.environ.get('PYTHONPATH', '')
-
-        if app_name:
-            rootdir, app_name, args, root_params = '.', app_name, [], pyhit.Node()
-        else:
+            moose_python = os.path.join(moose_dir, 'python')
+        if not app_name:
             rootdir, app_name, args, root_params = findTestRoot(start=os.getcwd())
+        else:
+            rootdir, app_name, args, root_params = '.', app_name, [], pyhit.Node()
+        self.libmesh_dir = os.environ.get('LIBMESH_DIR', os.path.join(moose_dir, 'libmesh', 'installed'))
+        self.env_config = TestEnv(app_name, os.environ.get('METHOD', 'opt'), moose_dir, moose_python, self.libmesh_dir)
+
+        os.environ['MOOSE_DIR'] = self.env_config.mooseDir()
+        os.environ['PYTHONPATH'] = self.env_config.moosePython() + ':' + os.environ.get('PYTHONPATH', '')
 
         self._orig_cwd = os.getcwd()
         os.chdir(rootdir)
@@ -200,24 +275,11 @@ class TestHarness:
 
         self.factory = Factory()
 
-        self.app_name = app_name
-
-        self.root_params = root_params
-
         # Build a Warehouse to hold the MooseObjects
         self.warehouse = Warehouse()
 
-        # Get dependant applications and load dynamic tester plugins
-        # If applications have new testers, we expect to find them in <app_dir>/scripts/TestHarness/testers
-        dirs = [os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))]
-        dirs.append(os.path.join(moose_dir, 'share', 'moose', 'python', 'TestHarness', 'testers'))
-        print(dirs)
-
-        # Use the find_dep_apps script to get the dependant applications for an app
-        depend_app_dirs = findDepApps(app_name, use_current_only=True)
-        dirs.extend([os.path.join(my_dir, 'scripts', 'TestHarness') for my_dir in depend_app_dirs.split('\n')])
-
         # Finally load the plugins!
+        dirs = self.env_config.testerDirs()
         self.factory.loadPlugins(dirs, 'testers', "IS_TESTER")
 
         self._infiles = ['tests', 'speedtests']
@@ -229,16 +291,10 @@ class TestHarness:
         self.num_pending = 0
         self.host_name = gethostname()
         self.moose_dir = moose_dir
-        self.base_dir = os.getcwd()
-        self.run_tests_dir = os.path.abspath('.')
+        self.run_tests_dir = self.env_config.testRoot()
         self.code = b'2d2d6769726c2d6d6f6465'
         self.error_code = 0x0
         self.keyboard_talk = True
-        # Assume libmesh is a peer directory to MOOSE if not defined
-        if "LIBMESH_DIR" in os.environ:
-            self.libmesh_dir = os.environ['LIBMESH_DIR']
-        else:
-            self.libmesh_dir = os.path.join(self.moose_dir, 'libmesh', 'installed')
         self.file = None
 
         # Failed Tests file object
@@ -359,7 +415,6 @@ class TestHarness:
             search_dir = os.getcwd()
 
         try:
-            testroot_params = {}
             for dirpath, dirnames, filenames in os.walk(search_dir, followlinks=True):
                 # Prune submdule paths when searching for tests
 
@@ -368,33 +423,9 @@ class TestHarness:
                     dirnames[:] = []
                     filenames[:] = []
 
-                if self.options.use_subdir_exe and testroot_params and not dirpath.startswith(testroot_params["testroot_dir"]):
-                    # Reset the params when we go outside the current testroot base directory
-                    testroot_params = {}
-
                 # walk into directories that aren't contrib directories
                 if "contrib" not in os.path.relpath(dirpath, os.getcwd()):
                     for file in filenames:
-                        if self.options.use_subdir_exe and file == "testroot":
-                            # Rely on the fact that os.walk does a depth first traversal.
-                            # Any directories below this one will use the executable specified
-                            # in this testroot file unless it is overridden.
-                            app_name, args, root_params = readTestRoot(os.path.join(dirpath, file))
-                            full_app_name = app_name + "-" + self.options.method
-                            if platform.system() == 'Windows':
-                                full_app_name += '.exe'
-
-                            testroot_params["executable"] = full_app_name
-                            if shutil.which(full_app_name) is None:
-                                testroot_params["executable"] = os.path.join(dirpath, full_app_name)
-
-                            testroot_params["testroot_dir"] = dirpath
-                            caveats = [full_app_name]
-                            if args:
-                                caveats.append("Ignoring args %s" % args)
-                            testroot_params["caveats"] = caveats
-                            testroot_params["root_params"] = root_params
-
                         # See if there were other arguments (test names) passed on the command line
                         if file in self._infiles \
                                and os.path.abspath(os.path.join(dirpath, file)) not in launched_tests:
@@ -407,7 +438,7 @@ class TestHarness:
                             os.chdir(dirpath)
 
                             # Get the testers for this test
-                            testers = self.createTesters(dirpath, file, find_only, testroot_params)
+                            testers = self.createTesters(dirpath, file, find_only)
 
                             # Schedule the testers for immediate execution
                             self.scheduler.schedule(testers)
@@ -443,12 +474,19 @@ class TestHarness:
 
     # Create and return list of tester objects. A tester is created by providing
     # abspath to basename (dirpath), and the test file in queustion (file)
-    def createTesters(self, dirpath, file, find_only, testroot_params={}):
+    def createTesters(self, dirpath, file, find_only):
+        args, root_params = self.env_config.testRootParams(for_path=dirpath)
+        caveats = []
+        if self.env_config.testRoot(for_path=dirpath) and self.options.use_subdir_exe:
+            caveats = [self.env_config.fullAppName(for_path=dirpath)]
+            if args:
+                caveats.append("Ignoring args %s" % args)
+
         # Build a Parser to parse the objects
         parser = Parser(self.factory, self.warehouse)
 
         # Parse it
-        parser.parse(file, testroot_params.get("root_params", self.root_params))
+        parser.parse(file, root_params)
         self.parse_errors.extend(parser.errors)
 
         # Retrieve the tests from the warehouse
@@ -456,10 +494,9 @@ class TestHarness:
 
         # Augment the Testers with additional information directly from the TestHarness
         for tester in testers:
-            self.augmentParameters(file, tester, testroot_params)
-            if testroot_params.get("caveats"):
-                # Show what executable we are using if using a different testroot file
-                tester.addCaveats(testroot_params["caveats"])
+            tester.setEnv(self.env_config)
+            self.augmentParameters(file, tester, dirpath, root_params=root_params)
+            tester.addCaveats(caveats)
 
         # Short circuit this loop if we've only been asked to parse Testers
         # Note: The warehouse will accumulate all testers in this mode
@@ -482,7 +519,7 @@ class TestHarness:
             and os.path.join(dirpath, filename) != self.options.spec_file):
             return True
 
-    def augmentParameters(self, filename, tester, testroot_params={}):
+    def augmentParameters(self, filename, tester, dirpath, root_params={}):
         params = tester.parameters()
 
         # We are going to do some formatting of the path that is printed
@@ -505,13 +542,8 @@ class TestHarness:
         params['test_name'] = formatted_name
         params['test_dir'] = test_dir
         params['relative_path'] = relative_path
-        params['executable'] = testroot_params.get("executable", self.executable)
         params['hostname'] = self.host_name
-        params['moose_dir'] = self.moose_dir
-        params['moose_python_dir'] = self.moose_python_dir
-        params['base_dir'] = self.base_dir
         params['first_directory'] = first_directory
-        params['root_params'] = testroot_params.get("root_params", self.root_params)
 
         if params.isValid('prereq'):
             if type(params['prereq']) != list:
@@ -850,13 +882,6 @@ class TestHarness:
         # Create the scheduler
         self.scheduler = self.factory.create(scheduler_plugin, self, plugin_params)
 
-        ## Save executable-under-test name to self.executable
-        exec_suffix = 'Windows' if platform.system() == 'Windows' else ''
-        self.executable = app_name + '-' + self.options.method + exec_suffix
-        if shutil.which(self.executable) is None:
-            self.executable = os.getcwd() + '/' + self.executable
-        print('exec is ', self.executable)
-
         # Save the output dir since the current working directory changes during tests
         self.output_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), self.options.output_dir)
 
@@ -1043,18 +1068,19 @@ class TestHarness:
             self.options.input_file_name = 'tests'
 
         # Update any keys from the environment as necessary
-        if not self.options.method:
-            if 'METHOD' in os.environ:
-                self.options.method = os.environ['METHOD']
-            else:
-                self.options.method = 'opt'
+        if self.options.method:
+            self.env_config.setMethod(self.options.method)
+        else:
+            self.options.method = self.env_config.method()
 
         if not self.options.valgrind_mode:
             self.options.valgrind_mode = ''
 
         # Update libmesh_dir to reflect arguments
         if opts.libmesh_dir:
-            self.libmesh_dir = opts.libmesh_dir
+            self.env_config.setLibmeshDir(opts.libmesh_dir)
+        else:
+            opts.libmesh_dir = self.env_config.libmeshDir()
 
         # When running heavy tests, we'll make sure we use --no-report
         if opts.heavy_tests:
