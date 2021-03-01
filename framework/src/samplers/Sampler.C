@@ -62,7 +62,6 @@ Sampler::Sampler(const InputParameters & parameters)
     _n_seeds(1),
     _next_local_row_requires_state_restore(true),
     _initialized(false),
-    _needs_reinit(true),
     _has_executed(false),
     _limit_get_global_samples(getParam<dof_id_type>("limit_get_global_samples")),
     _limit_get_local_samples(getParam<dof_id_type>("limit_get_local_samples")),
@@ -85,6 +84,7 @@ Sampler::init()
   // was added to help avoid future mistakes.
   if (_initialized)
     mooseError("The Sampler::init() method is called automatically and should not be called.");
+  _initialized = true;
 
   // do generic default initialization in case no systems/multi-apps are in
   // use that will call this themselves.
@@ -92,9 +92,6 @@ Sampler::init()
       processor_id(), n_processors(), _n_rows, 1, std::numeric_limits<unsigned int>::max()));
   // unset this from true because we still want to allow external setRankConfig calls to succeed.
   _rank_config_set = false;
-
-  // Update reinit() flag (see execute method)
-  _needs_reinit = false;
 }
 
 void
@@ -124,7 +121,6 @@ Sampler::setNumberOfRows(dof_id_type n_rows)
   if (n_rows == 0)
     mooseError("The number of rows cannot be zero.");
 
-  _needs_reinit = true;
   _n_rows = n_rows;
 }
 
@@ -134,7 +130,6 @@ Sampler::setNumberOfCols(dof_id_type n_cols)
   if (n_cols == 0)
     mooseError("The number of columns cannot be zero.");
 
-  _needs_reinit = true;
   _n_cols = n_cols;
 }
 
@@ -156,8 +151,6 @@ void
 Sampler::execute()
 {
   executeSetUp();
-  if (_needs_reinit)
-    reinit();
 
   if (_has_executed)
   {
@@ -173,7 +166,6 @@ DenseMatrix<Real>
 Sampler::getGlobalSamples()
 {
   TIME_SECTION(_perf_get_global_samples);
-  checkReinitStatus();
 
   if (_n_rows * _n_cols > _limit_get_global_samples)
     paramError("limit_get_global_samples",
@@ -196,7 +188,6 @@ DenseMatrix<Real>
 Sampler::getLocalSamples()
 {
   TIME_SECTION(_perf_get_local_samples);
-  checkReinitStatus();
 
   if (_n_local_rows * _n_cols > _limit_get_local_samples)
     paramError("limit_get_local_samples",
@@ -219,7 +210,6 @@ std::vector<Real>
 Sampler::getNextLocalRow()
 {
   TIME_SECTION(_perf_get_next_local_row);
-  checkReinitStatus();
 
   if (_next_local_row_requires_state_restore)
   {
@@ -263,8 +253,6 @@ Sampler::computeSampleMatrix(DenseMatrix<Real> & matrix)
     std::vector<Real> row(_n_cols, 0);
     computeSampleRow(i, row);
     mooseAssert(row.size() == _n_cols, "The row of sample data is not sized correctly.");
-    mooseAssert(!_needs_reinit,
-                "Changing the size of the sample must not occur during matrix access.");
     std::copy(row.begin(), row.end(), matrix.get_values().begin() + i * _n_cols);
   }
 }
@@ -280,8 +268,6 @@ Sampler::computeLocalSampleMatrix(DenseMatrix<Real> & matrix)
     std::vector<Real> row(_n_cols, 0);
     computeSampleRow(i, row);
     mooseAssert(row.size() == _n_cols, "The row of sample data is not sized correctly.");
-    mooseAssert(!_needs_reinit,
-                "Changing the size of the sample must not occur during matrix access.");
     std::copy(
         row.begin(), row.end(), matrix.get_values().begin() + ((i - _local_row_begin) * _n_cols));
   }
@@ -294,11 +280,7 @@ Sampler::computeSampleRow(dof_id_type i, std::vector<Real> & data)
   TIME_SECTION(_perf_sample_row);
 
   for (dof_id_type j = 0; j < _n_cols; ++j)
-  {
     data[j] = computeSample(i, j);
-    mooseAssert(!_needs_reinit,
-                "Changing the size of the sample must not occur during matrix access.");
-  }
 }
 
 void
@@ -380,13 +362,14 @@ Sampler::getLocalRowEnd() const
 void
 Sampler::checkReinitStatus() const
 {
-  if (_needs_reinit)
+  if (!_rank_config_set)
     mooseError("A call to 'setNumberOfRows()/Columns()' was made after initialization, as such the "
                "expected Sampler output has changed and a new sample must be created. However, a "
-               "call to Sampler::reinit() was not performed. The renit() method is automatically "
+               "call to Sampler::setRankConfig() was not performed. The renit() method is automatically "
                "called during Sampler execution, which occurs according to the 'execute_on' "
                "settings of the Sampler object. An adjustment to this parameter may be required. "
                "It is recommended that calls to 'setNumberOfRows()/Columns() occur within the "
                "Sampler::executeSetUp() method; this will ensure that the reinitialize is handled "
                "correctly. Have a nice day.");
 }
+

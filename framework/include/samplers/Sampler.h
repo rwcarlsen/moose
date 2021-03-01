@@ -248,7 +248,6 @@ private:
    * This init() method is called by FEProblemBase::addSampler; it should not be called elsewhere.
    */
   void init();   // sets up MooseRandom
-  void reinit(); // partitions sampler output
   ///@}
   friend void FEProblemBase::addSampler(const std::string & type,
                                         const std::string & name,
@@ -264,9 +263,6 @@ private:
   void execute();
   friend void FEProblemBase::objectExecuteHelper<Sampler>(const std::vector<Sampler *> & objects);
 
-  /**
-   * Helper function for reinit() errors.
-   **/
   void checkReinitStatus() const;
 
   /**
