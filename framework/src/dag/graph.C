@@ -89,7 +89,7 @@ void
 DAGNode::prepare()
 {
   auto & store = _owner->storage();
-  for (int i = 0; i < store.size(); i++)
+  for (size_t i = 0; i < store.size(); i++)
     store[i]->_loop = -1;
 
   for (auto r : _owner->roots())
@@ -195,7 +195,7 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   std::map<DAGNode *, DAGNode *> node_to_loopnode;
   std::map<DAGNode *, int> loopnode_to_partition;
   Graph graphgraph;
-  for (int i = 0; i < partitions.size(); i++)
+  for (size_t i = 0; i < partitions.size(); i++)
   {
     auto & part = partitions[i];
     auto loop_node = graphgraph.create("loop" + std::to_string(i), false, false, (*part.nodes().begin())->loopType());
@@ -257,13 +257,13 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   // determine which other merges each given merge prevents/cancells from being
   // able to occur.
   std::vector<std::vector<int>> cancellations(candidate_merges.size());
-  for (int i = 0; i < candidate_merges.size(); i++)
+  for (size_t i = 0; i < candidate_merges.size(); i++)
   {
     auto & candidate = candidate_merges[i];
     auto loop1 = candidate.first;
     auto loop2 = candidate.second;
 
-    for (int j = i + 1; j < candidate_merges.size(); j++)
+    for (size_t j = i + 1; j < candidate_merges.size(); j++)
     {
       auto other1 = candidate_merges[j].first;
       auto other2 = candidate_merges[j].second;
@@ -301,22 +301,22 @@ mergeSiblings(std::vector<Subgraph> & partitions)
 
   // sort the merges by fewest to most cancellations;
   std::vector<int> indices(candidate_merges.size());
-  for (int i = 0; i < indices.size(); i++)
+  for (size_t i = 0; i < indices.size(); i++)
     indices[i] = i;
   std::sort(indices.begin(), indices.end(), [&](int a, int b) {return cancellations[a].size() < cancellations[b].size();});
 
   std::vector<std::pair<DAGNode *, DAGNode *>> sorted_merges(indices.size());
   std::vector<std::vector<int>> sorted_cancellations(indices.size());
-  for (int i = 0; i < indices.size(); i++)
+  for (size_t i = 0; i < indices.size(); i++)
   {
     int index = indices[i];
     sorted_merges[i] = candidate_merges[index];
     sorted_cancellations[i] = cancellations[index];
   }
   // remap canceled merge indices using the new sorted indices:
-  for (int i = 0; i < sorted_cancellations.size(); i++)
-    for (int j = 0; j < sorted_cancellations[i].size(); j++)
-      for (int k = 0; k < indices.size(); k++)
+  for (size_t i = 0; i < sorted_cancellations.size(); i++)
+    for (size_t j = 0; j < sorted_cancellations[i].size(); j++)
+      for (size_t k = 0; k < indices.size(); k++)
         if (sorted_cancellations[i][j] == indices[k])
         {
           sorted_cancellations[i][j] = k;
@@ -326,9 +326,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   // choose which merges to perform
   std::set<int> canceled_merges;
   std::set<int> chosen_merges;
-  for (int i = 0; i < sorted_merges.size(); i++)
+  for (size_t i = 0; i < sorted_merges.size(); i++)
   {
-    auto & merge = sorted_merges[i];
     if (canceled_merges.count(i) > 0)
       continue;
 
@@ -345,7 +344,7 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   // merging partitions 2 and 3 results in a single subgraph representing all
   // nodes for partitions 1, 2, and 3.
   std::vector<Subgraph *> merged_partitions(partitions.size());
-  for (int i = 0; i < partitions.size(); i++)
+  for (size_t i = 0; i < partitions.size(); i++)
     merged_partitions[i] = &partitions[i];
   for (auto merge_index : chosen_merges)
   {
@@ -366,14 +365,14 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     // already-merged subrgraph.  As merges accumulate, we need to keep all
     // these original-partition subgraph entries pointing to the correct
     // single, merged subgraph.
-    for (int i = 0; i < merged_partitions.size(); i++)
+    for (size_t i = 0; i < merged_partitions.size(); i++)
     {
       // check if prior merges resulted in the current two partitions already being merged.
       // In this case. we don't want to clear out any subgraphs - if we did
       // then we could end up the nodes in the merged partitions being deleted!
       if (merged_partitions[part1_index] == merged_partitions[part2_index])
         break;
-      if (i == part1_index)
+      if (i == (size_t)part1_index)
         continue;
       if (merged_partitions[i] == merged_partitions[part2_index])
       {
@@ -442,7 +441,6 @@ computePartitions(Graph & g, bool merge)
   for (auto n : g.nodes())
     loopgraphs[n->loop()].add(n);
 
-  int loopindex = 0;
   for (auto & g : loopgraphs)
   {
     // further divide up each loop subgraph into one subgraph for each loop type.

@@ -36,7 +36,7 @@ loopTypeStr(const LoopType & l)
 }
 
 std::string
-nodeLabel(const Subgraph & g, Node * n)
+nodeLabel(const Subgraph & g, DAGNode * n)
 {
   std::string s = n->str() + " on partition " + std::to_string(g.id()) + "\\n";
   s += loopTypeStr(n->loopType());
@@ -63,7 +63,7 @@ nodeLabel(const Subgraph & g, Node * n)
 // available (i.e. computed in a prior loop) - filled nodes are not
 // (re)calculated in the current loop, just (re)used.
 std::string
-dotEdge(const Subgraph & g, Node * src, Node * dst)
+dotEdge(const Subgraph & g, DAGNode * src, DAGNode * dst)
 {
   if (dst)
   {
@@ -131,7 +131,7 @@ dotGraph(const Subgraph & g)
 // the loop type printed by this function will arbitrarily be one of those
 // two.
 void
-printLoops(std::vector<std::vector<std::vector<Node *>>> loops)
+printLoops(std::vector<std::vector<std::vector<DAGNode *>>> loops)
 {
   for (size_t i = 0; i < loops.size(); i++)
   {

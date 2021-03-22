@@ -60,18 +60,6 @@ template <typename RangeType>
 void
 UniversalLoop<RangeType>::operator()(const RangeType & range, bool bypass_threading)
 {
-  // TODO: make this query fv flux kernel specific or somehow integrate the
-  // fv source kernels into this loop. Also this check will need to increase
-  // in generality if/when other systems and objects besides FV stuff get
-  // added to this loop.
-  std::vector<FVKernel *> kernels;
-  _fe_problem.theWarehouse()
-      .query()
-      .template condition<AttribSystem>("FVFluxKernel")
-      .queryInto(kernels);
-  if (kernels.size() == 0)
-    return;
-
   try
   {
     try

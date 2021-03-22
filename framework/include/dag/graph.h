@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <limits>
 
+#include "MooseTypes.h"
+
 // Notes/thoughts:
 //
 // FV flux kernels depend on pseudo elemental (elem and neighbor) values.  How
@@ -209,15 +211,16 @@ private:
   std::set<DAGNode *> _deps;
   std::set<DAGNode *> _dependers;
 
-  std::function<void(const MeshLocation &, THREAD_ID tid)> _func;
-  std::function<void(THREAD_ID tid)> _join;
+  std::function<void(const MeshLocation &, THREAD_ID)> _func;
+  std::function<void(THREAD_ID)> _join;
 };
 
 class Subgraph
 {
 public:
   Subgraph() {}
-  Subgraph(const std::set<DAGNode *> & nodes) : _nodes(nodes), _id(_next_id++) {}
+  Subgraph(const std::set<DAGNode *> & nodes) : _id(_next_id++), _nodes(nodes){}
+  virtual ~Subgraph() {}
 
   // Returns the minimum number of jumps it takes to get from any root node of
   // the dependency graph to this node.

@@ -11,7 +11,7 @@ std::string loopCategoryStr(const LoopCategory cat);
 
 std::string loopTypeStr(const LoopType & l);
 
-std::string nodeLabel(const Subgraph & g, Node * n);
+std::string nodeLabel(const Subgraph & g, DAGNode * n);
 
 // outputs an a dot script edge pointing from src to dst.  If dst is nullptr,
 // then src is created as an "island" node.  If dst is not contained in the
@@ -19,7 +19,7 @@ std::string nodeLabel(const Subgraph & g, Node * n);
 // that this node represents a value that is cached and should already be
 // available (i.e. computed in a prior loop) - filled nodes are not
 // (re)calculated in the current loop, just (re)used.
-std::string dotEdge(const Subgraph & g, Node * src, Node * dst);
+std::string dotEdge(const Subgraph & g, DAGNode * src, DAGNode * dst);
 
 std::string dotConnections(const Subgraph & g);
 
@@ -33,5 +33,5 @@ std::string dotGraph(const Subgraph & g);
 // from Elemental_onElem and Elemental_onBoundary together into a single loop,
 // the loop type printed by this function will arbitrarily be one of those
 // two.
-void printLoops(std::vector<std::vector<std::vector<Node *>>> loops);
+void printLoops(std::vector<std::vector<std::vector<DAGNode *>>> loops);
 
