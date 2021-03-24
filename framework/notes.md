@@ -27,3 +27,30 @@ Questions:
 
 - add a way to "lock" the warehouse as immutable (except the cache) to prevent new objects from
     being added (but still allow updating existing objects.
+
+Transient::execute
+    -> Transient::takeStep
+        -> TimeStepper::step
+            -> PicardSolve::solve
+                -> PicardSolve::solveStep
+                    -> FEProblem::execute(timestep begin/end/etc)
+                    -> FEProblemSolve::solve
+                        -> FEProblemBase::solve
+                            -> NonlinearSystem::solve
+                                -> FEProblemBase::computeResidualSys
+                                    -> FEProblemBase::computeResidual
+                                        -> FEProblemBase::computeResidualInternal
+                                            -> FEProblemBase::computeResidualTags
+                                                -> NonlinearSystemBase::computeResidualTags
+                                                    -> NonlinearSystemBase::computeResidualInternal
+                                                        -> ComputeResidualThread
+                                                        -> ComputeFVFluxThread
+                                                        -> ComputeNodalKernelsThread
+                                            -> FEProblemBase::computeUserObjects
+                                            -> AuxiliarySystem::residualSetup
+                                            -> AuxiliarySystem::compute
+                                            -> MaterialWarehouse::residualSetup
+                                            -> NonlinearSystem::computeTimeDerivatives
+                                            -> FEProblemBase::executeControls
+                -> FEProblem::outputStep(timestep begin/end/etc)
+
