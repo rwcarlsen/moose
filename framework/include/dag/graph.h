@@ -12,6 +12,41 @@
 
 #include "MooseTypes.h"
 
+// Here is one of the main lines of control flow that causes evaluations of
+// all the moose objects:
+//    Transient::execute
+//        -> Transient::takeStep
+//            -> TimeStepper::step
+//                -> PicardSolve::solve
+//                    -> PicardSolve::solveStep
+//                        -> FEProblem::execute(timestep begin/end/etc)
+//                        -> FEProblemSolve::solve
+//                            -> FEProblemBase::solve
+//                                -> NonlinearSystem::solve
+//                                    -> FEProblemBase::computeResidualSys
+//                                        -> FEProblemBase::computeResidual
+//                                            -> FEProblemBase::computeResidualInternal
+//                                                -> FEProblemBase::computeResidualTags
+//                                                    -> NonlinearSystemBase::computeResidualTags
+//                                                        -> NonlinearSystemBase::computeResidualInternal
+//                                                            -> ComputeResidualThread
+//                                                            -> ComputeFVFluxThread
+//                                                            -> ComputeNodalKernelsThread
+//                                                -> FEProblemBase::computeUserObjects
+//                                                -> AuxiliarySystem::residualSetup
+//                                                -> AuxiliarySystem::compute
+//                                                -> MaterialWarehouse::residualSetup
+//                                                -> NonlinearSystem::computeTimeDerivatives
+//                                                -> FEProblemBase::executeControls
+//
+// The "right" place to tie in some sort of DAG auto-mesh-loop functionality
+// is probably FEProblemBase::computeResidualTags and FEProblemBase::computeJacobianTags.
+//
+// There are other places where there is generally less
+// complexity/interdependency - i.e. FEProblemBase::outputStep,
+// FEProblemBase::execute (samplers and such), etc. that would also eventually
+// need to be addressed.
+
 // Notes/thoughts:
 //
 // FV flux kernels depend on pseudo elemental (elem and neighbor) values.  How
