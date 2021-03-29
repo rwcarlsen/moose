@@ -107,6 +107,8 @@
 #include "libmesh/string_to_enum.h"
 #include "libmesh/fe_interface.h"
 
+#include "loop.h"
+
 #include "metaphysicl/dualnumber.h"
 
 // Anonymous namespace for helper function
@@ -5433,10 +5435,74 @@ FEProblemBase::computeTransientImplicitResidual(Real time,
   computeResidual(u, residual);
 }
 
+
+void
+FEProblemBase::buildLoops(const std::set<TagID> tags, LoopData & ld)
+{
+  const unsigned int tmp_tid = 0;
+  auto & warehouse = _nl->getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
+  const auto n_threads = libMesh::n_threads();
+
+  for (auto block : _mesh.meshSubdomains())
+  {
+    auto & kernels = warehouse.getBlockObjects(block, tmp_tid);
+    for (auto kern : kernels)
+    {
+      auto k = kern.get();
+
+      std::vector<KernelBase *> kernel_copies;
+      for (unsigned int i = 0; i < n_threads; i++)
+        kernel_copies.push_back(warehouse.getObject(k->name(), i).get());
+
+      auto obj = ld.graph.create(k->name(), false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+      obj->setRunFunc([kernel_copies](const MeshLocation & /*loc*/, THREAD_ID tid){
+            kernel_copies[tid]->computeResidual();
+          });
+
+      // kernels get/store their dependencies from:
+      //     * variables: MooseVariableInterface, Coupleable
+      //     * materials: MaterialPropertyInterface - material.getSuppliedPropIDs() and kern->getMatPropDependencies() should get us what we need.
+      //     * postprocessors: PostprocessorInterface
+      // TODO: figure out how to index these objects as we create them so we
+      // can set up the DAG dependencies correctly/conveniently
+    }
+  }
+}
+
 void
 FEProblemBase::computeResidualTags(const std::set<TagID> & tags)
 {
   TIME_SECTION(_compute_residual_tags_timer);
+
+  if (_run_dag_style)
+  {
+    std::vector<TagID> tagskey(tags.begin(), tags.end());
+    if (_loops.count(tagskey) == 0)
+      buildLoops(tags, _loops[tagskey]);
+
+    auto & loop_data = _loops[tagskey];
+
+    for (size_t i = 0; i < loop_data.objs.size(); i++)
+    {
+
+      if (loop_data.loop_type[i] == dag::LoopCategory::Elemental_onElem)
+      {
+        UniversalRange range(_elem_locs.begin(), _elem_locs.end());
+        runLoop(*this, loop_data.objs[i], range);
+      }
+      else if (loop_data.loop_type[i] == dag::LoopCategory::Face)
+      {
+        UniversalRange range(_face_locs.begin(), _face_locs.end());
+        runLoop(*this, loop_data.objs[i], range);
+      }
+      else if (loop_data.loop_type[i] == dag::LoopCategory::Nodal)
+      {
+        UniversalRange range(_node_locs.begin(), _node_locs.end());
+        runLoop(*this, loop_data.objs[i], range);
+      } // TODO: add the rest.
+    }
+    return;
+  }
 
   _nl->zeroVariablesForResidual();
   _aux->zeroVariablesForResidual();

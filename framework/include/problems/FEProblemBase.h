@@ -30,6 +30,7 @@
 #include "VectorPostprocessor.h"
 #include "PerfGraphInterface.h"
 #include "Attributes.h"
+#include "graph.h"
 
 #include "libmesh/enum_quadrature_type.h"
 #include "libmesh/equation_systems.h"
@@ -2225,6 +2226,20 @@ protected:
   bool _using_ad_mat_props;
 
 private:
+  bool _run_dag_style = true;
+  struct LoopData
+  {
+    dag::Graph graph;
+    std::vector<dag::LoopCategory> loop_type;
+    std::vector<std::vector<dag::Node *>> objs;
+  };
+  std::map<std::vector<TagID>, LoopData> _loops;
+  void buildLoops(const std::set<TagID> tags, LoopData & ld);
+  std::vector<std::unique_ptr<MeshLocation>> _all_locs;
+  std::vector<MeshLocation *> _elem_locs;
+  std::vector<MeshLocation *> _node_locs;
+  std::vector<MeshLocation *> _face_locs;
+
   void updateMaxQps();
 
   void joinAndFinalize(TheWarehouse::Query query, bool isgen = false);

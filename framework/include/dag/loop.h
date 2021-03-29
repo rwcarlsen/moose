@@ -1,24 +1,36 @@
+#include "graph.h"
+
+#include "FEProblemBase.h"
+
+class MeshLocation
+{
+public:
+  dag::LoopType type;
+  SubdomainID id;
+  Elem * elem;
+  FaceInfo * face;
+  Node * node;
+};
+
+using UniversalRange = StoredRange<std::vector<MeshLocation *>::const_iterator, const MeshLocation *>;
 
 /**
  * This loops over a set of mesh faces (i.e. FaceInfo objects).  Callback
  * routines are provided for visiting each face, for visiting boundary faces,
  * for sudomain changes, and pre/post many of these events.
  */
-template <typename RangeType>
 class UniversalLoop
 {
 public:
-  UniversalLoop(FEProblemBase & fe_problem, const std::set<TagID> & tags, std::vector<DAGNode *> & nodes);
+  UniversalLoop(FEProblemBase & fe_problem, std::vector<dag::Node *> & nodes);
 
   UniversalLoop(UniversalLoop & x, Threads::split split);
 
   virtual ~UniversalLoop();
 
-  virtual void operator()(const RangeType & range, bool bypass_threading = false);
+  virtual void operator()(const UniversalRange & range, bool bypass_threading = false);
 
   void join(const UniversalLoop & /*y*/){};
-
-  virtual void onLocation(const MeshLocation & loc) = 0;
 
   /// Called if a MooseException is caught anywhere during the computation.
   virtual void caughtMooseException(MooseException &){};
@@ -26,27 +38,22 @@ public:
 private:
   FEProblemBase & _fe_problem;
   MooseMesh & _mesh;
-  const std::set<TagID> & _tags;
   THREAD_ID _tid;
-  std::vector<DAGNode *> & _objects;
+  std::vector<dag::Node *> & _objects;
 };
 
-template <typename RangeType>
-UniversalLoop<RangeType>::UniversalLoop(FEProblemBase & fe_problem,
-                                              const std::set<TagID> & tags,
-                                              std::vector<DAGNode *> & nodes)
-  : _fe_problem(fe_problem), _mesh(fe_problem.mesh()), _tags(tags), _objects(nodes)
+UniversalLoop::UniversalLoop(FEProblemBase & fe_problem,
+                                              std::vector<dag::Node *> & nodes)
+  : _fe_problem(fe_problem), _mesh(fe_problem.mesh()), _objects(nodes)
 {
 }
 
-template <typename RangeType>
-UniversalLoop<RangeType>::UniversalLoop(ThreadedFaceLoop & x, Threads::split /*split*/)
-  : _fe_problem(x._fe_problem), _mesh(x._mesh), _tags(x._tags), _objects(x._objects)
+UniversalLoop::UniversalLoop(UniversalLoop & x, Threads::split /*split*/)
+  : _fe_problem(x._fe_problem), _mesh(x._mesh), _objects(x._objects)
 {
 }
 
-template <typename RangeType>
-UniversalLoop<RangeType>::~ThreadedFaceLoop()
+UniversalLoop::~UniversalLoop()
 {
 }
 
@@ -56,9 +63,8 @@ UniversalLoop<RangeType>::~ThreadedFaceLoop()
 // "neighbor") parameters in order to avoid jumping back and forth along the
 // boundary between using one or the other subdomains' FV kernels
 // unpredictably.
-template <typename RangeType>
 void
-UniversalLoop<RangeType>::operator()(const RangeType & range, bool bypass_threading)
+UniversalLoop::operator()(const UniversalRange & range, bool bypass_threading)
 {
   try
   {
@@ -67,14 +73,10 @@ UniversalLoop<RangeType>::operator()(const RangeType & range, bool bypass_thread
       ParallelUniqueId puid;
       _tid = bypass_threading ? 0 : puid.id;
 
-      typename RangeType::const_iterator loc = range.begin();
+      UniversalRange::const_iterator loc = range.begin();
       for (loc = range.begin(); loc != range.end(); ++loc)
-      {
-        const Elem & elem = (*faceinfo)->elem();
         for (auto obj : _objects)
-          obj->run(*loc, _tid);
-
-      }
+          obj->run(**loc, _tid);
     }
     catch (libMesh::LogicError & e)
     {
@@ -87,10 +89,9 @@ UniversalLoop<RangeType>::operator()(const RangeType & range, bool bypass_thread
   }
 }
 
-template <typename RangeType>
-void runLoop(FEProblemBase & fep, const std::set<TagID> tags, std::vector<DAGNode *> & nodes, const RangeType & range)
+void runLoop(FEProblemBase & fep, std::vector<dag::Node *> & nodes, const UniversalRange & range)
 {
-  UniversalLoop loop(fep, tags, nodes);
+  UniversalLoop loop(fep, nodes);
   Threads::parallel_reduce(range, loop);
   for (auto n : nodes)
     n->join();

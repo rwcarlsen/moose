@@ -2,11 +2,14 @@
 #include "graph.h"
 #include "show.h"
 
-int DAGNode::_n_visits = 0;
+namespace dag
+{
+
+int Node::_n_visits = 0;
 
 int Subgraph::_next_id = 0;
 
-bool canMerge(DAGNode * a, DAGNode * b)
+bool canMerge(Node * a, Node * b)
 {
   // this allows us to consider all Elemental_foo loop types mergeable
   static std::map<LoopCategory, std::set<LoopCategory>> mergeable = {
@@ -30,24 +33,24 @@ bool canMerge(DAGNode * a, DAGNode * b)
   return true;
 }
 
-DAGNode::DAGNode(Graph * g, const std::string & name, bool cached, bool reducing, LoopType l)
+Node::Node(Graph * g, const std::string & name, bool cached, bool reducing, LoopType l)
     : _owner(g), _name(name), _cached(cached), _reducing(reducing), _looptype(l)
 {
 }
 
-std::set<DAGNode *> DAGNode::deps() const { return _deps; }
-std::set<DAGNode *> DAGNode::dependers() const { return _dependers; }
+std::set<Node *> Node::deps() const { return _deps; }
+std::set<Node *> Node::dependers() const { return _dependers; }
 
-bool DAGNode::dependsOn(DAGNode * n)
+bool Node::dependsOn(Node * n)
 {
   return n->_transitive_dependers.count(this) > 0;
 }
-void DAGNode::transitiveDependers(std::set<DAGNode *> & all) const
+void Node::transitiveDependers(std::set<Node *> & all) const
 {
   all.insert(_transitive_dependers.begin(), _transitive_dependers.end());
 }
 
-void DAGNode::transitiveDeps(std::set<DAGNode *> & all) const
+void Node::transitiveDeps(std::set<Node *> & all) const
 {
   for (auto d : _deps)
   {
@@ -58,18 +61,18 @@ void DAGNode::transitiveDeps(std::set<DAGNode *> & all) const
   }
 }
 
-bool DAGNode::isReducing() const { return _reducing; }
-bool DAGNode::isCached() const { return _cached || _reducing; }
-LoopType DAGNode::loopType() const { return _looptype; }
+bool Node::isReducing() const { return _reducing; }
+bool Node::isCached() const { return _cached || _reducing; }
+LoopType Node::loopType() const { return _looptype; }
 
-std::string DAGNode::str() { return _name; }
-std::string DAGNode::name() { return _name; }
+std::string Node::str() { return _name; }
+std::string Node::name() { return _name; }
 
-void DAGNode::clearDeps() {_deps.clear(); _dependers.clear();}
+void Node::clearDeps() {_deps.clear(); _dependers.clear();}
 
-int DAGNode::id() {return _id;}
+int Node::id() {return _id;}
 
-void DAGNode::setId(int id)
+void Node::setId(int id)
 {
   if (_id != -1)
     throw std::runtime_error("setting node id multiple times");
@@ -78,7 +81,7 @@ void DAGNode::setId(int id)
   _id = id;
 }
 
-int DAGNode::loop()
+int Node::loop()
 {
   if (_loop == -1)
     _loop = loopInner();
@@ -86,7 +89,7 @@ int DAGNode::loop()
 }
 
 void
-DAGNode::prepare()
+Node::prepare()
 {
   auto & store = _owner->storage();
   for (size_t i = 0; i < store.size(); i++)
@@ -97,7 +100,7 @@ DAGNode::prepare()
 }
 
 
-void DAGNode::inheritDependers(DAGNode * n, std::set<DAGNode *> & dependers)
+void Node::inheritDependers(Node * n, std::set<Node *> & dependers)
 {
   assert(dependers.count(this) == 0);
   if (n->_visit_count == _n_visits)
@@ -112,7 +115,7 @@ void DAGNode::inheritDependers(DAGNode * n, std::set<DAGNode *> & dependers)
     d->inheritDependers(n, dependers);
 }
 
-int DAGNode::loopInner()
+int Node::loopInner()
 {
   if (_dependers.size() == 0)
     return 0;
@@ -142,9 +145,9 @@ int DAGNode::loopInner()
 }
 
 void
-execOrder(Subgraph g, std::vector<std::vector<DAGNode *>> & order)
+execOrder(Subgraph g, std::vector<std::vector<Node *>> & order)
 {
-  std::set<DAGNode *> executed;
+  std::set<Node *> executed;
   while (!g.nodes().empty())
   {
     order.push_back({});
@@ -163,7 +166,7 @@ execOrder(Subgraph g, std::vector<std::vector<DAGNode *>> & order)
 }
 
 void
-findConnected(const Subgraph & g, DAGNode * n, Subgraph & all)
+findConnected(const Subgraph & g, Node * n, Subgraph & all)
 {
   if (all.contains(n) || !g.contains(n))
     return;
@@ -176,7 +179,7 @@ findConnected(const Subgraph & g, DAGNode * n, Subgraph & all)
 }
 
 void
-floodUp(DAGNode * n, Subgraph & g, LoopType t, int curr_loop)
+floodUp(Node * n, Subgraph & g, LoopType t, int curr_loop)
 {
   if (n->loopType() != t)
     return;
@@ -192,8 +195,8 @@ void
 mergeSiblings(std::vector<Subgraph> & partitions)
 {
   // create a graph where each node represents one of the total dep graph partitions
-  std::map<DAGNode *, DAGNode *> node_to_loopnode;
-  std::map<DAGNode *, int> loopnode_to_partition;
+  std::map<Node *, Node *> node_to_loopnode;
+  std::map<Node *, int> loopnode_to_partition;
   Graph graphgraph;
   for (size_t i = 0; i < partitions.size(); i++)
   {
@@ -232,8 +235,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   graphgraph.prepare();
 
   // determine the set of potential merges.
-  std::vector<std::pair<DAGNode *, DAGNode *>> candidate_merges;
-  std::map<DAGNode *, std::map<DAGNode *, bool>> merge_index;
+  std::vector<std::pair<Node *, Node *>> candidate_merges;
+  std::map<Node *, std::map<Node *, bool>> merge_index;
   for (auto loop1 : graphgraph.nodes())
   {
     for (auto loop2 : graphgraph.nodes())
@@ -305,7 +308,7 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     indices[i] = i;
   std::sort(indices.begin(), indices.end(), [&](int a, int b) {return cancellations[a].size() < cancellations[b].size();});
 
-  std::vector<std::pair<DAGNode *, DAGNode *>> sorted_merges(indices.size());
+  std::vector<std::pair<Node *, Node *>> sorted_merges(indices.size());
   std::vector<std::vector<int>> sorted_cancellations(indices.size());
   for (size_t i = 0; i < indices.size(); i++)
   {
@@ -400,10 +403,10 @@ splitPartitions(std::vector<Subgraph> & partitions)
 
   for (auto & g : partitions)
   {
-    std::set<DAGNode *> roots = g.roots();
+    std::set<Node *> roots = g.roots();
     while (roots.size() > 0)
     {
-      DAGNode * r = *roots.begin();
+      Node * r = *roots.begin();
       Subgraph split;
       findConnected(g, r, split);
       for (auto r : split.roots())
@@ -485,8 +488,8 @@ computePartitions(Graph & g, bool merge)
   // make sure there aren't any dependency nodes that aren't included in at
   // least one partition
   assert([&](){
-        std::set<DAGNode *> all_deps;
-        std::set<DAGNode *> all_nodes;
+        std::set<Node *> all_deps;
+        std::set<Node *> all_nodes;
         for (auto & g : partitions)
         {
           for (auto n : g.nodes())
@@ -508,10 +511,10 @@ computePartitions(Graph & g, bool merge)
   return partitions;
 }
 
-std::vector<std::vector<std::vector<DAGNode *>>>
+std::vector<std::vector<std::vector<Node *>>>
 computeLoops(std::vector<Subgraph> & partitions)
 {
-  std::vector<std::vector<std::vector<DAGNode *>>> loops;
+  std::vector<std::vector<std::vector<Node *>>> loops;
   // topological sort the nodes for each loop
   for (auto & g : partitions)
   {
@@ -522,3 +525,4 @@ computeLoops(std::vector<Subgraph> & partitions)
   return loops;
 }
 
+} // namespace dag

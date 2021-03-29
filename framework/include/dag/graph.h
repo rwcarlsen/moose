@@ -12,6 +12,8 @@
 
 #include "MooseTypes.h"
 
+class MeshLocation;
+
 // Here is one of the main lines of control flow that causes evaluations of
 // all the moose objects:
 //    Transient::execute
@@ -100,6 +102,10 @@
 // inter-loop-type dependencies normally require the depended on value to be
 // cached, but since materials are "duplicated" into every loop they are in,
 // this isn't a problem.
+//
+
+namespace dag
+{
 
 enum class LoopCategory
 {
@@ -157,31 +163,29 @@ public:
 
 class Graph;
 
-class MeshLocation;
-
-class DAGNode
+class Node
 {
 public:
-  DAGNode(Graph * g, const std::string & name, bool cached, bool reducing, LoopType l);
+  Node(Graph * g, const std::string & name, bool cached, bool reducing, LoopType l);
 
   void setRunFunc(std::function<void(const MeshLocation &, THREAD_ID)> func) { _func = func;}
   void run(const MeshLocation & loc, THREAD_ID tid) { _func(loc, tid);}
-  void setJoinFunc(std::function<void(THREAD_ID)> func) { _join = func;}
-  void join(THREAD_ID tid) { _join(tid);}
+  void setJoinFunc(std::function<void()> func) { _join = func;}
+  void join() { _join();}
 
-  std::set<DAGNode *> deps() const;
-  std::set<DAGNode *> dependers() const;
+  std::set<Node *> deps() const;
+  std::set<Node *> dependers() const;
 
   // Returns true if n depends on this node (directly or transitively).  reachable must
   // contain a superset of reachable nodes from this node - this is used for
   // optimization purposes.
-  bool dependsOn(DAGNode * n);
+  bool dependsOn(Node * n);
 
   // Stores in all every node that depends on this node transitively.
-  void transitiveDependers(std::set<DAGNode *> & all) const;
+  void transitiveDependers(std::set<Node *> & all) const;
 
   // Stores in all every node that this node depends on transitively.
-  void transitiveDeps(std::set<DAGNode *> & all) const;
+  void transitiveDeps(std::set<Node *> & all) const;
 
   bool isReducing() const;
   bool isCached() const;
@@ -195,7 +199,7 @@ public:
   void needs() {}
 
   template <typename... Args>
-  void needs(DAGNode * n, Args... args)
+  void needs(Node * n, Args... args)
   {
     assert(n != this); // cyclical dep check - node can't depend on itself.
     _deps.insert(n);
@@ -204,7 +208,7 @@ public:
     n->_dependers.insert(this);
     needs(args...);
   }
-  void needs(const std::set<DAGNode *> & deps);
+  void needs(const std::set<Node *> & deps);
 
   int id();
 
@@ -228,14 +232,14 @@ public:
 private:
   // Allows incrementally building up the transitive dependers/deps lists for every
   // node as new dependencies are added between nodes.
-  void inheritDependers(DAGNode * n, std::set<DAGNode *> & dependers);
+  void inheritDependers(Node * n, std::set<Node *> & dependers);
   int loopInner();
 
   int _visit_count = 0;
   static int _n_visits;
 
   int _loop = -1;
-  std::set<DAGNode *> _transitive_dependers;
+  std::set<Node *> _transitive_dependers;
   Graph * _owner;
 
   std::string _name;
@@ -243,23 +247,23 @@ private:
   bool _cached;
   bool _reducing;
   LoopType _looptype;
-  std::set<DAGNode *> _deps;
-  std::set<DAGNode *> _dependers;
+  std::set<Node *> _deps;
+  std::set<Node *> _dependers;
 
   std::function<void(const MeshLocation &, THREAD_ID)> _func;
-  std::function<void(THREAD_ID)> _join;
+  std::function<void()> _join;
 };
 
 class Subgraph
 {
 public:
   Subgraph() {}
-  Subgraph(const std::set<DAGNode *> & nodes) : _id(_next_id++), _nodes(nodes){}
+  Subgraph(const std::set<Node *> & nodes) : _id(_next_id++), _nodes(nodes){}
   virtual ~Subgraph() {}
 
   // Returns the minimum number of jumps it takes to get from any root node of
   // the dependency graph to this node.
-  int mindepth(DAGNode * n)
+  int mindepth(Node * n)
   {
     auto deps = filter(n->deps());
     if (deps.size() == 0)
@@ -282,9 +286,9 @@ public:
   }
   // returns true if any nodes in this graph are reachable from or dependend on
   // transitively by the given from nodes.
-  bool reachable(std::set<DAGNode *> from)
+  bool reachable(std::set<Node *> from)
   {
-    std::set<DAGNode *> transitive_deps;
+    std::set<Node *> transitive_deps;
     for (auto n : from)
       n->transitiveDeps(transitive_deps);
 
@@ -296,7 +300,7 @@ public:
 
   // returns all nodes that depend on n transitively that are within this
   // subgraph.
-  void transitiveDependers(DAGNode * n, std::set<DAGNode *> & all) const
+  void transitiveDependers(Node * n, std::set<Node *> & all) const
   {
     for (auto d : filter(n->dependers()))
     {
@@ -309,7 +313,7 @@ public:
 
   // returns all nodes that n depends on transitively that are within this
   // subgraph.
-  void transitiveDeps(DAGNode * n, std::set<DAGNode *> & all) const
+  void transitiveDeps(Node * n, std::set<Node *> & all) const
   {
     for (auto d : filter(n->deps()))
     {
@@ -322,7 +326,7 @@ public:
 
   // returns a subgraph of all nodes that are reachable (depended on
   // transitively) by the given from node.
-  Subgraph reachableFrom(DAGNode * from)
+  Subgraph reachableFrom(Node * from)
   {
     Subgraph can_reach;
     for (auto n : nodes())
@@ -333,30 +337,30 @@ public:
     }
     return can_reach;
   }
-  virtual std::set<DAGNode *> roots() const
+  virtual std::set<Node *> roots() const
   {
-    std::set<DAGNode *> rs;
+    std::set<Node *> rs;
     for (auto n : _nodes)
       if (filter(n->deps()).empty())
         rs.insert(n);
     return rs;
   }
-  virtual std::set<DAGNode *> leaves() const
+  virtual std::set<Node *> leaves() const
   {
-    std::set<DAGNode *> leaves;
+    std::set<Node *> leaves;
     for (auto n : _nodes)
       if (filter(n->dependers()).empty())
         leaves.insert(n);
     return leaves;
   }
-  virtual void roots(DAGNode * n, std::set<DAGNode *> rts) const
+  virtual void roots(Node * n, std::set<Node *> rts) const
   {
     if (filter(n->deps()).empty())
       rts.insert(n);
     for (auto d : filter(n->deps()))
       roots(d, rts);
   }
-  virtual void leaves(DAGNode * n, std::set<DAGNode *> lvs) const
+  virtual void leaves(Node * n, std::set<Node *> lvs) const
   {
     if (filter(n->dependers()).empty())
       lvs.insert(n);
@@ -364,10 +368,10 @@ public:
       leaves(d, lvs);
   }
 
-  virtual void add(DAGNode * n) { _nodes.insert(n); }
-  virtual void remove(DAGNode * n) { _nodes.erase(n); }
-  virtual bool contains(DAGNode * n) const { return _nodes.count(n) > 0; }
-  virtual std::set<DAGNode *> nodes() const { return _nodes; }
+  virtual void add(Node * n) { _nodes.insert(n); }
+  virtual void remove(Node * n) { _nodes.erase(n); }
+  virtual bool contains(Node * n) const { return _nodes.count(n) > 0; }
+  virtual std::set<Node *> nodes() const { return _nodes; }
   virtual void clear() { _nodes.clear(); }
   virtual void merge(const Subgraph & other)
   {
@@ -378,9 +382,9 @@ public:
   int size() const {return _nodes.size();}
 
 private:
-  std::set<DAGNode *> filter(std::set<DAGNode *> ns) const
+  std::set<Node *> filter(std::set<Node *> ns) const
   {
-    std::set<DAGNode *> filtered;
+    std::set<Node *> filtered;
     for (auto n : ns)
       if (contains(n))
         filtered.insert(n);
@@ -389,35 +393,35 @@ private:
 
   static int _next_id;
   int _id;
-  std::set<DAGNode *> _nodes;
+  std::set<Node *> _nodes;
 };
 
 class Graph : public Subgraph
 {
 public:
   template <typename... Args>
-  DAGNode * create(Args... args)
+  Node * create(Args... args)
   {
-    _node_storage.emplace_back(new DAGNode(this, std::forward<Args>(args)...));
+    _node_storage.emplace_back(new Node(this, std::forward<Args>(args)...));
     _node_storage.back()->setId(_node_storage.size() - 1);
     add(_node_storage.back().get());
     return _node_storage.back().get();
   }
 
-  const std::vector<std::unique_ptr<DAGNode>> & storage() { return _node_storage; }
+  const std::vector<std::unique_ptr<Node>> & storage() { return _node_storage; }
 
 private:
-  std::vector<std::unique_ptr<DAGNode>> _node_storage;
+  std::vector<std::unique_ptr<Node>> _node_storage;
 };
 
 // this effectively implements a topological sort for the nodes in the graph g. returning a list
 // that can be executed that contains groups of nodes that can be run simultaneously.
 // Note that g is a by-value arg - because we want a copy to modify during
 // this function.
-void execOrder(Subgraph g, std::vector<std::vector<DAGNode *>> & order);
+void execOrder(Subgraph g, std::vector<std::vector<Node *>> & order);
 
 // return a subgraph of g containing all nodes connected to n;
-void findConnected(const Subgraph & g, DAGNode * n, Subgraph & all);
+void findConnected(const Subgraph & g, Node * n, Subgraph & all);
 
 // walk n's dependencies recursively traversing over elemental nodes and
 // stopping at nodes of a different loop type, adding all visited elemental
@@ -425,10 +429,10 @@ void findConnected(const Subgraph & g, DAGNode * n, Subgraph & all);
 // This also stops on cached dependencies that don't need to be recalculated
 // as part of the current loop. This transitively adds all uncached
 // dependencies of n to the current loop/subgraph.
-void floodUp(DAGNode * n, Subgraph & g, LoopType t, int curr_loop);
+void floodUp(Node * n, Subgraph & g, LoopType t, int curr_loop);
 
 // returns true if loops/partitions represented by nodes a and b can be merged.
-bool canMerge(DAGNode * a, DAGNode * b);
+bool canMerge(Node * a, Node * b);
 
 // once we have the graph split into partitions, there are some
 // optimizations that can be performed to combine partitions/loops together
@@ -452,5 +456,6 @@ std::vector<Subgraph> splitPartitions(std::vector<Subgraph> & partitions);
 
 std::vector<Subgraph> computePartitions(Graph & g, bool merge = false);
 
-std::vector<std::vector<std::vector<DAGNode *>>> computeLoops(std::vector<Subgraph> & partitions);
+std::vector<std::vector<std::vector<Node *>>> computeLoops(std::vector<Subgraph> & partitions);
 
+} // namespace dag
