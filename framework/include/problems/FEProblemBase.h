@@ -2230,6 +2230,7 @@ private:
   struct LoopData
   {
     dag::Graph graph;
+    std::map<SubdomainID, dag::Node *> elem_setup;
     std::vector<dag::LoopCategory> loop_type;
     std::vector<std::vector<dag::Node *>> objs;
   };

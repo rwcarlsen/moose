@@ -51,6 +51,7 @@
 #include "InternalSidePostprocessor.h"
 #include "InterfacePostprocessor.h"
 #include "GeneralPostprocessor.h"
+#include "SwapBackSentinel.h"
 #include "ElementVectorPostprocessor.h"
 #include "NodalVectorPostprocessor.h"
 #include "SideVectorPostprocessor.h"
@@ -132,6 +133,9 @@ InputParameters
 FEProblemBase::validParams()
 {
   InputParameters params = SubProblem::validParams();
+  params.addParam<bool>("run_dag_style",
+                        false,
+                        "executes objects for residual calcs in an experimental high tech way");
   params.addParam<unsigned int>("null_space_dimension", 0, "The dimension of the nullspace");
   params.addParam<unsigned int>(
       "transpose_null_space_dimension", 0, "The dimension of the transpose nullspace");
@@ -299,6 +303,7 @@ FEProblemBase::FEProblemBase(const InputParameters & parameters)
     _is_petsc_options_inserted(false),
     _line_search(nullptr),
     _using_ad_mat_props(false),
+    _run_dag_style(getParam<bool>("run_dag_style")),
     _error_on_jacobian_nonzero_reallocation(
         isParamValid("error_on_jacobian_nonzero_reallocation")
             ? getParam<bool>("error_on_jacobian_nonzero_reallocation")
@@ -5445,6 +5450,13 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, LoopData & ld)
 
   for (auto block : _mesh.meshSubdomains())
   {
+    auto elem_setup = ld.graph.create("elem_setup", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+    ld.elem_setup[block] = elem_setup;
+    elem_setup->setRunFunc([this](const MeshLocation & loc, THREAD_ID tid){
+          this->prepare(loc.elem, tid);
+          this->reinitElem(loc.elem, tid);
+        });
+
     auto & kernels = warehouse.getBlockObjects(block, tmp_tid);
     for (auto kern : kernels)
     {
@@ -5455,9 +5467,20 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, LoopData & ld)
         kernel_copies.push_back(warehouse.getObject(k->name(), i).get());
 
       auto obj = ld.graph.create(k->name(), false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-      obj->setRunFunc([kernel_copies](const MeshLocation & /*loc*/, THREAD_ID tid){
+      obj->setRunFunc([kernel_copies, this](const MeshLocation & loc, THREAD_ID tid){
+            auto props = kernel_copies[tid]->getMatPropDependencies();
+            auto & vars = kernel_copies[tid]->getMooseVariableDependencies();
+            this->setActiveElementalMooseVariables(vars, tid);
+            this->setActiveMaterialProperties(props, tid);
+            this->prepareMaterials(loc.block, tid);
+
+            SwapBackSentinel sentinel(*this, &FEProblem::swapBackMaterials, tid);
+            this->reinitMaterials(loc.block, tid);
+
             kernel_copies[tid]->computeResidual();
           });
+
+      obj->needs(elem_setup);
 
       // kernels get/store their dependencies from:
       //     * variables: MooseVariableInterface, Coupleable
