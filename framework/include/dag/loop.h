@@ -89,11 +89,19 @@ UniversalLoop::operator()(const UniversalRange & range, bool bypass_threading)
   }
 }
 
-void runLoop(FEProblemBase & fep, std::vector<dag::Node *> & nodes, const UniversalRange & range)
+void
+runLoop(FEProblemBase & fep,
+        std::vector<std::vector<dag::Node *>> & nodes,
+        const UniversalRange & range)
 {
-  UniversalLoop loop(fep, nodes);
+  std::vector<dag::Node *> all;
+  for (auto group : nodes)
+    for (auto n : group)
+      all.push_back(n);
+
+  UniversalLoop loop(fep, all);
   Threads::parallel_reduce(range, loop);
-  for (auto n : nodes)
+  for (auto n : all)
     n->join();
 }
 

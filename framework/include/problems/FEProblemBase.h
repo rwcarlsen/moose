@@ -2227,15 +2227,16 @@ protected:
 
 private:
   bool _run_dag_style = true;
-  struct LoopData
+  struct GraphData
   {
     dag::Graph graph;
+    std::vector<dag::Subgraph> partitions;
+    std::vector<std::vector<std::vector<dag::Node *>>> objs;
     std::map<SubdomainID, dag::Node *> elem_setup;
     std::vector<dag::LoopCategory> loop_type;
-    std::vector<std::vector<dag::Node *>> objs;
   };
-  std::map<std::vector<TagID>, LoopData> _loops;
-  void buildLoops(const std::set<TagID> tags, LoopData & ld);
+  std::map<std::vector<TagID>, GraphData> _loops;
+  void buildLoops(const std::set<TagID> tags, GraphData & ld);
   std::vector<std::unique_ptr<MeshLocation>> _all_locs;
   std::vector<MeshLocation *> _elem_locs;
   std::vector<MeshLocation *> _node_locs;

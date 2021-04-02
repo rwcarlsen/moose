@@ -5440,18 +5440,19 @@ FEProblemBase::computeTransientImplicitResidual(Real time,
   computeResidual(u, residual);
 }
 
-
 void
-FEProblemBase::buildLoops(const std::set<TagID> tags, LoopData & ld)
+FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
 {
   const unsigned int tmp_tid = 0;
   auto & warehouse = _nl->getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
   const auto n_threads = libMesh::n_threads();
 
+  // create all the objects and dependencies
   for (auto block : _mesh.meshSubdomains())
   {
-    auto elem_setup = ld.graph.create("elem_setup", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-    ld.elem_setup[block] = elem_setup;
+    auto elem_setup = gd.graph.create(
+        "elem_setup", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+    gd.elem_setup[block] = elem_setup;
     elem_setup->setRunFunc([this](const MeshLocation & loc, THREAD_ID tid){
           this->prepare(loc.elem, tid);
           this->reinitElem(loc.elem, tid);
@@ -5466,7 +5467,8 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, LoopData & ld)
       for (unsigned int i = 0; i < n_threads; i++)
         kernel_copies.push_back(warehouse.getObject(k->name(), i).get());
 
-      auto obj = ld.graph.create(k->name(), false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+      auto obj = gd.graph.create(
+          k->name(), false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
       obj->setRunFunc([kernel_copies, this](const MeshLocation & loc, THREAD_ID tid){
             auto props = kernel_copies[tid]->getMatPropDependencies();
             auto & vars = kernel_copies[tid]->getMooseVariableDependencies();
@@ -5490,6 +5492,10 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, LoopData & ld)
       // can set up the DAG dependencies correctly/conveniently
     }
   }
+
+  // calculate the loops
+  gd.partitions = dag::computePartitions(gd.graph, true);
+  gd.objs = computeLoops(gd.partitions);
 }
 
 void
