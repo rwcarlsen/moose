@@ -6,7 +6,6 @@ class MeshLocation
 {
 public:
   dag::LoopType type;
-  SubdomainID block;
   Elem * elem;
   FaceInfo * face;
   Node * node;

@@ -34,7 +34,13 @@ bool canMerge(Node * a, Node * b)
 }
 
 Node::Node(Graph * g, const std::string & name, bool cached, bool reducing, LoopType l)
-    : _owner(g), _name(name), _cached(cached), _reducing(reducing), _looptype(l)
+  : _owner(g),
+    _name(name),
+    _cached(cached),
+    _reducing(reducing),
+    _looptype(l),
+    _func([](const MeshLocation &, THREAD_ID) {}),
+    _join([]() {})
 {
 }
 

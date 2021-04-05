@@ -2233,14 +2233,16 @@ private:
     std::vector<dag::Subgraph> partitions;
     std::vector<std::vector<std::vector<dag::Node *>>> objs;
     std::map<SubdomainID, dag::Node *> elem_setup;
-    std::vector<dag::LoopCategory> loop_type;
+    std::map<SubdomainID, dag::Node *> elem_teardown;
+    std::vector<dag::LoopType> loop_type;
   };
   std::map<std::vector<TagID>, GraphData> _loops;
   void buildLoops(const std::set<TagID> tags, GraphData & ld);
+  void buildMeshLocations();
   std::vector<std::unique_ptr<MeshLocation>> _all_locs;
-  std::vector<MeshLocation *> _elem_locs;
-  std::vector<MeshLocation *> _node_locs;
-  std::vector<MeshLocation *> _face_locs;
+  std::map<SubdomainID, std::vector<MeshLocation *>> _elem_locs;
+  std::map<SubdomainID, std::vector<MeshLocation *>> _node_locs;
+  std::map<SubdomainID, std::vector<MeshLocation *>> _face_locs;
 
   void updateMaxQps();
 

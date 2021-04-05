@@ -5441,8 +5441,31 @@ FEProblemBase::computeTransientImplicitResidual(Real time,
 }
 
 void
+FEProblemBase::buildMeshLocations()
+{
+  if (_elem_locs.size() > 0)
+    return;
+
+  auto begin = _mesh.getMesh().active_elements_begin();
+  auto end = _mesh.getMesh().active_elements_end();
+
+  for (auto it = begin; it != end; ++it)
+  {
+    Elem * elem = *it;
+    _all_locs.emplace_back(
+        new MeshLocation{dag::LoopType(dag::LoopCategory::Elemental_onElem, elem->subdomain_id()),
+                         elem,
+                         nullptr,
+                         nullptr});
+    auto loc = _all_locs.back().get();
+    _elem_locs[elem->subdomain_id()].push_back(loc);
+  }
+}
+
+void
 FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
 {
+  buildMeshLocations();
   const unsigned int tmp_tid = 0;
   auto & warehouse = _nl->getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
   const auto n_threads = libMesh::n_threads();
@@ -5457,6 +5480,17 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
           this->prepare(loc.elem, tid);
           this->reinitElem(loc.elem, tid);
         });
+
+    auto elem_teardown = gd.graph.create(
+        "elem_teardown", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+    gd.elem_teardown[block] = elem_teardown;
+    elem_teardown->setRunFunc([this](const MeshLocation & /*loc*/, THREAD_ID tid) {
+      this->cacheResidual(tid);
+      {
+        Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
+        this->addCachedResidual(tid);
+      }
+    });
 
     auto & kernels = warehouse.getBlockObjects(block, tmp_tid);
     for (auto kern : kernels)
@@ -5474,15 +5508,16 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
             auto & vars = kernel_copies[tid]->getMooseVariableDependencies();
             this->setActiveElementalMooseVariables(vars, tid);
             this->setActiveMaterialProperties(props, tid);
-            this->prepareMaterials(loc.block, tid);
+            this->prepareMaterials(loc.type.block, tid);
 
             SwapBackSentinel sentinel(*this, &FEProblem::swapBackMaterials, tid);
-            this->reinitMaterials(loc.block, tid);
+            this->reinitMaterials(loc.type.block, tid);
 
             kernel_copies[tid]->computeResidual();
           });
 
       obj->needs(elem_setup);
+      elem_teardown->needs(obj);
 
       // kernels get/store their dependencies from:
       //     * variables: MooseVariableInterface, Coupleable
@@ -5496,6 +5531,8 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
   // calculate the loops
   gd.partitions = dag::computePartitions(gd.graph, true);
   gd.objs = computeLoops(gd.partitions);
+  for (auto p : gd.partitions)
+    gd.loop_type.push_back((*p.nodes().begin())->loopType());
 }
 
 void
@@ -5505,6 +5542,8 @@ FEProblemBase::computeResidualTags(const std::set<TagID> & tags)
 
   if (_run_dag_style)
   {
+    _current_execute_on_flag = EXEC_LINEAR;
+
     std::vector<TagID> tagskey(tags.begin(), tags.end());
     if (_loops.count(tagskey) == 0)
       buildLoops(tags, _loops[tagskey]);
@@ -5513,23 +5552,25 @@ FEProblemBase::computeResidualTags(const std::set<TagID> & tags)
 
     for (size_t i = 0; i < loop_data.objs.size(); i++)
     {
-
-      if (loop_data.loop_type[i] == dag::LoopCategory::Elemental_onElem)
+      auto cat = loop_data.loop_type[i].category;
+      auto block = loop_data.loop_type[i].block;
+      if (cat == dag::LoopCategory::Elemental_onElem)
       {
-        UniversalRange range(_elem_locs.begin(), _elem_locs.end());
+        UniversalRange range(_elem_locs[block].begin(), _elem_locs[block].end());
         runLoop(*this, loop_data.objs[i], range);
       }
-      else if (loop_data.loop_type[i] == dag::LoopCategory::Face)
+      else if (cat == dag::LoopCategory::Face)
       {
-        UniversalRange range(_face_locs.begin(), _face_locs.end());
+        UniversalRange range(_face_locs[block].begin(), _face_locs[block].end());
         runLoop(*this, loop_data.objs[i], range);
       }
-      else if (loop_data.loop_type[i] == dag::LoopCategory::Nodal)
+      else if (cat == dag::LoopCategory::Nodal)
       {
-        UniversalRange range(_node_locs.begin(), _node_locs.end());
+        UniversalRange range(_node_locs[block].begin(), _node_locs[block].end());
         runLoop(*this, loop_data.objs[i], range);
       } // TODO: add the rest.
     }
+    _current_execute_on_flag = EXEC_NONE;
     return;
   }
 
