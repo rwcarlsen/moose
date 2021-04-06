@@ -110,8 +110,9 @@ namespace dag
 enum class LoopCategory
 {
   None, // represents values calculated "outside" of any loop (e.g. postprocessors that depend on only other postprocessors).
-  Nodal,
   Face, // FV
+  Nodal,
+  Nodal_onBoundary,
   Elemental_onElem,
   Elemental_onElemFV, // different quadrature points than normal/FE
   Elemental_onBoundary,

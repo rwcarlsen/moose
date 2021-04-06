@@ -6,9 +6,11 @@ class MeshLocation
 {
 public:
   dag::LoopType type;
-  Elem * elem;
-  FaceInfo * face;
-  Node * node;
+  Elem * elem = nullptr;
+  FaceInfo * face = nullptr;
+  Node * node = nullptr;
+  unsigned int side = 0;
+  BoundaryID boundary = 0;
 };
 
 using UniversalRange = StoredRange<std::vector<MeshLocation *>::const_iterator, const MeshLocation *>;

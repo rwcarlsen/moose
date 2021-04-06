@@ -76,6 +76,7 @@ class Distribution;
 class Sampler;
 class KernelBase;
 class IntegratedBCBase;
+class NodalBCBase;
 class LineSearch;
 class UserObject;
 class AutomaticMortarGeneration;
@@ -2234,15 +2235,20 @@ private:
     std::vector<std::vector<std::vector<dag::Node *>>> objs;
     std::map<SubdomainID, dag::Node *> elem_setup;
     std::map<SubdomainID, dag::Node *> elem_teardown;
+    std::map<BoundaryID, dag::Node *> side_setup;
+    std::map<BoundaryID, dag::Node *> side_node_setup;
     std::vector<dag::LoopType> loop_type;
   };
   std::map<std::vector<TagID>, GraphData> _loops;
   void buildLoops(const std::set<TagID> tags, GraphData & ld);
-  void buildMeshLocations();
+  void buildMeshLocations(GraphData & gd);
+  dag::Node * convertKernel(GraphData & gd, std::vector<KernelBase *> & kernels, SubdomainID block);
+  dag::Node * convertBC(GraphData & gd, std::vector<IntegratedBCBase *> & bcs, BoundaryID boundary);
+  dag::Node * convertNodalBC(GraphData & gd, std::vector<NodalBCBase *> & bcs, BoundaryID boundary);
   std::vector<std::unique_ptr<MeshLocation>> _all_locs;
   std::map<SubdomainID, std::vector<MeshLocation *>> _elem_locs;
-  std::map<SubdomainID, std::vector<MeshLocation *>> _node_locs;
-  std::map<SubdomainID, std::vector<MeshLocation *>> _face_locs;
+  std::map<BoundaryID, std::vector<MeshLocation *>> _side_locs;
+  std::map<BoundaryID, std::vector<MeshLocation *>> _side_node_locs;
 
   void updateMaxQps();
 

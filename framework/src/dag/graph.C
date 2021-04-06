@@ -15,11 +15,16 @@ bool canMerge(Node * a, Node * b)
   static std::map<LoopCategory, std::set<LoopCategory>> mergeable = {
     {LoopCategory::None, {LoopCategory::None}},
     {LoopCategory::Nodal, {LoopCategory::Nodal}},
+    {LoopCategory::Nodal_onBoundary, {LoopCategory::Nodal_onBoundary}},
     {LoopCategory::Face, {LoopCategory::Face}},
-    {LoopCategory::Elemental_onElem, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
-    {LoopCategory::Elemental_onElemFV, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
-    {LoopCategory::Elemental_onBoundary, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
-    {LoopCategory::Elemental_onInternalSide, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
+    //{LoopCategory::Elemental_onElem, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
+    //{LoopCategory::Elemental_onElemFV, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
+    //{LoopCategory::Elemental_onBoundary, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
+    //{LoopCategory::Elemental_onInternalSide, {LoopCategory::Elemental_onElem, LoopCategory::Elemental_onElemFV, LoopCategory::Elemental_onBoundary, LoopCategory::Elemental_onInternalSide}},
+    {LoopCategory::Elemental_onElem, {LoopCategory::Elemental_onElem}},
+    {LoopCategory::Elemental_onElemFV, {LoopCategory::Elemental_onElemFV}},
+    {LoopCategory::Elemental_onBoundary, {LoopCategory::Elemental_onBoundary}},
+    {LoopCategory::Elemental_onInternalSide, {LoopCategory::Elemental_onInternalSide}},
   };
 
   if (a == b)

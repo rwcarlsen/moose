@@ -16,6 +16,8 @@ loopCategoryStr(const LoopCategory cat)
     return "None";
   else if (cat == LoopCategory::Nodal)
     return "Nodal";
+  else if (cat == LoopCategory::Nodal_onBoundary)
+    return "Nodal_onBoundary";
   else if (cat == LoopCategory::Face)
     return "Face";
   else if (cat == LoopCategory::Elemental_onElem)
