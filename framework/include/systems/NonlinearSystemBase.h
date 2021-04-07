@@ -391,6 +391,7 @@ public:
    *  Return a numeric vector that is associated with the time tag.
    */
   NumericVector<Number> & getResidualTimeVector();
+  bool haveResidualTimeVector() { return _Re_time != nullptr; }
 
   /**
    * Return a numeric vector that is associated with the nontime tag.
@@ -597,6 +598,7 @@ public:
    * Return the NodalBCBase warehouse
    */
   const MooseObjectTagWarehouse<NodalBCBase> & getNodalBCWarehouse() const { return _nodal_bcs; }
+  MooseObjectTagWarehouse<NodalBCBase> & getNodalBCWarehouse() { return _nodal_bcs; }
 
   /**
    * Return the IntegratedBCBase warehouse
