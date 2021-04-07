@@ -5544,8 +5544,10 @@ FEProblemBase::convertKernel(GraphData & gd, std::vector<KernelBase *> & kernels
         kernels[tid]->computeResidual();
       });
 
+  gd.residual_nodes.push_back(obj);
   obj->needs(gd.elem_setup[block]);
   gd.elem_teardown[block]->needs(obj);
+  obj->needs(gd.residual_setup);
   return obj;
 }
 
@@ -5569,7 +5571,9 @@ FEProblemBase::convertBC(GraphData & gd, std::vector<IntegratedBCBase *> & bcs, 
           bcs[tid]->computeResidual();
       });
 
+  gd.residual_nodes.push_back(obj);
   obj->needs(gd.side_setup[boundary]);
+  obj->needs(gd.residual_setup);
   return obj;
 }
 
@@ -5583,12 +5587,13 @@ FEProblemBase::convertNodalBC(GraphData & gd, std::vector<NodalBCBase *> & bcs, 
           bcs[tid]->computeResidual();
       });
 
+  gd.residual_nodes.push_back(obj);
   obj->needs(gd.side_node_setup[boundary]);
   return obj;
 }
 
 void
-FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
+FEProblemBase::buildLoops(const std::set<TagID> & tags, GraphData & gd)
 {
   buildMeshLocations(gd);
   const unsigned int tmp_tid = 0;
@@ -5596,6 +5601,15 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
   auto & kern_warehouse = _nl->getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
   auto & ibc_warehouse = _nl->getIntegratedBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
   auto & nbc_warehouse = _nl->getNodalBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
+
+  gd.residual_setup =
+      gd.graph.create("residual_setup", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.residual_setup->setRunFunc([this, tags](const MeshLocation &, THREAD_ID) {
+    this->setCurrentlyComputingResidual(true);
+    this->_current_execute_on_flag = EXEC_LINEAR;
+    this->_nl->zeroTaggedVectors(tags);
+    this->_nl->residualSetup();
+  });
 
   for (auto block : _mesh.meshSubdomains())
   {
@@ -5642,6 +5656,25 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
     }
   }
 
+  auto residual_teardown =
+      gd.graph.create("residual_teardown", true, false, dag::LoopType(dag::LoopCategory::None));
+  for (auto n : gd.residual_nodes)
+    residual_teardown->needs(n);
+  residual_teardown->setRunFunc([this, tags](const MeshLocation &, THREAD_ID) {
+    if (this->_nl->haveResidualTimeVector())
+      this->_nl->getResidualTimeVector().close();
+    this->_nl->getResidualNonTimeVector().close();
+
+    this->_nl->closeTaggedVectors(tags);
+
+    this->_current_execute_on_flag = EXEC_NONE;
+    this->_nl->activeAllMatrixTags();
+    this->setCurrentlyComputingResidual(false);
+  });
+
+  auto solution = gd.graph.create("solution", true, false, dag::LoopType(dag::LoopCategory::None));
+  solution->needs(residual_teardown);
+
   auto pre_nodal_setup =
       gd.graph.create("pre_nodal_residuals", true, false, dag::LoopType(dag::LoopCategory::None));
   pre_nodal_setup->setRunFunc([this, tags](const MeshLocation &, THREAD_ID) {
@@ -5664,13 +5697,30 @@ FEProblemBase::buildLoops(const std::set<TagID> tags, GraphData & gd)
     n->needs(pre_nodal_setup);
 
   // calculate the loops
-  gd.partitions = dag::computePartitions(gd.graph, true);
+  std::set<dag::Node *> start_nodes = {solution};
+  auto partitions = dag::computePartitions(gd.graph, true);
+  for (auto & g : partitions)
+    if (g.reachable(start_nodes))
+      gd.partitions.push_back(g);
+    else
+      for (auto s : start_nodes)
+        if (g.contains(s))
+        {
+          gd.partitions.push_back(g);
+          break;
+        }
+
   gd.objs = computeLoops(gd.partitions);
   for (auto nodes : gd.objs)
     gd.loop_type.push_back(nodes[0][0]->loopType());
   dag::printLoops(gd.objs);
+
   // show all the given subgraphs on a single graph.
-  std::cout << dag::dotGraphMerged(gd.partitions);
+  dag::Subgraph full;
+  for (auto & p : gd.partitions)
+    for (auto n : p.nodes())
+      full.add(n);
+  std::cout << dag::dotGraph(full);
 }
 
 void
@@ -5680,11 +5730,6 @@ FEProblemBase::computeResidualTags(const std::set<TagID> & tags)
 
   if (_run_dag_style)
   {
-    setCurrentlyComputingResidual(true);
-    _current_execute_on_flag = EXEC_LINEAR;
-    _nl->zeroTaggedVectors(tags);
-    _nl->residualSetup();
-
     std::vector<TagID> tagskey(tags.begin(), tags.end());
     if (_loops.count(tagskey) == 0)
       buildLoops(tags, _loops[tagskey]);
@@ -5722,15 +5767,6 @@ FEProblemBase::computeResidualTags(const std::set<TagID> & tags)
         mooseError("unsupported loop category type (yet)");
       }
     }
-    if (_nl->haveResidualTimeVector())
-      _nl->getResidualTimeVector().close();
-    _nl->getResidualNonTimeVector().close();
-
-    _nl->closeTaggedVectors(tags);
-
-    _current_execute_on_flag = EXEC_NONE;
-    _nl->activeAllMatrixTags();
-    setCurrentlyComputingResidual(false);
     return;
   }
 

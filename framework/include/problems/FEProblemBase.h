@@ -2237,10 +2237,12 @@ private:
     std::map<SubdomainID, dag::Node *> elem_teardown;
     std::map<BoundaryID, dag::Node *> side_setup;
     std::map<BoundaryID, dag::Node *> side_node_setup;
+    std::vector<dag::Node *> residual_nodes;
     std::vector<dag::LoopType> loop_type;
+    dag::Node * residual_setup = nullptr;
   };
   std::map<std::vector<TagID>, GraphData> _loops;
-  void buildLoops(const std::set<TagID> tags, GraphData & ld);
+  void buildLoops(const std::set<TagID> & tags, GraphData & gd);
   void buildMeshLocations(GraphData & gd);
   dag::Node * convertKernel(GraphData & gd, std::vector<KernelBase *> & kernels, SubdomainID block);
   dag::Node * convertBC(GraphData & gd, std::vector<IntegratedBCBase *> & bcs, BoundaryID boundary);
