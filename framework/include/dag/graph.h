@@ -258,7 +258,7 @@ private:
 class Subgraph
 {
 public:
-  Subgraph() {}
+  Subgraph() : _id(_next_id++) {}
   Subgraph(const std::set<Node *> & nodes) : _id(_next_id++), _nodes(nodes){}
   virtual ~Subgraph() {}
 
