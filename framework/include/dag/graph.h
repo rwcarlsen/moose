@@ -109,9 +109,11 @@ namespace dag
 
 enum class LoopCategory
 {
-  None, // represents values calculated "outside" of any loop (e.g. postprocessors that depend on only other postprocessors).
+  None, // represents values calculated "outside" of any loop (e.g. postprocessors that depend on
+        // only other postprocessors).
   Face, // FV
   Nodal,
+  Any,
   Nodal_onBoundary,
   Elemental_onElem,
   Elemental_onElemFV, // different quadrature points than normal/FE
@@ -126,7 +128,8 @@ public:
   LoopType(LoopCategory cat = LoopCategory::Elemental_onElem, int blk = 0) : block(blk), category(cat) {}
   bool operator==(const LoopType & other)
   {
-    return other.block == block && other.category == category;
+    return other.block == block && (other.category == category || category == LoopCategory::Any ||
+                                    other.category == LoopCategory::Any);
   }
   bool operator!=(const LoopType & other)
   {
