@@ -25,24 +25,12 @@ struct GraphData
   dag::Node * residual_teardown = nullptr;
   dag::Node * pre_nodal_residual = nullptr;
   dag::Node * solution = nullptr;
+  std::map<std::string, std::map<dag::LoopType, dag::Node *>> named_objects;
 };
 
 void buildMeshLocations(MooseMesh & mesh,
                         std::vector<std::unique_ptr<MeshLocation>> & all,
                         std::map<dag::LoopType, std::vector<MeshLocation *>> & locs);
 void buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd);
-
-dag::Node * convertKernel(FEProblemBase & fe,
-                          GraphData & gd,
-                          std::vector<KernelBase *> & kernels,
-                          SubdomainID block);
-dag::Node * convertBC(FEProblemBase & fe,
-                      GraphData & gd,
-                      std::vector<IntegratedBCBase *> & bcs,
-                      BoundaryID boundary);
-dag::Node * convertNodalBC(FEProblemBase &,
-                           GraphData & gd,
-                           std::vector<NodalBCBase *> & bcs,
-                           BoundaryID boundary);
 
 } // namespace translation

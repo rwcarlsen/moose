@@ -74,7 +74,6 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.elem_setup[block] = elem_setup;
     elem_setup->setRunFunc([&fe](const MeshLocation & loc, THREAD_ID tid) {
       fe.prepare(loc.elem, tid);
-      fe.reinitElem(loc.elem, tid);
     });
     auto elem_teardown = gd.graph.create(
         "elem_teardown", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
@@ -98,7 +97,6 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.side_setup[boundary] = side_setup;
     side_setup->setRunFunc([&fe](const MeshLocation & loc, THREAD_ID tid) {
       fe.prepare(loc.elem, tid);
-      fe.reinitElem(loc.elem, tid);
       fe.reinitElemFace(loc.elem, loc.side, loc.boundary, tid);
     });
 
@@ -133,6 +131,8 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     fe.setCurrentExecuteOnFlag(EXEC_LINEAR);
     fe.getNonlinearSystemBase().zeroTaggedVectors(tags);
     fe.getNonlinearSystemBase().residualSetup();
+    for (unsigned int i = 0; i < libMesh::n_threads(); i++)
+      fe.clearActiveElementalMooseVariables(i);
   });
 
   gd.residual_teardown =
@@ -172,19 +172,61 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.pre_nodal_residual->needs(gd.elem_teardown[block]);
 }
 
+void
+addVarDeps(GraphData & gd, MooseVariableDependencyInterface * obj, dag::Node * n)
+{
+  auto vars = obj->getMooseVariableDependencies();
+  for (auto var : vars)
+  {
+    auto key = "variable_" + var->name();
+    mooseAssert(gd.named_objects.count(key) > 0 && gd.named_objects[key].count(n->loopType()) > 0,
+                "object's needed variable has no dag node");
+    auto var_node = gd.named_objects[key][n->loopType()];
+    n->needs(var_node);
+  }
+}
+
+dag::Node *
+convertVar(FEProblemBase &,
+           GraphData & gd,
+           std::vector<MooseVariableFieldBase *> & vars,
+           dag::LoopType type)
+{
+  std::vector<dag::Node *> objs;
+  auto objname = "variable_" + vars[0]->name();
+
+  auto obj = gd.graph.create(objname, false, false, type);
+  obj->setRunFunc([vars](const MeshLocation & loc, THREAD_ID tid) {
+    auto var = vars[tid];
+    var->clearDofIndices();
+    var->prepare();
+    if (loc.type.category == dag::LoopCategory::Elemental_onElem)
+      var->computeElemValues();
+    else if (loc.type.category == dag::LoopCategory::Elemental_onBoundary)
+      var->computeElemValuesFace();
+    else if (loc.type.category == dag::LoopCategory::Nodal_onBoundary)
+    {
+      var->reinitNode();
+      if (var->isNodalDefined())
+        var->computeNodalValues();
+    }
+    else
+      mooseError("unsupported loop type for variable node");
+  });
+  return obj;
+}
+
 dag::Node *
 convertKernel(FEProblemBase & fe,
               GraphData & gd,
               std::vector<KernelBase *> & kernels,
               SubdomainID block)
 {
-  auto objname = kernels[0]->name();
+  auto objname = "kernel_" + kernels[0]->name();
   auto obj = gd.graph.create(
       objname, false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
   obj->setRunFunc([kernels, &fe](const MeshLocation & loc, THREAD_ID tid) {
     auto props = kernels[tid]->getMatPropDependencies();
-    auto & vars = kernels[tid]->getMooseVariableDependencies();
-    fe.setActiveElementalMooseVariables(vars, tid);
     fe.setActiveMaterialProperties(props, tid);
     fe.prepareMaterials(loc.type.block, tid);
 
@@ -193,6 +235,8 @@ convertKernel(FEProblemBase & fe,
 
     kernels[tid]->computeResidual();
   });
+
+  addVarDeps(gd, kernels[0], obj);
 
   obj->needs(gd.elem_setup[block]);
   gd.elem_teardown[block]->needs(obj);
@@ -207,13 +251,11 @@ convertBC(FEProblemBase & fe,
           std::vector<IntegratedBCBase *> & bcs,
           BoundaryID boundary)
 {
-  auto objname = bcs[0]->name();
+  auto objname = "bc_" + bcs[0]->name();
   auto obj = gd.graph.create(
       objname, false, false, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
   obj->setRunFunc([bcs, &fe](const MeshLocation & loc, THREAD_ID tid) {
     auto props = bcs[tid]->getMatPropDependencies();
-    auto & vars = bcs[tid]->getMooseVariableDependencies();
-    fe.setActiveElementalMooseVariables(vars, tid);
     fe.setActiveMaterialProperties(props, tid);
     fe.prepareMaterials(loc.elem->subdomain_id(), tid);
 
@@ -224,6 +266,8 @@ convertBC(FEProblemBase & fe,
     if (bcs[tid]->shouldApply())
       bcs[tid]->computeResidual();
   });
+
+  addVarDeps(gd, bcs[0], obj);
 
   obj->needs(gd.side_setup[boundary]);
   gd.side_teardown[boundary]->needs(obj);
@@ -238,13 +282,15 @@ convertNodalBC(FEProblemBase &,
                std::vector<NodalBCBase *> & bcs,
                BoundaryID boundary)
 {
-  auto objname = bcs[0]->name();
+  auto objname = "bc_" + bcs[0]->name();
   auto obj = gd.graph.create(
       objname, false, false, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
   obj->setRunFunc([bcs](const MeshLocation & /*loc*/, THREAD_ID tid) {
     if (bcs[tid]->shouldApply())
       bcs[tid]->computeResidual();
   });
+
+  addVarDeps(gd, bcs[0], obj);
 
   gd.residual_nodes.push_back(obj);
   obj->needs(gd.side_node_setup[boundary]);
@@ -268,19 +314,55 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   auto & nbc_warehouse =
       fe.getNonlinearSystemBase().getNodalBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
 
+  // create variable nodes
+  {
+    auto field_vars = fe.getNonlinearSystemBase().getVariables(tmp_tid);
+    for (auto v : field_vars)
+    {
+      std::vector<MooseVariableFieldBase *> var_copies;
+      for (unsigned int i = 0; i < n_threads; i++)
+        var_copies.push_back(&fe.getNonlinearSystemBase().getVariable(i, v->name()));
+
+      dag::Node * obj = nullptr;
+      // here we loop over all mesh subdomains instead of just the ones the
+      // variable is defined on because then we don't have to worry about
+      // handling the "special" subdomain ID values (ANY, etc.) - and
+      // evaluation only occurs when we want it to if a particular block
+      // restricted depender object grabs the var on this block.
+      for (auto block : fe.mesh().meshSubdomains())
+      {
+        obj = convertVar(
+            fe, gd, var_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+        obj->needs(gd.elem_setup[block]);
+        gd.named_objects[obj->name()][obj->loopType()] = obj;
+      }
+      for (auto boundary : fe.mesh().meshBoundaryIds())
+      {
+        obj = convertVar(
+            fe, gd, var_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+        obj->needs(gd.side_setup[boundary]);
+        gd.named_objects[obj->name()][obj->loopType()] = obj;
+        obj = convertVar(
+            fe, gd, var_copies, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
+        obj->needs(gd.side_node_setup[boundary]);
+        gd.named_objects[obj->name()][obj->loopType()] = obj;
+      }
+    }
+  }
+
   for (auto block : fe.mesh().meshSubdomains())
   {
-    if (!kern_warehouse.hasActiveBlockObjects(block, tmp_tid))
-      continue;
-
-    auto & kernels = kern_warehouse.getBlockObjects(block, tmp_tid);
-    for (auto kern : kernels)
+    if (kern_warehouse.hasActiveBlockObjects(block, tmp_tid))
     {
-      auto k = kern.get();
-      std::vector<KernelBase *> kernel_copies;
-      for (unsigned int i = 0; i < n_threads; i++)
-        kernel_copies.push_back(kern_warehouse.getObject(k->name(), i).get());
-      convertKernel(fe, gd, kernel_copies, block);
+      auto & kernels = kern_warehouse.getBlockObjects(block, tmp_tid);
+      for (auto kern : kernels)
+      {
+        auto k = kern.get();
+        std::vector<KernelBase *> kernel_copies;
+        for (unsigned int i = 0; i < n_threads; i++)
+          kernel_copies.push_back(kern_warehouse.getObject(k->name(), i).get());
+        convertKernel(fe, gd, kernel_copies, block);
+      }
     }
   }
   for (auto boundary : fe.mesh().meshBoundaryIds())
