@@ -31,6 +31,7 @@
 #include "PerfGraphInterface.h"
 #include "Attributes.h"
 #include "graph.h"
+#include "translation.h"
 
 #include "libmesh/enum_quadrature_type.h"
 #include "libmesh/equation_systems.h"
@@ -2228,29 +2229,9 @@ protected:
 
 private:
   bool _run_dag_style = true;
-  struct GraphData
-  {
-    dag::Graph graph;
-    std::vector<dag::Subgraph> partitions;
-    std::vector<std::vector<std::vector<dag::Node *>>> objs;
-    std::map<SubdomainID, dag::Node *> elem_setup;
-    std::map<SubdomainID, dag::Node *> elem_teardown;
-    std::map<BoundaryID, dag::Node *> side_setup;
-    std::map<BoundaryID, dag::Node *> side_node_setup;
-    std::vector<dag::Node *> residual_nodes;
-    std::vector<dag::LoopType> loop_type;
-    dag::Node * residual_setup = nullptr;
-  };
-  std::map<std::vector<TagID>, GraphData> _loops;
-  void buildLoops(const std::set<TagID> & tags, GraphData & gd);
-  void buildMeshLocations(GraphData & gd);
-  dag::Node * convertKernel(GraphData & gd, std::vector<KernelBase *> & kernels, SubdomainID block);
-  dag::Node * convertBC(GraphData & gd, std::vector<IntegratedBCBase *> & bcs, BoundaryID boundary);
-  dag::Node * convertNodalBC(GraphData & gd, std::vector<NodalBCBase *> & bcs, BoundaryID boundary);
-  std::vector<std::unique_ptr<MeshLocation>> _all_locs;
-  std::map<SubdomainID, std::vector<MeshLocation *>> _elem_locs;
-  std::map<BoundaryID, std::vector<MeshLocation *>> _side_locs;
-  std::map<BoundaryID, std::vector<MeshLocation *>> _side_node_locs;
+  std::map<std::vector<TagID>, translation::GraphData> _loops;
+  std::vector<std::unique_ptr<MeshLocation>> _all_dag_mesh_locs;
+  std::map<dag::LoopType, std::vector<MeshLocation *>> _dag_mesh_locs;
 
   void updateMaxQps();
 

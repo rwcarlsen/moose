@@ -110,6 +110,7 @@
 #include "libmesh/fe_interface.h"
 
 #include "loop.h"
+#include "translation.h"
 #include "show.h"
 
 #include "metaphysicl/dualnumber.h"
@@ -5443,328 +5444,39 @@ FEProblemBase::computeTransientImplicitResidual(Real time,
 }
 
 void
-FEProblemBase::buildMeshLocations(GraphData & gd)
-{
-  // note we need to redo this every time because we need to create the elem
-  // setup and teardown objects.  Maybe refactor this eventually so the mesh
-  // location construction (which only needs to be done once) is separate from
-  // the setup/teardown node creation (which needs to be done for every tag
-  // combo/GraphData object.
-  auto begin = _mesh.getMesh().active_elements_begin();
-  auto end = _mesh.getMesh().active_elements_end();
-
-  for (auto it = begin; it != end; ++it)
-  {
-    Elem * elem = *it;
-    auto block = elem->subdomain_id();
-    _all_locs.emplace_back(
-        new MeshLocation{dag::LoopType(dag::LoopCategory::Elemental_onElem, block),
-                         elem,
-                         nullptr,
-                         nullptr, 0, 0});
-    _elem_locs[block].push_back(_all_locs.back().get());
-
-    if (gd.elem_setup[block] == nullptr)
-    {
-      auto elem_setup = gd.graph.create(
-          "elem_setup", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-      gd.elem_setup[block] = elem_setup;
-      elem_setup->setRunFunc([this](const MeshLocation & loc, THREAD_ID tid){
-            this->prepare(loc.elem, tid);
-            this->reinitElem(loc.elem, tid);
-          });
-      auto elem_teardown = gd.graph.create(
-          "elem_teardown", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-      gd.elem_teardown[block] = elem_teardown;
-      elem_teardown->setRunFunc([this](const MeshLocation &, THREAD_ID tid) {
-        this->cacheResidual(tid);
-        {
-          Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
-          this->addCachedResidual(tid);
-        }
-      });
-    }
-
-    for (unsigned int side = 0; side < elem->n_sides(); side++)
-    {
-      for (auto boundary : _mesh.getBoundaryIDs(elem, side))
-      {
-        _all_locs.emplace_back(new MeshLocation{dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary), elem, nullptr, nullptr, side, boundary});
-        _side_locs[elem->subdomain_id()].push_back(_all_locs.back().get());
-        if (gd.side_setup[boundary] == nullptr)
-        {
-          auto side_setup = gd.graph.create(
-              "side_setup", false, false, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-          gd.side_setup[boundary] = side_setup;
-          side_setup->setRunFunc([this](const MeshLocation & loc, THREAD_ID tid){
-                this->prepare(loc.elem, tid);
-                this->reinitElem(loc.elem, tid);
-                this->reinitElemFace(loc.elem, loc.side, loc.boundary, tid);
-              });
-        }
-      }
-    }
-  }
-
-  ConstBndNodeRange & bnd_nodes = *_mesh.getBoundaryNodeRange();
-  for (const auto & bnode : bnd_nodes)
-  {
-    BoundaryID boundary = bnode->_bnd_id;
-    Node * node = bnode->_node;
-    _all_locs.emplace_back(new MeshLocation{dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary), nullptr, nullptr, node, 0, boundary});
-    _side_node_locs[boundary].push_back(_all_locs.back().get());
-
-    if (gd.side_node_setup[boundary] == nullptr)
-    {
-      auto side_node_setup = gd.graph.create(
-          "side_node_setup", false, false, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
-      gd.side_node_setup[boundary] = side_node_setup;
-      side_node_setup->setRunFunc([this](const MeshLocation & loc, THREAD_ID tid){
-            this->reinitNodeFace(loc.node, loc.boundary, tid);
-          });
-    }
-  }
-}
-
-dag::Node *
-FEProblemBase::convertKernel(GraphData & gd, std::vector<KernelBase *> & kernels, SubdomainID block)
-{
-  auto objname = kernels[0]->name();
-  auto obj = gd.graph.create( objname, false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-  obj->setRunFunc([kernels, this](const MeshLocation & loc, THREAD_ID tid){
-        auto props = kernels[tid]->getMatPropDependencies();
-        auto & vars = kernels[tid]->getMooseVariableDependencies();
-        this->setActiveElementalMooseVariables(vars, tid);
-        this->setActiveMaterialProperties(props, tid);
-        this->prepareMaterials(loc.type.block, tid);
-
-        SwapBackSentinel sentinel(*this, &FEProblem::swapBackMaterials, tid);
-        this->reinitMaterials(loc.type.block, tid);
-
-        kernels[tid]->computeResidual();
-      });
-
-  gd.residual_nodes.push_back(obj);
-  obj->needs(gd.elem_setup[block]);
-  gd.elem_teardown[block]->needs(obj);
-  obj->needs(gd.residual_setup);
-  return obj;
-}
-
-dag::Node *
-FEProblemBase::convertBC(GraphData & gd, std::vector<IntegratedBCBase *> & bcs, BoundaryID boundary)
-{
-  auto objname = bcs[0]->name();
-  auto obj = gd.graph.create(objname, false, false, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-  obj->setRunFunc([bcs, this](const MeshLocation & loc, THREAD_ID tid){
-        auto props = bcs[tid]->getMatPropDependencies();
-        auto & vars = bcs[tid]->getMooseVariableDependencies();
-        this->setActiveElementalMooseVariables(vars, tid);
-        this->setActiveMaterialProperties(props, tid);
-        this->prepareMaterials(loc.elem->subdomain_id(), tid);
-
-        SwapBackSentinel sentinel(*this, &FEProblem::swapBackMaterialsFace, tid);
-        this->reinitMaterialsFace(loc.elem->subdomain_id(), tid);
-        this->reinitMaterialsBoundary(loc.boundary, tid);
-
-        if (bcs[tid]->shouldApply())
-          bcs[tid]->computeResidual();
-      });
-
-  gd.residual_nodes.push_back(obj);
-  obj->needs(gd.side_setup[boundary]);
-  obj->needs(gd.residual_setup);
-  return obj;
-}
-
-dag::Node *
-FEProblemBase::convertNodalBC(GraphData & gd, std::vector<NodalBCBase *> & bcs, BoundaryID boundary)
-{
-  auto objname = bcs[0]->name();
-  auto obj = gd.graph.create(objname, false, false, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
-  obj->setRunFunc([bcs](const MeshLocation & /*loc*/, THREAD_ID tid){
-        if (bcs[tid]->shouldApply())
-          bcs[tid]->computeResidual();
-      });
-
-  gd.residual_nodes.push_back(obj);
-  obj->needs(gd.side_node_setup[boundary]);
-  return obj;
-}
-
-void
-FEProblemBase::buildLoops(const std::set<TagID> & tags, GraphData & gd)
-{
-  buildMeshLocations(gd);
-  const unsigned int tmp_tid = 0;
-  const auto n_threads = libMesh::n_threads();
-  auto & kern_warehouse = _nl->getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
-  auto & ibc_warehouse = _nl->getIntegratedBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
-  auto & nbc_warehouse = _nl->getNodalBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
-
-  gd.residual_setup =
-      gd.graph.create("residual_setup", true, false, dag::LoopType(dag::LoopCategory::None));
-  gd.residual_setup->setRunFunc([this, tags](const MeshLocation &, THREAD_ID) {
-    this->setCurrentlyComputingResidual(true);
-    this->_current_execute_on_flag = EXEC_LINEAR;
-    this->_nl->zeroTaggedVectors(tags);
-    this->_nl->residualSetup();
-  });
-
-  for (auto block : _mesh.meshSubdomains())
-  {
-    if (!kern_warehouse.hasActiveBlockObjects(block, tmp_tid))
-      continue;
-
-    auto & kernels = kern_warehouse.getBlockObjects(block, tmp_tid);
-    for (auto kern : kernels)
-    {
-      auto k = kern.get();
-      std::vector<KernelBase *> kernel_copies;
-      for (unsigned int i = 0; i < n_threads; i++)
-        kernel_copies.push_back(kern_warehouse.getObject(k->name(), i).get());
-      convertKernel(gd, kernel_copies, block);
-    }
-  }
-  std::vector<dag::Node *> nodal_bcs;
-  for (auto boundary : _mesh.meshBoundaryIds())
-  {
-    if (ibc_warehouse.hasActiveBoundaryObjects(boundary, tmp_tid))
-    {
-      auto & ibcs = ibc_warehouse.getBoundaryObjects(boundary, tmp_tid);
-      for (auto bc : ibcs)
-      {
-        auto b = bc.get();
-        std::vector<IntegratedBCBase *> ibc_copies;
-        for (unsigned int i = 0; i < n_threads; i++)
-          ibc_copies.push_back(ibc_warehouse.getObject(b->name(), i).get());
-        convertBC(gd, ibc_copies, boundary);
-      }
-    }
-
-    if (nbc_warehouse.hasActiveBoundaryObjects(boundary, tmp_tid))
-    {
-      auto & nbcs = nbc_warehouse.getBoundaryObjects(boundary, tmp_tid);
-      for (auto bc : nbcs)
-      {
-        auto b = bc.get();
-        std::vector<NodalBCBase *> nbc_copies;
-        for (unsigned int i = 0; i < n_threads; i++)
-          nbc_copies.push_back(nbc_warehouse.getObject(b->name(), i).get());
-        nodal_bcs.push_back(convertNodalBC(gd, nbc_copies, boundary));
-      }
-    }
-  }
-
-  auto residual_teardown =
-      gd.graph.create("residual_teardown", true, false, dag::LoopType(dag::LoopCategory::None));
-  for (auto n : gd.residual_nodes)
-    residual_teardown->needs(n);
-  residual_teardown->setRunFunc([this, tags](const MeshLocation &, THREAD_ID) {
-    if (this->_nl->haveResidualTimeVector())
-      this->_nl->getResidualTimeVector().close();
-    this->_nl->getResidualNonTimeVector().close();
-
-    this->_nl->closeTaggedVectors(tags);
-
-    this->_current_execute_on_flag = EXEC_NONE;
-    this->_nl->activeAllMatrixTags();
-    this->setCurrentlyComputingResidual(false);
-  });
-
-  auto solution = gd.graph.create("solution", true, false, dag::LoopType(dag::LoopCategory::None));
-  solution->needs(residual_teardown);
-
-  auto pre_nodal_setup =
-      gd.graph.create("pre_nodal_residuals", true, false, dag::LoopType(dag::LoopCategory::None));
-  pre_nodal_setup->setRunFunc([this, tags](const MeshLocation &, THREAD_ID) {
-    _nl->closeTaggedVectors(tags);
-    bool required_residual = tags.find(this->_nl->residualVectorTag()) == tags.end() ? false : true;
-    if (required_residual)
-    {
-      auto & residual = this->_nl->getVector(this->_nl->residualVectorTag());
-      if (this->_nl->getTimeIntegrator())
-        this->_nl->getTimeIntegrator()->postResidual(residual);
-      else
-        residual += this->_nl->getResidualNonTimeVector();
-      residual.close();
-    }
-  });
-
-  for (auto block : _mesh.meshSubdomains())
-    pre_nodal_setup->needs(gd.elem_teardown[block]);
-  for (auto n : nodal_bcs)
-    n->needs(pre_nodal_setup);
-
-  // calculate the loops
-  std::set<dag::Node *> start_nodes = {solution};
-  auto partitions = dag::computePartitions(gd.graph, true);
-  for (auto & g : partitions)
-    if (g.reachable(start_nodes))
-      gd.partitions.push_back(g);
-    else
-      for (auto s : start_nodes)
-        if (g.contains(s))
-        {
-          gd.partitions.push_back(g);
-          break;
-        }
-
-  gd.objs = computeLoops(gd.partitions);
-  for (auto nodes : gd.objs)
-    gd.loop_type.push_back(nodes[0][0]->loopType());
-  dag::printLoops(gd.objs);
-
-  // show all the given subgraphs on a single graph.
-  dag::Subgraph full;
-  for (auto & p : gd.partitions)
-    for (auto n : p.nodes())
-      full.add(n);
-  std::cout << dag::dotGraph(full);
-}
-
-void
 FEProblemBase::computeResidualTags(const std::set<TagID> & tags)
 {
   TIME_SECTION(_compute_residual_tags_timer);
 
   if (_run_dag_style)
   {
+    if (_all_dag_mesh_locs.size() == 0)
+      translation::buildMeshLocations(_mesh, _all_dag_mesh_locs, _dag_mesh_locs);
+
     std::vector<TagID> tagskey(tags.begin(), tags.end());
     if (_loops.count(tagskey) == 0)
-      buildLoops(tags, _loops[tagskey]);
+      buildLoops(*this, tags, _loops[tagskey]);
 
     auto & loop_data = _loops[tagskey];
 
     for (size_t i = 0; i < loop_data.objs.size(); i++)
     {
-      auto cat = loop_data.loop_type[i].category;
-      auto block = loop_data.loop_type[i].block;
-      if (cat == dag::LoopCategory::Elemental_onElem)
-      {
-        UniversalRange range(_elem_locs[block].begin(), _elem_locs[block].end());
-        runLoop(*this, loop_data.objs[i], range);
-      }
-      else if (cat == dag::LoopCategory::Elemental_onBoundary)
-      {
-        UniversalRange range(_side_locs[block].begin(), _side_locs[block].end());
-        runLoop(*this, loop_data.objs[i], range);
-      }
-      else if (cat == dag::LoopCategory::Nodal_onBoundary)
-      {
-        UniversalRange range(_side_node_locs[block].begin(), _side_node_locs[block].end());
-        runLoop(*this, loop_data.objs[i], range);
-      }
-      else if (cat == dag::LoopCategory::None)
+      auto type = loop_data.loop_type[i];
+      if (type.category == dag::LoopCategory::None)
       {
         MeshLocation loc{};
         for (auto & loopobjs : loop_data.objs[i])
           for (auto & obj : loopobjs)
             obj->run(loc, 0);
       }
+      else if (_dag_mesh_locs.count(type) > 0)
+      {
+        UniversalRange range(_dag_mesh_locs[type].begin(), _dag_mesh_locs[type].end());
+        runLoop(*this, loop_data.objs[i], range);
+      }
       else
       {
-        mooseError("unsupported loop category type (yet)");
+        mooseError("unsupported loop type (for now)");
       }
     }
     return;
