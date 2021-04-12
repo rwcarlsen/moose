@@ -101,7 +101,14 @@ class MeshLocation;
 // are allowed to run in one or more of the available loop types. Other
 // inter-loop-type dependencies normally require the depended on value to be
 // cached, but since materials are "duplicated" into every loop they are in,
-// this isn't a problem.
+// this isn't a problem.  Actually - I've decided the best way to tackle this
+// problem is to just create a duplicate/separate node for each loop type a
+// material can operate in.  The duplication isn't a problem regardless of
+// caching because the duplication is only over different loop types - which
+// will require separate calculations anyway.  Also - the nodes exist
+// independent of the actual objects in my new design - so it's no trouble at
+// all to have two or more nodes with their execution pointing to the same
+// material objects.
 //
 
 namespace dag

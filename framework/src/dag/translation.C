@@ -9,6 +9,9 @@
 #include "IntegratedBCBase.h"
 #include "TimeIntegrator.h"
 #include "SwapBackSentinel.h"
+#include "MooseVariableBase.h"
+#include "Material.h"
+#include "MaterialPropertyInterface.h"
 
 namespace translation
 {
@@ -172,6 +175,8 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.pre_nodal_residual->needs(gd.elem_teardown[block]);
 }
 
+// find all dag nodes corresponding to the moose variables obj depends on and
+// make n (which is the dag node for the moose object obj) depend on them.
 void
 addVarDeps(GraphData & gd, MooseVariableDependencyInterface * obj, dag::Node * n)
 {
@@ -186,6 +191,11 @@ addVarDeps(GraphData & gd, MooseVariableDependencyInterface * obj, dag::Node * n
   }
 }
 
+// convert the given (thread copies) of the given variable to a dag node of
+// the given loop type.  We call this function several times for a given
+// variable in order to create one dag node for every loop type this variable
+// could be used in - although each of these copies is bound to the same moose
+// object/run-func calls.
 dag::Node *
 convertVar(FEProblemBase &,
            GraphData & gd,
@@ -213,7 +223,71 @@ convertVar(FEProblemBase &,
     else
       mooseError("unsupported loop type for variable node");
   });
+
+  if (type.category == dag::LoopCategory::Elemental_onElem)
+    obj->needs(gd.elem_setup[type.block]);
+  else if (type.category == dag::LoopCategory::Elemental_onBoundary)
+    obj->needs(gd.side_setup[type.block]);
+  else if (type.category == dag::LoopCategory::Nodal_onBoundary)
+    obj->needs(gd.side_node_setup[type.block]);
+  else
+    mooseError("unsupported loop type for variable node");
   return obj;
+}
+
+// convert the given (thread copies) of the given material to a dag node of
+// the given loop type.  We call this function several times for a given
+// material in order to create one dag node for every loop type this material
+// could be used in - although each of these copies is bound to the same moose
+// object/run-func calls.
+//
+// We create a map of every material property the material defines to the dag node
+// we create for this material.
+dag::Node *
+convertMat(FEProblemBase &, GraphData & gd, std::vector<Material *> & mats, dag::LoopType type)
+{
+  auto objname = "material_" + mats[0]->name();
+  auto obj = gd.graph.create(objname, false, false, type);
+  obj->setRunFunc([mats](const MeshLocation &, THREAD_ID tid) { mats[tid]->computeProperties(); });
+
+  std::cout << "  converting mat " << mats[0]->name() << " on " << dag::loopTypeStr(type) << "\n";
+  auto mat = mats[0];
+  auto & props = mat->getSuppliedPropIDs();
+  for (auto prop : props)
+  {
+    gd.named_mat_props[prop][type] = obj;
+    std::cout << "    adding entry for prop " << prop << "\n";
+  }
+
+  addVarDeps(gd, mats[0], obj);
+
+  // we can't add material->material dependencies in here because they might not have
+  // been converted/created yet.
+
+  if (type.category == dag::LoopCategory::Elemental_onElem)
+    obj->needs(gd.elem_setup[type.block]);
+  else if (type.category == dag::LoopCategory::Elemental_onBoundary)
+    obj->needs(gd.side_setup[type.block]);
+  else if (type.category == dag::LoopCategory::Nodal_onBoundary)
+    obj->needs(gd.side_node_setup[type.block]);
+  else
+    mooseError("unsupported loop type for variable node");
+
+  return obj;
+}
+
+void
+addMatDeps(GraphData & gd, MaterialPropertyInterface * obj, dag::Node * n)
+{
+  auto & props = obj->getMatPropDependencies();
+  for (auto prop : props)
+  {
+    mooseAssert(gd.named_mat_props.count(prop) > 0 &&
+                    gd.named_mat_props[prop].count(n->loopType()) > 0,
+                "object's needed material has no dag node");
+    auto mat = gd.named_mat_props[prop][n->loopType()];
+    n->needs(mat);
+  }
 }
 
 dag::Node *
@@ -237,6 +311,7 @@ convertKernel(FEProblemBase & fe,
   });
 
   addVarDeps(gd, kernels[0], obj);
+  addMatDeps(gd, kernels[0], obj);
 
   obj->needs(gd.elem_setup[block]);
   gd.elem_teardown[block]->needs(obj);
@@ -268,6 +343,7 @@ convertBC(FEProblemBase & fe,
   });
 
   addVarDeps(gd, bcs[0], obj);
+  addMatDeps(gd, bcs[0], obj);
 
   obj->needs(gd.side_setup[boundary]);
   gd.side_teardown[boundary]->needs(obj);
@@ -306,14 +382,6 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
 
   const unsigned int tmp_tid = 0;
   const auto n_threads = libMesh::n_threads();
-  auto & kern_warehouse =
-      fe.getNonlinearSystemBase().getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
-  auto & ibc_warehouse =
-      fe.getNonlinearSystemBase().getIntegratedBCWarehouse().getVectorTagsObjectWarehouse(tags,
-                                                                                          tmp_tid);
-  auto & nbc_warehouse =
-      fe.getNonlinearSystemBase().getNodalBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
-
   // create variable nodes
   {
     auto field_vars = fe.getNonlinearSystemBase().getVariables(tmp_tid);
@@ -333,22 +401,72 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
       {
         obj = convertVar(
             fe, gd, var_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-        obj->needs(gd.elem_setup[block]);
         gd.named_objects[obj->name()][obj->loopType()] = obj;
       }
       for (auto boundary : fe.mesh().meshBoundaryIds())
       {
         obj = convertVar(
             fe, gd, var_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-        obj->needs(gd.side_setup[boundary]);
         gd.named_objects[obj->name()][obj->loopType()] = obj;
         obj = convertVar(
             fe, gd, var_copies, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
-        obj->needs(gd.side_node_setup[boundary]);
         gd.named_objects[obj->name()][obj->loopType()] = obj;
       }
     }
   }
+
+  // create material nodes
+  std::vector<std::pair<MaterialPropertyInterface *, dag::Node *>> material_node_pairs;
+  auto & mat_warehouse = fe.getMaterialWarehouse();
+  for (auto block : fe.mesh().meshSubdomains())
+  {
+    if (mat_warehouse.hasActiveBlockObjects(block, tmp_tid))
+    {
+      auto & mats = mat_warehouse.getBlockObjects(block, tmp_tid);
+      for (auto mat : mats)
+      {
+        auto m = dynamic_cast<Material *>(mat.get());
+        std::vector<Material *> mat_copies;
+        for (unsigned int i = 0; i < n_threads; i++)
+          mat_copies.push_back(
+              dynamic_cast<Material *>(mat_warehouse.getObject(m->name(), i).get()));
+        auto obj = convertMat(
+            fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+        material_node_pairs.emplace_back(m, obj);
+      }
+    }
+  }
+  for (auto boundary : fe.mesh().meshBoundaryIds())
+  {
+    std::cout << "adding materials for boundary " << boundary << "\n";
+    if (mat_warehouse.hasActiveBoundaryObjects(boundary, tmp_tid))
+    {
+      auto & mats = mat_warehouse.getBoundaryObjects(boundary, tmp_tid);
+      for (auto mat : mats)
+      {
+        auto m = dynamic_cast<Material *>(mat.get());
+        std::vector<Material *> mat_copies;
+        for (unsigned int i = 0; i < n_threads; i++)
+          mat_copies.push_back(
+              dynamic_cast<Material *>(mat_warehouse.getObject(m->name(), i).get()));
+        auto obj = convertMat(
+            fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+        material_node_pairs.emplace_back(m, obj);
+      }
+    }
+  }
+  // add material->material dependencies *after* we've created all material dag nodes
+  for (auto & pair : material_node_pairs)
+    addMatDeps(gd, pair.first, pair.second);
+
+  // create kernels and bcs
+  auto & kern_warehouse =
+      fe.getNonlinearSystemBase().getKernelWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
+  auto & ibc_warehouse =
+      fe.getNonlinearSystemBase().getIntegratedBCWarehouse().getVectorTagsObjectWarehouse(tags,
+                                                                                          tmp_tid);
+  auto & nbc_warehouse =
+      fe.getNonlinearSystemBase().getNodalBCWarehouse().getVectorTagsObjectWarehouse(tags, tmp_tid);
 
   for (auto block : fe.mesh().meshSubdomains())
   {
@@ -394,7 +512,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
     }
   }
 
-  // calculate the loops
+  // calculate the graph-partitions/mesh-loops
   std::set<dag::Node *> start_nodes = {gd.solution};
   auto partitions = dag::computePartitions(gd.graph, true);
   for (auto & g : partitions)

@@ -26,6 +26,8 @@ struct GraphData
   dag::Node * pre_nodal_residual = nullptr;
   dag::Node * solution = nullptr;
   std::map<std::string, std::map<dag::LoopType, dag::Node *>> named_objects;
+  // map<mat prop id, map<looptype, node>>
+  std::map<unsigned int, std::map<dag::LoopType, dag::Node *>> named_mat_props;
 };
 
 void buildMeshLocations(MooseMesh & mesh,
