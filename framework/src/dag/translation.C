@@ -537,6 +537,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
     for (auto n : p.nodes())
       full.add(n);
   std::cout << dag::dotGraph(full);
+  // std::cout << dag::dotGraphMerged(gd.partitions);
 }
 
 } // namespace translation

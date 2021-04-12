@@ -203,6 +203,74 @@ floodUp(Node * n, Subgraph & g, LoopType t, int curr_loop)
 }
 
 void
+mergeSubsets(std::vector<Subgraph> & partitions)
+{
+  std::set<std::pair<size_t, size_t>> merges;
+  for (int i = 0; i < partitions.size(); i++)
+    for (int j = 0; j < partitions.size(); j++)
+    {
+      if (i == j || merges.count(std::make_pair(i, j)) > 0 ||
+          merges.count(std::make_pair(j, i)) > 0)
+        continue;
+      bool canmerge = true;
+      for (auto n : partitions[i].nodes())
+        if (!partitions[j].contains(n))
+        {
+          canmerge = false;
+          break;
+        }
+      if (canmerge)
+        merges.insert(std::make_pair(i, j));
+    }
+
+  std::vector<Subgraph *> merged_partitions(partitions.size());
+  for (size_t i = 0; i < partitions.size(); i++)
+    merged_partitions[i] = &partitions[i];
+  for (auto & merge : merges)
+  {
+    auto part1_index = merge.first;
+    auto part2_index = merge.second;
+
+    // check if previous mergers already caused these two original partitions to become merged;
+    // only merge if this wasn't the case.
+    if (merged_partitions[part1_index] != merged_partitions[part2_index])
+      merged_partitions[part1_index]->merge(*merged_partitions[part2_index]);
+
+    // when two partitions are merged, we need to set the subgraph pointer in both
+    // original partitions point to the same subghraph.  Then further merges that
+    // may be with already merged partitions can also be placed into the same
+    // already-merged subrgraph.  As merges accumulate, we need to keep all
+    // these original-partition subgraph entries pointing to the correct
+    // single, merged subgraph.
+    for (size_t i = 0; i < merged_partitions.size(); i++)
+    {
+      // check if prior merges resulted in the current two partitions already being merged.
+      // In this case. we don't want to clear out any subgraphs - if we did
+      // then we could end up the nodes in the merged partitions being deleted!
+      if (merged_partitions[part1_index] == merged_partitions[part2_index])
+        break;
+      if (i == (size_t)part1_index)
+        continue;
+      if (merged_partitions[i] == merged_partitions[part2_index])
+      {
+        // clear out the partition we merged "from" so that it has zero nodes
+        // and we know to remove it from our main partition list/vector once
+        // we are done merging.
+        merged_partitions[i]->clear();
+        merged_partitions[i] = merged_partitions[part1_index];
+      }
+    }
+  }
+
+  // remove the empty partitions that we merged away into other partitions.
+  for (auto it = partitions.begin(); it != partitions.end();)
+    if (it->nodes().size() == 0)
+      it = partitions.erase(it);
+    else
+      ++it;
+}
+
+void
 mergeSiblings(std::vector<Subgraph> & partitions)
 {
   // create a graph where each node represents one of the total dep graph partitions
@@ -262,6 +330,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
       if (!canMerge(loop1, loop2))
         continue;
 
+      std::cout << "canmerge partition " << loopnode_to_partition[loop1] << " to partition "
+                << loopnode_to_partition[loop2] << "\n";
       merge_index[loop1][loop2] = true;
       merge_index[loop2][loop1] = true;
       candidate_merges.emplace_back(loop1, loop2);
@@ -367,6 +437,7 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     auto loop2 = merge.second;
     auto part1_index = loopnode_to_partition[loop1];
     auto part2_index = loopnode_to_partition[loop2];
+    std::cout << "merging partition " << part1_index << " to partition " << part2_index << "\n";
 
     // check if previous mergers already caused these two original partitions to become merged;
     // only merge if this wasn't the case.
@@ -517,6 +588,20 @@ computePartitions(Graph & g, bool merge)
         return true;
       }());
 
+  // This is necessary due to shortcommings in the basic loop-number-based partitioning
+  // algorithm.  It is possible that there are multiple leaves in the full
+  // dependency graph that lead to the same node where each path would result
+  // in a different loop number for that node.  This is handled by having the
+  // node choose the largest loop number among it's dependers.  However, if
+  // one leaf path to the node contains 1 or more depender nodes of the same loop type
+  // - this causes the dependers to be inside a different loop number even
+  // though they could run together - same loop type.  The mergeSiblings
+  // function doesn't handle this case because that algorithm is designed to
+  // find partition mergers that don't depend on each other - where this case
+  // is explicitly one of merging partitions that depend on each other.
+  mergeSubsets(partitions);
+
+  // merge partitions that don't depend on each other as much as possible
   if (merge)
     mergeSiblings(partitions);
   return partitions;
