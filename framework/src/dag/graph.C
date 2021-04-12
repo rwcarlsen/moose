@@ -74,6 +74,16 @@ void Node::transitiveDeps(std::set<Node *> & all) const
 
 bool Node::isReducing() const { return _reducing; }
 bool Node::isCached() const { return _cached || _reducing; }
+bool
+Node::isIntermediate() const
+{
+  return _intermediate;
+}
+void
+Node::markImportant()
+{
+  _intermediate = false;
+}
 LoopType Node::loopType() const { return _looptype; }
 
 std::string Node::str() { return _name; }
@@ -187,6 +197,25 @@ findConnected(const Subgraph & g, Node * n, Subgraph & all)
     findConnected(g, d, all);
   for (auto d : n->dependers())
     findConnected(g, d, all);
+}
+
+// remove all intermediate nodes recursively that don't have any dependers.
+void
+pruneUp(Subgraph & g)
+{
+  int n_pruned = 1;
+  while (n_pruned > 0)
+  {
+    n_pruned = 0;
+    for (auto leaf : g.leaves())
+    {
+      if (leaf->isIntermediate())
+      {
+        g.remove(leaf);
+        n_pruned++;
+      }
+    }
+  }
 }
 
 void
@@ -471,6 +500,7 @@ std::vector<Subgraph>
 computePartitions(Graph & g, bool merge)
 {
   g.prepare();
+  pruneUp(g);
 
   std::vector<Subgraph> partitions;
 

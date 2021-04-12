@@ -200,6 +200,9 @@ public:
 
   bool isReducing() const;
   bool isCached() const;
+  bool isIntermediate() const;
+  // make not intermediate
+  void markImportant();
   LoopType loopType() const;
 
   std::string str();
@@ -257,6 +260,10 @@ private:
   int _id = -1;
   bool _cached;
   bool _reducing;
+  // true for nodes that don't represent important side efects that must be
+  // executed regardless if no other nodes depend on them.  For false nodes,
+  // if they have no dependers, they can be pruned away.
+  bool _intermediate = true;
   LoopType _looptype;
   std::set<Node *> _deps;
   std::set<Node *> _dependers;

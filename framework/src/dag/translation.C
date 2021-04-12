@@ -80,6 +80,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     });
     auto elem_teardown = gd.graph.create(
         "elem_teardown", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+    elem_teardown->markImportant();
     gd.elem_teardown[block] = elem_teardown;
     elem_teardown->setRunFunc([&fe](const MeshLocation &, THREAD_ID tid) {
       fe.cacheResidual(tid);
@@ -108,6 +109,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
                         false,
                         false,
                         dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+    side_teardown->markImportant();
     gd.side_teardown[boundary] = side_teardown;
     side_teardown->setRunFunc([&fe](const MeshLocation &, THREAD_ID tid) {
       fe.cacheResidual(tid);
@@ -152,6 +154,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
 
   gd.solution = gd.graph.create("solution", true, false, dag::LoopType(dag::LoopCategory::None));
   gd.solution->needs(gd.residual_teardown);
+  gd.solution->markImportant();
 
   gd.pre_nodal_residual =
       gd.graph.create("pre_nodal_residual", true, false, dag::LoopType(dag::LoopCategory::None));
@@ -250,14 +253,10 @@ convertMat(FEProblemBase &, GraphData & gd, std::vector<Material *> & mats, dag:
   auto obj = gd.graph.create(objname, false, false, type);
   obj->setRunFunc([mats](const MeshLocation &, THREAD_ID tid) { mats[tid]->computeProperties(); });
 
-  std::cout << "  converting mat " << mats[0]->name() << " on " << dag::loopTypeStr(type) << "\n";
   auto mat = mats[0];
   auto & props = mat->getSuppliedPropIDs();
   for (auto prop : props)
-  {
     gd.named_mat_props[prop][type] = obj;
-    std::cout << "    adding entry for prop " << prop << "\n";
-  }
 
   addVarDeps(gd, mats[0], obj);
 
@@ -418,41 +417,37 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   // create material nodes
   std::vector<std::pair<MaterialPropertyInterface *, dag::Node *>> material_node_pairs;
   auto & mat_warehouse = fe.getMaterialWarehouse();
-  for (auto block : fe.mesh().meshSubdomains())
+  for (auto mat : mat_warehouse.getActiveObjects(tmp_tid))
   {
-    if (mat_warehouse.hasActiveBlockObjects(block, tmp_tid))
+    auto m = dynamic_cast<Material *>(mat.get());
+    std::vector<Material *> mat_copies;
+    for (unsigned int i = 0; i < n_threads; i++)
+      mat_copies.push_back(dynamic_cast<Material *>(mat_warehouse.getObject(m->name(), i).get()));
+    for (auto block : fe.mesh().meshSubdomains())
     {
-      auto & mats = mat_warehouse.getBlockObjects(block, tmp_tid);
-      for (auto mat : mats)
-      {
-        auto m = dynamic_cast<Material *>(mat.get());
-        std::vector<Material *> mat_copies;
-        for (unsigned int i = 0; i < n_threads; i++)
-          mat_copies.push_back(
-              dynamic_cast<Material *>(mat_warehouse.getObject(m->name(), i).get()));
-        auto obj = convertMat(
-            fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-        material_node_pairs.emplace_back(m, obj);
-      }
+      auto obj =
+          convertMat(fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+      material_node_pairs.emplace_back(m, obj);
+    }
+    for (auto boundary : fe.mesh().meshBoundaryIds())
+    {
+      auto obj = convertMat(
+          fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+      material_node_pairs.emplace_back(m, obj);
     }
   }
-  for (auto boundary : fe.mesh().meshBoundaryIds())
+  for (auto mat : mat_warehouse[Moose::FACE_MATERIAL_DATA].getActiveObjects(tmp_tid))
   {
-    std::cout << "adding materials for boundary " << boundary << "\n";
-    if (mat_warehouse.hasActiveBoundaryObjects(boundary, tmp_tid))
+    auto m = dynamic_cast<Material *>(mat.get());
+    std::vector<Material *> mat_copies;
+    for (unsigned int i = 0; i < n_threads; i++)
+      mat_copies.push_back(dynamic_cast<Material *>(
+          mat_warehouse[Moose::FACE_MATERIAL_DATA].getObject(m->name(), i).get()));
+    for (auto boundary : fe.mesh().meshBoundaryIds())
     {
-      auto & mats = mat_warehouse.getBoundaryObjects(boundary, tmp_tid);
-      for (auto mat : mats)
-      {
-        auto m = dynamic_cast<Material *>(mat.get());
-        std::vector<Material *> mat_copies;
-        for (unsigned int i = 0; i < n_threads; i++)
-          mat_copies.push_back(
-              dynamic_cast<Material *>(mat_warehouse.getObject(m->name(), i).get()));
-        auto obj = convertMat(
-            fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-        material_node_pairs.emplace_back(m, obj);
-      }
+      auto obj = convertMat(
+          fe, gd, mat_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+      material_node_pairs.emplace_back(m, obj);
     }
   }
   // add material->material dependencies *after* we've created all material dag nodes
@@ -512,19 +507,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
     }
   }
 
-  // calculate the graph-partitions/mesh-loops
-  std::set<dag::Node *> start_nodes = {gd.solution};
-  auto partitions = dag::computePartitions(gd.graph, true);
-  for (auto & g : partitions)
-    if (g.reachable(start_nodes))
-      gd.partitions.push_back(g);
-    else
-      for (auto s : start_nodes)
-        if (g.contains(s))
-        {
-          gd.partitions.push_back(g);
-          break;
-        }
+  gd.partitions = dag::computePartitions(gd.graph, true);
 
   gd.objs = computeLoops(gd.partitions);
   for (auto nodes : gd.objs)
