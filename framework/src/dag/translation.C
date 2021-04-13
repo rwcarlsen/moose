@@ -80,7 +80,6 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     });
     auto elem_teardown = gd.graph.create(
         "elem_teardown", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-    elem_teardown->markImportant();
     gd.elem_teardown[block] = elem_teardown;
     elem_teardown->setRunFunc([&fe](const MeshLocation &, THREAD_ID tid) {
       fe.cacheResidual(tid);
@@ -109,7 +108,6 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
                         false,
                         false,
                         dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-    side_teardown->markImportant();
     gd.side_teardown[boundary] = side_teardown;
     side_teardown->setRunFunc([&fe](const MeshLocation &, THREAD_ID tid) {
       fe.cacheResidual(tid);
@@ -174,8 +172,12 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     }
   });
 
+  gd.residual_teardown->needs(gd.pre_nodal_residual);
+
   for (auto block : fe.mesh().meshSubdomains())
     gd.pre_nodal_residual->needs(gd.elem_teardown[block]);
+  for (auto block : fe.mesh().meshBoundaryIds())
+    gd.pre_nodal_residual->needs(gd.side_teardown[block]);
 }
 
 // find all dag nodes corresponding to the moose variables obj depends on and
