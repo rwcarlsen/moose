@@ -199,6 +199,24 @@ addVarDeps(GraphData & gd, MooseVariableDependencyInterface * obj, dag::Node * n
   }
 }
 
+// removes tail node from g (if it exists in g) if and only if head node is
+// not present in g.  This helps with things like setup+teardown nodes where
+// we eneded up not having any nodes that depended on setup so it is missing,
+// but something still (unnecessarily) depended on the tail node.  We want to
+// prune these nodes away.
+void
+pruneBrokenSandwiches(dag::Subgraph & g, dag::Node * head, dag::Node * tail)
+{
+  std::cout << "checking for broken sandwich: head=" << head->name() << ", tail=" << tail->name()
+            << "\n";
+  if (!g.contains(head))
+  {
+    std::cout << "    deleting sandwich tail\n";
+    g.remove(tail);
+    tail->clearDeps();
+  }
+}
+
 // convert the given (thread copies) of the given variable to a dag node of
 // the given loop type.  We call this function several times for a given
 // variable in order to create one dag node for every loop type this variable
@@ -495,6 +513,13 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
       }
     }
   }
+
+  // prune un-needed stuff
+  dag::pruneUp(gd.graph);
+  for (size_t i = 0; i < gd.elem_teardown.size(); i++)
+    pruneBrokenSandwiches(gd.graph, gd.elem_setup[i], gd.elem_teardown[i]);
+  for (size_t i = 0; i < gd.side_teardown.size(); i++)
+    pruneBrokenSandwiches(gd.graph, gd.side_setup[i], gd.side_teardown[i]);
 
   gd.partitions = dag::computePartitions(gd.graph, true);
 

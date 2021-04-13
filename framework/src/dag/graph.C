@@ -89,7 +89,17 @@ LoopType Node::loopType() const { return _looptype; }
 std::string Node::str() { return _name; }
 std::string Node::name() { return _name; }
 
-void Node::clearDeps() {_deps.clear(); _dependers.clear();}
+void
+Node::clearDeps()
+{
+  uninheritDependers(this, _transitive_dependers);
+  for (auto dep : _deps)
+    dep->_dependers.erase(this);
+  for (auto dep : _dependers)
+    dep->_deps.erase(this);
+  _deps.clear();
+  _dependers.clear();
+}
 
 int Node::id() {return _id;}
 
@@ -120,6 +130,21 @@ Node::prepare()
     r->loop();
 }
 
+void
+Node::uninheritDependers(Node * n, std::set<Node *> & dependers)
+{
+  assert(dependers.count(this) == 0);
+  if (n->_visit_count == _n_visits)
+    return;
+  n->_visit_count = _n_visits;
+
+  _transitive_dependers.erase(n);
+  _transitive_dependers.erase(dependers.begin(), dependers.end());
+  assert(_transitive_dependers.count(this) == 0);
+
+  for (auto d : _deps)
+    d->uninheritDependers(n, dependers);
+}
 
 void Node::inheritDependers(Node * n, std::set<Node *> & dependers)
 {
@@ -218,6 +243,12 @@ pruneUp(Subgraph & g)
   }
 }
 
+// walk n's dependencies recursively traversing over elemental nodes and
+// stopping at nodes of a different loop type, adding all visited elemental
+// nodes.  The blocking different-loop-type nodes are not added to the set.
+// This also stops on cached dependencies that don't need to be recalculated
+// as part of the current loop. This transitively adds all uncached
+// dependencies of n to the current loop/subgraph.
 void
 floodUp(Node * n, Subgraph & g, LoopType t, int curr_loop)
 {
@@ -500,7 +531,6 @@ std::vector<Subgraph>
 computePartitions(Graph & g, bool merge)
 {
   g.prepare();
-  pruneUp(g);
 
   std::vector<Subgraph> partitions;
 

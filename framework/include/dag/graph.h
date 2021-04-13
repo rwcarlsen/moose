@@ -208,6 +208,9 @@ public:
   std::string str();
   std::string name();
 
+  // remove all dependencies and dependers from this node - also update this
+  // node's previous dependers and dependencies to not have any references
+  // to/from this node (basically undoes calls to the "needs" function.
   void clearDeps();
 
   void needs() {}
@@ -247,6 +250,9 @@ private:
   // Allows incrementally building up the transitive dependers/deps lists for every
   // node as new dependencies are added between nodes.
   void inheritDependers(Node * n, std::set<Node *> & dependers);
+  // Allows incrementally clearing out the transitive dependers/deps lists for every
+  // node as existing dependencies are removed from nodes (i.e. via clearDeps).
+  void uninheritDependers(Node * n, std::set<Node *> & dependers);
   int loopInner();
 
   int _visit_count = 0;
@@ -441,14 +447,6 @@ void execOrder(Subgraph g, std::vector<std::vector<Node *>> & order);
 // return a subgraph of g containing all nodes connected to n;
 void findConnected(const Subgraph & g, Node * n, Subgraph & all);
 
-// walk n's dependencies recursively traversing over elemental nodes and
-// stopping at nodes of a different loop type, adding all visited elemental
-// nodes.  The blocking different-loop-type nodes are not added to the set.
-// This also stops on cached dependencies that don't need to be recalculated
-// as part of the current loop. This transitively adds all uncached
-// dependencies of n to the current loop/subgraph.
-void floodUp(Node * n, Subgraph & g, LoopType t, int curr_loop);
-
 // returns true if loops/partitions represented by nodes a and b can be merged.
 bool canMerge(Node * a, Node * b);
 
@@ -471,6 +469,9 @@ void mergeSiblings(std::vector<Subgraph> & partitions);
 // This merges all pairs of partitions together for which one is a subset of
 // the other - i.e. all nodes of one partitions exist in the other partition.
 void mergeSubsets(std::vector<Subgraph> & partitions);
+
+// remove all intermediate nodes recursively that don't have any dependers.
+void pruneUp(Subgraph & g);
 
 // takes subgraphs passed in and splits them each into all unconnected
 // subgraphs.
