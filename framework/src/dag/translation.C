@@ -8,7 +8,6 @@
 #include "NodalBCBase.h"
 #include "IntegratedBCBase.h"
 #include "TimeIntegrator.h"
-#include "SwapBackSentinel.h"
 #include "MooseVariableBase.h"
 #include "Material.h"
 #include "MaterialPropertyInterface.h"
@@ -77,11 +76,13 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.elem_setup[block] = elem_setup;
     elem_setup->setRunFunc([&fe](const MeshLocation & loc, THREAD_ID tid) {
       fe.prepare(loc.elem, tid);
+      fe.getMaterialData(Moose::BLOCK_MATERIAL_DATA, tid)->swap(*loc.elem);
     });
     auto elem_teardown = gd.graph.create(
         "elem_teardown", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
     gd.elem_teardown[block] = elem_teardown;
     elem_teardown->setRunFunc([&fe](const MeshLocation &, THREAD_ID tid) {
+      fe.swapBackMaterials(tid);
       fe.cacheResidual(tid);
       {
         Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
@@ -101,6 +102,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     side_setup->setRunFunc([&fe](const MeshLocation & loc, THREAD_ID tid) {
       fe.prepare(loc.elem, tid);
       fe.reinitElemFace(loc.elem, loc.side, loc.boundary, tid);
+      fe.getMaterialData(Moose::FACE_MATERIAL_DATA, tid)->swap(*loc.elem, loc.side);
     });
 
     auto side_teardown =
@@ -110,6 +112,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
                         dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
     gd.side_teardown[boundary] = side_teardown;
     side_teardown->setRunFunc([&fe](const MeshLocation &, THREAD_ID tid) {
+      fe.swapBackMaterialsFace(tid);
       fe.cacheResidual(tid);
       {
         Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
@@ -292,7 +295,7 @@ addMatDeps(GraphData & gd, MaterialPropertyInterface * obj, dag::Node * n)
 }
 
 dag::Node *
-convertKernel(FEProblemBase & fe,
+convertKernel(FEProblemBase &,
               GraphData & gd,
               std::vector<KernelBase *> & kernels,
               SubdomainID block)
@@ -300,16 +303,8 @@ convertKernel(FEProblemBase & fe,
   auto objname = "kernel_" + kernels[0]->name();
   auto obj = gd.graph.create(
       objname, false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-  obj->setRunFunc([kernels, &fe](const MeshLocation & loc, THREAD_ID tid) {
-    auto props = kernels[tid]->getMatPropDependencies();
-    fe.setActiveMaterialProperties(props, tid);
-    fe.prepareMaterials(loc.type.block, tid);
-
-    SwapBackSentinel sentinel(fe, &FEProblem::swapBackMaterials, tid);
-    fe.reinitMaterials(loc.type.block, tid);
-
-    kernels[tid]->computeResidual();
-  });
+  obj->setRunFunc(
+      [kernels](const MeshLocation &, THREAD_ID tid) { kernels[tid]->computeResidual(); });
 
   addVarDeps(gd, kernels[0], obj);
   addMatDeps(gd, kernels[0], obj);
@@ -322,7 +317,7 @@ convertKernel(FEProblemBase & fe,
 }
 
 dag::Node *
-convertBC(FEProblemBase & fe,
+convertBC(FEProblemBase &,
           GraphData & gd,
           std::vector<IntegratedBCBase *> & bcs,
           BoundaryID boundary)
@@ -330,15 +325,7 @@ convertBC(FEProblemBase & fe,
   auto objname = "bc_" + bcs[0]->name();
   auto obj = gd.graph.create(
       objname, false, false, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-  obj->setRunFunc([bcs, &fe](const MeshLocation & loc, THREAD_ID tid) {
-    auto props = bcs[tid]->getMatPropDependencies();
-    fe.setActiveMaterialProperties(props, tid);
-    fe.prepareMaterials(loc.elem->subdomain_id(), tid);
-
-    SwapBackSentinel sentinel(fe, &FEProblem::swapBackMaterialsFace, tid);
-    fe.reinitMaterialsFace(loc.elem->subdomain_id(), tid);
-    fe.reinitMaterialsBoundary(loc.boundary, tid);
-
+  obj->setRunFunc([bcs](const MeshLocation &, THREAD_ID tid) {
     if (bcs[tid]->shouldApply())
       bcs[tid]->computeResidual();
   });
