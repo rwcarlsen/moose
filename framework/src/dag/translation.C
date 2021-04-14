@@ -5,6 +5,7 @@
 #include "NonlinearSystemBase.h"
 #include "MooseMesh.h"
 #include "KernelBase.h"
+#include "TimeKernel.h"
 #include "NodalBCBase.h"
 #include "IntegratedBCBase.h"
 #include "TimeIntegrator.h"
@@ -181,6 +182,12 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.pre_nodal_residual->needs(gd.elem_teardown[block]);
   for (auto block : fe.mesh().meshBoundaryIds())
     gd.pre_nodal_residual->needs(gd.side_teardown[block]);
+
+  gd.time_derivative =
+      gd.graph.create("time_derivative", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.time_derivative->setRunFunc([&fe, tags](const MeshLocation &, THREAD_ID) {
+    fe.getNonlinearSystemBase().computeTimeDerivatives();
+  });
 }
 
 // find all dag nodes corresponding to the moose variables obj depends on and
@@ -326,6 +333,9 @@ convertKernel(FEProblemBase &,
 
   addVarDeps(gd, kernels[0], obj);
   addMatDeps(gd, kernels[0], obj);
+
+  if (dynamic_cast<TimeKernel *>(kernels[0]))
+    obj->needs(gd.time_derivative);
 
   obj->needs(gd.elem_setup[block]);
   gd.elem_teardown[block]->needs(obj);

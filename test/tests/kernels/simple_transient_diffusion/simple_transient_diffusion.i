@@ -37,6 +37,10 @@
   [../]
 []
 
+[Problem]
+  run_dag_style = true
+[]
+
 [Executioner]
   type = Transient
   num_steps = 20

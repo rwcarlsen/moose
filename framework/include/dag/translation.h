@@ -25,6 +25,7 @@ struct GraphData
   dag::Node * residual_teardown = nullptr;
   dag::Node * pre_nodal_residual = nullptr;
   dag::Node * solution = nullptr;
+  dag::Node * time_derivative = nullptr;
   std::map<std::string, std::map<dag::LoopType, dag::Node *>> named_objects;
   // map<mat prop id, map<looptype, node>>
   std::map<unsigned int, std::map<dag::LoopType, dag::Node *>> named_mat_props;
