@@ -109,6 +109,10 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     gd.node_setup[block] = node_setup;
     node_setup->setRunFunc(
         [&fe](const MeshLocation & loc, THREAD_ID tid) { fe.reinitNode(loc.node, tid); });
+
+    // if anything ever goes in this node's run function, we'll need to add
+    // some dependencies on node_teardown so it isn't pruned away.  Right now
+    // nothing depends on it.
     auto node_teardown = gd.graph.create(
         "node_teardown", false, false, dag::LoopType(dag::LoopCategory::Nodal, block));
     gd.node_teardown[block] = node_teardown;
@@ -183,7 +187,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
 
   gd.solution = gd.graph.create("solution", true, false, dag::LoopType(dag::LoopCategory::None));
   gd.solution->needs(gd.residual_teardown);
-  gd.solution->markImportant();
+  gd.solution->preserve();
 
   gd.pre_nodal_residual =
       gd.graph.create("pre_nodal_residual", true, false, dag::LoopType(dag::LoopCategory::None));
@@ -219,14 +223,20 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
   gd.aux_soln_finalize =
       gd.graph.create("aux_solution_finalize", true, false, dag::LoopType(dag::LoopCategory::None));
   gd.aux_soln_finalize->setRunFunc([&fe](const MeshLocation &, THREAD_ID) {
+    fe.getAuxiliarySystem().solution().close();
+    fe.getAuxiliarySystem().system().update();
     auto ti = fe.getAuxiliarySystem().getTimeIntegrator();
     if (fe.dt() > 0. && ti)
       ti->computeTimeDerivatives();
   });
+
+  gd.aux_soln_finalize->preserve();
 }
 
 // find all dag nodes corresponding to the moose variables obj depends on and
 // make n (which is the dag node for the moose object obj) depend on them.
+// If live vars is true, then n will depend on the "live" versions if any
+// exist of the variables it depends on.
 void
 addVarDeps(GraphData & gd,
            MooseVariableDependencyInterface * obj,
@@ -236,18 +246,16 @@ addVarDeps(GraphData & gd,
   auto vars = obj->getMooseVariableDependencies();
   for (auto var : vars)
   {
-    if (need_live_vars)
-      std::cout << "trying to find live var " << var->name() << "\n";
     auto key = "variable_" + var->name();
     auto live_key = "live_variable_" + var->name();
-    // TODO: check if each var type is Aux - before bothering to check for "live" versions
+    // depend on the live version of the var if there is one and it deoesn't depend on n
     if (need_live_vars && gd.named_objects.count(live_key) > 0 &&
-        gd.named_objects[live_key].count(n->loopType()) > 0)
+        gd.named_objects[live_key].count(n->loopType()) > 0 &&
+        !gd.named_objects[live_key][n->loopType()]->dependsOn(n))
       n->needs(gd.named_objects[live_key][n->loopType()]);
     else
     {
-      if (need_live_vars)
-        std::cout << "  didn't find live version of var\n";
+      // fallback to depending on the non-live/lagged version of the var
       if (gd.named_objects.count(key) > 0 && gd.named_objects[key].count(n->loopType()) > 0)
       {
         auto var_node = gd.named_objects[key][n->loopType()];
@@ -292,7 +300,14 @@ pruneBrokenSandwiches(dag::Subgraph & g, dag::Node * head, dag::Node * tail)
 // the given loop type.  We call this function several times for a given
 // variable in order to create one dag node for every loop type this variable
 // could be used in - although each of these copies is bound to the same moose
-// object/run-func calls.
+// object/run-func calls.  If live is true, then the dag node name will be the object name
+// prefixed with "live_varible_" instead of just "variable_".  This means that
+// the variable represents one that is "current" or "updated" for the current
+// iteration - i.e. it has been solved on the current iteration prior to this
+// variable node being calculated.  This is relevant for auxiliary variables
+// that may have dependers who expect to see the non-lagged,
+// computed-this-iteration value.  This could also be relevant for dampers and
+// regular nonlinear variables if we ever get those implemented.
 dag::Node *
 convertVar(FEProblemBase &,
            GraphData & gd,
@@ -301,12 +316,30 @@ convertVar(FEProblemBase &,
            bool live = false)
 {
   std::vector<dag::Node *> objs;
-  auto objname = "variable_" + vars[0]->name();
+  auto nonlivename = "variable_" + vars[0]->name();
+  auto objname = nonlivename;
   if (live)
     objname = "live_" + objname;
 
   auto obj = gd.graph.create(objname, false, false, type);
-  obj->setRunFunc([vars](const MeshLocation & loc, THREAD_ID tid) {
+
+  if (live)
+  {
+    // make the live version depend on the non-live version
+    mooseAssert(gd.named_objects.count(nonlivename) > 0 &&
+                    gd.named_objects[nonlivename].count(type) > 0,
+                "cannot create live version for a var with no non-live version to depend on");
+    obj->needs(gd.named_objects[nonlivename][type]);
+  }
+
+  obj->setRunFunc([vars, live](const MeshLocation & loc, THREAD_ID tid) {
+    // live variables don't actually do anything except depend on the non-live
+    // node (which will do all the code we skip below for us) - and also
+    // depend on the corresponding aux kernel that calculates the live var.
+    // That dependency will be generated when the aux kernel is created.
+    if (live)
+      return;
+
     auto var = vars[tid];
     var->clearDofIndices();
     var->prepare();
@@ -316,10 +349,6 @@ convertVar(FEProblemBase &,
       var->computeElemValuesFace();
     else if (loc.type.category == dag::LoopCategory::Nodal)
     {
-      // TODO: if this variable represents an aux var, and its associated aux
-      // kernel has just run and inserted a new nodal value into it, does
-      // re-initing overwrite/ruin this calculation?  What about
-      // computeNodalValues?  How should we handle this generally.
       var->reinitNode();
       if (var->isNodalDefined())
         var->computeNodalValues();
@@ -351,11 +380,10 @@ dag::Node *
 convertAuxKernel(FEProblemBase & fe,
                  GraphData & gd,
                  std::vector<AuxKernel *> & kernels,
-                 SubdomainID block)
+                 dag::LoopType type)
 {
   auto obj_name = "auxkernel_" + kernels[0]->name();
-  auto loc = dag::LoopType(dag::LoopCategory::Nodal, block);
-  auto obj = gd.graph.create(obj_name, false, false, loc);
+  auto obj = gd.graph.create(obj_name, false, false, type);
   obj->setRunFunc([&fe, kernels](const MeshLocation &, THREAD_ID tid) {
     kernels[tid]->compute();
     {
@@ -363,24 +391,35 @@ convertAuxKernel(FEProblemBase & fe,
       kernels[tid]->variable().insert(fe.getAuxiliarySystem().solution());
     }
   });
+
+  // make all loop type incarnations of the kernel's primary variable's "live"
+  // dag node (on the current block) depend on this aux kernel. Do this before
+  // we add variable dependencies - so that when addVarDeps tries to make this
+  // aux kernel depend on its own variable (sloppy moose world) - it triggers
+  // a cyclical dependency and can be skipped.
+  for (auto & entry : gd.named_objects["live_variable_" + kernels[0]->variable().name()])
+    if (entry.first.block == type.block)
+      entry.second->needs(obj);
+
   // TODO: do we call this to add "live" or "lagged" deps (i.e. last bool true or false)
   // I think lagged because the var deps for an aux kernel include the
   // variable the kernel is calculating - so if we did live - we'd have
   // cyclical deps.
-  addVarDeps(gd, kernels[0], obj, false);
+  addVarDeps(gd, kernels[0], obj, true);
   addMatDeps(gd, kernels[0], obj);
-  obj->needs(gd.node_setup[block]);
-  gd.node_teardown[block]->needs(obj);
-  gd.aux_soln_finalize->needs(obj);
+
+  if (type.category == dag::LoopCategory::Nodal_onBoundary)
+    obj->needs(gd.side_node_setup[type.block]);
+  else if (type.category == dag::LoopCategory::Nodal)
+  {
+    obj->needs(gd.node_setup[type.block]);
+    gd.node_teardown[type.block]->needs(obj);
+  }
+  else
+    mooseError("unsupported loop type for auxvariable node");
+
   gd.aux_soln_finalize->needs(obj);
 
-  // make all loop type incarnations of a variable (on the current block)
-  // depend on this aux kernel
-  for (auto & entry : gd.named_objects["live_variable_" + kernels[0]->variable().name()])
-    if (entry.first.block == block)
-      entry.second->needs(obj);
-
-  obj->markImportant();
   return obj;
 }
 
@@ -668,7 +707,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
         std::vector<AuxKernel *> kernel_copies;
         for (unsigned int i = 0; i < n_threads; i++)
           kernel_copies.push_back(auxkern_warehouse.getObject(k->name(), i).get());
-        convertAuxKernel(fe, gd, kernel_copies, block);
+        convertAuxKernel(fe, gd, kernel_copies, dag::LoopType(dag::LoopCategory::Nodal, block));
       }
     }
   }
@@ -697,6 +736,19 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
         for (unsigned int i = 0; i < n_threads; i++)
           nbc_copies.push_back(nbc_warehouse.getObject(b->name(), i).get());
         convertNodalBC(fe, gd, nbc_copies, boundary);
+      }
+    }
+    if (auxkern_warehouse.hasActiveBoundaryObjects(boundary, tmp_tid))
+    {
+      auto & kernels = auxkern_warehouse.getBoundaryObjects(boundary, tmp_tid);
+      for (auto kern : kernels)
+      {
+        auto k = kern.get();
+        std::vector<AuxKernel *> kernel_copies;
+        for (unsigned int i = 0; i < n_threads; i++)
+          kernel_copies.push_back(auxkern_warehouse.getObject(k->name(), i).get());
+        convertAuxKernel(
+            fe, gd, kernel_copies, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
       }
     }
   }

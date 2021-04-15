@@ -80,7 +80,7 @@ Node::isIntermediate() const
   return _intermediate;
 }
 void
-Node::markImportant()
+Node::preserve()
 {
   _intermediate = false;
 }

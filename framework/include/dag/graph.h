@@ -201,8 +201,9 @@ public:
   bool isReducing() const;
   bool isCached() const;
   bool isIntermediate() const;
-  // make not intermediate
-  void markImportant();
+  // make not intermediate - i.e. prevent this node from being pruned away
+  // (and preserve all nodes it depends on).
+  void preserve();
   LoopType loopType() const;
 
   std::string str();
