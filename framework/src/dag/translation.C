@@ -363,6 +363,15 @@ convertVar(FEProblemBase &,
       mooseError("unsupported loop type for variable node");
   });
 
+  // TODO: there are cases where we want this variable dag node to depend on
+  // the aux solution - i.e. if this is for a live variable and this node will
+  // run in a different loop than the aux var's kernel.  In that case - we
+  // want to finalize the aux solution (i.e. depend on aux_soln_finalize
+  // node) first before calculating this variable.  I don't know how to make
+  // this happen because at the time we are creating the dependencies we don't
+  // yet know whether it will be in a different loop or the same loop as the
+  // corresponding aux kernel.
+
   if (type.category == dag::LoopCategory::Elemental_onElem)
     obj->needs(gd.elem_setup[type.block]);
   else if (type.category == dag::LoopCategory::Elemental_onBoundary)
