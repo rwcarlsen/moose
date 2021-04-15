@@ -16,6 +16,8 @@ struct GraphData
   std::vector<std::vector<std::vector<dag::Node *>>> objs;
   std::map<SubdomainID, dag::Node *> elem_setup;
   std::map<SubdomainID, dag::Node *> elem_teardown;
+  std::map<SubdomainID, dag::Node *> node_setup;
+  std::map<SubdomainID, dag::Node *> node_teardown;
   std::map<BoundaryID, dag::Node *> side_setup;
   std::map<BoundaryID, dag::Node *> side_teardown;
   std::map<BoundaryID, dag::Node *> side_node_setup;
@@ -26,6 +28,8 @@ struct GraphData
   dag::Node * pre_nodal_residual = nullptr;
   dag::Node * solution = nullptr;
   dag::Node * time_derivative = nullptr;
+  dag::Node * aux_soln_finalize = nullptr;
+  // map<node name, map<looptype, node>>
   std::map<std::string, std::map<dag::LoopType, dag::Node *>> named_objects;
   // map<mat prop id, map<looptype, node>>
   std::map<unsigned int, std::map<dag::LoopType, dag::Node *>> named_mat_props;

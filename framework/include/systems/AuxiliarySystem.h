@@ -153,6 +153,8 @@ public:
 
   void clearScalarVariableCoupleableTags();
 
+  MooseObjectWarehouse<AuxKernel> & getNodalKernelWarehouse() { return _nodal_aux_storage; }
+
 protected:
   void computeScalarVars(ExecFlagType type);
   void computeNodalVars(ExecFlagType type);

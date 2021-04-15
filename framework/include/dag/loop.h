@@ -10,7 +10,7 @@ public:
   dag::LoopType type;
   Elem * elem = nullptr;
   FaceInfo * face = nullptr;
-  Node * node = nullptr;
+  const Node * node = nullptr;
   unsigned int side = 0;
   BoundaryID boundary = 0;
 };
