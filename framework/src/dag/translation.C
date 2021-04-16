@@ -229,8 +229,6 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     if (fe.dt() > 0. && ti)
       ti->computeTimeDerivatives();
   });
-
-  gd.aux_soln_finalize->preserve();
 }
 
 // find all dag nodes corresponding to the moose variables obj depends on and
@@ -332,25 +330,20 @@ convertVar(FEProblemBase &,
 
   auto obj = gd.graph.create(objname, false, false, type);
 
-  if (live)
+  if (live && finalized)
   {
-    // make the live version depend on the non-live version
-    mooseAssert(gd.named_objects.count(nonlivename) > 0 &&
-                    gd.named_objects[nonlivename].count(type) > 0,
-                "cannot create live version for a var with no non-live version to depend on");
-    obj->needs(gd.named_objects[nonlivename][type]);
-    if (finalized)
-      obj->needs(gd.aux_soln_finalize);
+    auto solvname = "auxsolve_" + nonlivename;
+    if (gd.named_objects.count(solvname) == 0)
+    {
+      auto solv = gd.graph.create(solvname, true, false, dag::LoopType(dag::LoopCategory::None));
+      gd.named_objects[solv->name()][solv->loopType()] = solv;
+    }
+    auto solv = gd.named_objects[solvname][dag::LoopType(dag::LoopCategory::None)];
+    obj->needs(solv);
+    solv->needs(gd.aux_soln_finalize);
   }
 
-  obj->setRunFunc([vars, live](const MeshLocation & loc, THREAD_ID tid) {
-    // live variables don't actually do anything except depend on the non-live
-    // node (which will do all the code we skip below for us) - and also
-    // depend on the corresponding aux kernel that calculates the live var.
-    // That dependency will be generated when the aux kernel is created.
-    if (live)
-      return;
-
+  obj->setRunFunc([vars](const MeshLocation & loc, THREAD_ID tid) {
     auto var = vars[tid];
     var->clearDofIndices();
     var->prepare();
@@ -373,15 +366,6 @@ convertVar(FEProblemBase &,
     else
       mooseError("unsupported loop type for variable node");
   });
-
-  // TODO: there are cases where we want this variable dag node to depend on
-  // the aux solution - i.e. if this is for a live variable and this node will
-  // run in a different loop than the aux var's kernel.  In that case - we
-  // want to finalize the aux solution (i.e. depend on aux_soln_finalize
-  // node) first before calculating this variable.  I don't know how to make
-  // this happen because at the time we are creating the dependencies we don't
-  // yet know whether it will be in a different loop or the same loop as the
-  // corresponding aux kernel.
 
   if (type.category == dag::LoopCategory::Elemental_onElem)
     obj->needs(gd.elem_setup[type.block]);
@@ -412,14 +396,22 @@ convertAuxKernel(FEProblemBase & fe,
     }
   });
 
+  obj->preserve();
+
   // make all loop type incarnations of the kernel's primary variable's "live"
   // dag node (on the current block) depend on this aux kernel. Do this before
   // we add variable dependencies - so that when addVarDeps tries to make this
   // aux kernel depend on its own variable (sloppy moose world) - it triggers
   // a cyclical dependency and can be skipped.
   for (auto & entry : gd.named_objects["live_variable_" + kernels[0]->variable().name()])
-    if (entry.first.block == type.block)
+    if (entry.first.block == type.block || entry.first.category != type.category)
       entry.second->needs(obj);
+    else
+      for (auto & entry : gd.named_objects["finalized_variable_" + kernels[0]->variable().name()])
+        if (entry.first.block == type.block || entry.first.category != type.category)
+          entry.second->needs(obj);
+  for (auto & entry : gd.named_objects["auxsolve_variable_" + kernels[0]->variable().name()])
+    entry.second->needs(obj);
 
   // TODO: we actually want live vars for variables of the same loop type and
   // finalized variables for variables of a different loop type.  Figure out
@@ -436,8 +428,6 @@ convertAuxKernel(FEProblemBase & fe,
   }
   else
     mooseError("unsupported loop type for auxvariable node");
-
-  gd.aux_soln_finalize->needs(obj);
 
   return obj;
 }
@@ -793,6 +783,8 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   for (size_t i = 0; i < gd.side_teardown.size(); i++)
     pruneBrokenSandwiches(gd.graph, gd.side_setup[i], gd.side_teardown[i]);
 
+  std::cout << dag::dotGraph(gd.graph);
+
   gd.partitions = dag::computePartitions(gd.graph, true);
 
   gd.objs = computeLoops(gd.partitions);
@@ -801,11 +793,6 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   dag::printLoops(gd.objs);
 
   // show all the given subgraphs on a single graph.
-  dag::Subgraph full;
-  for (auto & p : gd.partitions)
-    for (auto n : p.nodes())
-      full.add(n);
-  std::cout << dag::dotGraph(full);
   // std::cout << dag::dotGraphMerged(gd.partitions);
 }
 
