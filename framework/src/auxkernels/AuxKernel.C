@@ -275,6 +275,7 @@ template <typename ComputeValueType>
 void
 AuxKernelTempl<ComputeValueType>::compute()
 {
+  _aux_sys.isDirty(true);
   precalculateValue();
 
   if (isNodal()) /* nodal variables */

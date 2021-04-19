@@ -18,6 +18,8 @@
 namespace translation
 {
 
+const dag::LoopType NoneType = dag::LoopType(dag::LoopCategory::None);
+
 void
 buildMeshLocations(MooseMesh & mesh,
                    std::vector<std::unique_ptr<MeshLocation>> & all,
@@ -158,8 +160,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     });
   }
 
-  gd.residual_setup =
-      gd.graph.create("residual_setup", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.residual_setup = gd.graph.create("residual_setup", true, false, NoneType);
   gd.residual_setup->setRunFunc([&fe, tags](const MeshLocation &, THREAD_ID) {
     fe.getNonlinearSystemBase().zeroVariablesForResidual();
     fe.getAuxiliarySystem().zeroVariablesForResidual();
@@ -173,8 +174,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
       fe.clearActiveElementalMooseVariables(i);
   });
 
-  gd.residual_teardown =
-      gd.graph.create("residual_teardown", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.residual_teardown = gd.graph.create("residual_teardown", true, false, NoneType);
   gd.residual_teardown->setRunFunc([&fe, tags](const MeshLocation &, THREAD_ID) {
     if (fe.getNonlinearSystemBase().haveResidualTimeVector())
       fe.getNonlinearSystemBase().getResidualTimeVector().close();
@@ -185,12 +185,11 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
     fe.setCurrentlyComputingResidual(false);
   });
 
-  gd.solution = gd.graph.create("solution", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.solution = gd.graph.create("solution", true, false, NoneType);
   gd.solution->needs(gd.residual_teardown);
   gd.solution->preserve();
 
-  gd.pre_nodal_residual =
-      gd.graph.create("pre_nodal_residual", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.pre_nodal_residual = gd.graph.create("pre_nodal_residual", true, false, NoneType);
   gd.pre_nodal_residual->setRunFunc([&fe, tags](const MeshLocation &, THREAD_ID) {
     fe.getNonlinearSystemBase().closeTaggedVectors(tags);
     bool required_residual =
@@ -214,18 +213,26 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
   for (auto block : fe.mesh().meshBoundaryIds())
     gd.pre_nodal_residual->needs(gd.side_teardown[block]);
 
-  gd.time_derivative =
-      gd.graph.create("time_derivative", true, false, dag::LoopType(dag::LoopCategory::None));
+  gd.time_derivative = gd.graph.create("time_derivative", true, false, NoneType);
   gd.time_derivative->setRunFunc([&fe](const MeshLocation &, THREAD_ID) {
     fe.getNonlinearSystemBase().computeTimeDerivatives();
   });
 
-  gd.aux_soln_finalize =
-      gd.graph.create("aux_solution_finalize", true, false, dag::LoopType(dag::LoopCategory::None));
+  // this is not cached in order to allow it to be duplicated into every loop
+  // where it is used - we want the aux finalize stuff to occur directly in
+  // every loop that needs a finalized aux var otherwise we could be depending
+  // on updated aux info that hasn't been finalized because the dag assumed
+  // the finalization only needed to occur once which was in a loop prior to
+  // the latest aux var/kernel calls/mods.
+  gd.aux_soln_finalize = gd.graph.create("aux_solution_finalize", false, false, NoneType);
   gd.aux_soln_finalize->setRunFunc([&fe](const MeshLocation &, THREAD_ID) {
-    fe.getAuxiliarySystem().solution().close();
-    fe.getAuxiliarySystem().system().update();
-    auto ti = fe.getAuxiliarySystem().getTimeIntegrator();
+    auto & sys = fe.getAuxiliarySystem();
+    if (!sys.isDirty())
+      return;
+    sys.isDirty(false);
+    sys.solution().close();
+    sys.system().update();
+    auto ti = sys.getTimeIntegrator();
     if (fe.dt() > 0. && ti)
       ti->computeTimeDerivatives();
   });
@@ -247,14 +254,16 @@ addVarDeps(GraphData & gd,
     auto key = "variable_" + var->name();
     auto live_key = "live_variable_" + var->name();
     auto finalized_key = "finalized_variable_" + var->name();
+    bool have_finalized = gd.named_objects.count(finalized_key) > 0 &&
+                          gd.named_objects[finalized_key].count(n->loopType()) > 0;
+    bool have_live =
+        gd.named_objects.count(live_key) > 0 && gd.named_objects[live_key].count(n->loopType()) > 0;
     // depend on the live version of the var if there is one and it deoesn't depend on n
-    if (need_finalized_vars && gd.named_objects.count(finalized_key) > 0 &&
-        gd.named_objects[finalized_key].count(n->loopType()) > 0 &&
+    if (need_finalized_vars && have_finalized &&
         !gd.named_objects[finalized_key][n->loopType()]->dependsOn(n))
       n->needs(gd.named_objects[finalized_key][n->loopType()]);
-    else if (need_live_vars && gd.named_objects.count(live_key) > 0 &&
-        gd.named_objects[live_key].count(n->loopType()) > 0 &&
-        !gd.named_objects[live_key][n->loopType()]->dependsOn(n))
+    else if (need_live_vars && have_live &&
+             !gd.named_objects[live_key][n->loopType()]->dependsOn(n))
       n->needs(gd.named_objects[live_key][n->loopType()]);
     else
     {
@@ -332,13 +341,23 @@ convertVar(FEProblemBase &,
 
   if (live && finalized)
   {
+    // create an intermediate aux solve node that the variable node depends
+    // on.  The auxsolve node also depends on the aux kernel for this variable.
+    // This intermediate node has a None type and depends on a full aux
+    // solution finalizing operation that is also None type - so it can run
+    // together with the full aux system solve node in between the actual variable node and the
+    // kernel. This 3 layer approach allows multiple loops depending on various aux variables to
+    // share a single aux system solve operation that runs once. There may be multiple aux system
+    // solve ops for the entire simulation per iteration, but they will be shared as much as
+    // possible (hopefully) with this approach.
     auto solvname = "auxsolve_" + nonlivename;
     if (gd.named_objects.count(solvname) == 0)
     {
-      auto solv = gd.graph.create(solvname, true, false, dag::LoopType(dag::LoopCategory::None));
+      auto solv = gd.graph.create(solvname, true, false, NoneType);
       gd.named_objects[solv->name()][solv->loopType()] = solv;
+      solv->preserve();
     }
-    auto solv = gd.named_objects[solvname][dag::LoopType(dag::LoopCategory::None)];
+    auto solv = gd.named_objects[solvname][NoneType];
     obj->needs(solv);
     solv->needs(gd.aux_soln_finalize);
   }
@@ -396,22 +415,36 @@ convertAuxKernel(FEProblemBase & fe,
     }
   });
 
-  obj->preserve();
-
   // make all loop type incarnations of the kernel's primary variable's "live"
   // dag node (on the current block) depend on this aux kernel. Do this before
   // we add variable dependencies - so that when addVarDeps tries to make this
   // aux kernel depend on its own variable (sloppy moose world) - it triggers
   // a cyclical dependency and can be skipped.
+  //
+  // It's also possible that the looptype blocks mismatch because e.g. a nodal
+  // aux variable may depend on e.g. a boundary restricted aux kernel - if
+  // this is the case, then we still need+want the var->aux dependency in
+  // place - and in fact we want the variable to depend on every aux kernel
+  // for that for the corresponding aux var - not just the block-matching one
+  // (since there isn't really a block matching one).  So that is why we still
+  // add deps below when the looptype categories mismatch (even if the blocks
+  // also mismatch).  And in the case of live variables, we sort of want to
+  // "promote" live variables to also depend on the auxsolve node like
+  // finalized variables do in the case where the loop category types do
+  // mismatch.
   for (auto & entry : gd.named_objects["live_variable_" + kernels[0]->variable().name()])
+    if (entry.first.block == type.block && entry.first.category == type.category)
+      entry.second->needs(obj);
+    else if (entry.first.category != type.category)
+    {
+      entry.second->needs(obj);
+      entry.second->needs(
+          gd.named_objects["auxsolve_variable_" + kernels[0]->variable().name()][NoneType]);
+    }
+  for (auto & entry : gd.named_objects["finalized_variable_" + kernels[0]->variable().name()])
     if (entry.first.block == type.block || entry.first.category != type.category)
       entry.second->needs(obj);
-    else
-      for (auto & entry : gd.named_objects["finalized_variable_" + kernels[0]->variable().name()])
-        if (entry.first.block == type.block || entry.first.category != type.category)
-          entry.second->needs(obj);
-  for (auto & entry : gd.named_objects["auxsolve_variable_" + kernels[0]->variable().name()])
-    entry.second->needs(obj);
+  gd.named_objects["auxsolve_variable_" + kernels[0]->variable().name()][NoneType]->needs(obj);
 
   // TODO: we actually want live vars for variables of the same loop type and
   // finalized variables for variables of a different loop type.  Figure out

@@ -155,6 +155,9 @@ public:
 
   MooseObjectWarehouse<AuxKernel> & getNodalKernelWarehouse() { return _nodal_aux_storage; }
 
+  bool isDirty() { return _is_dirty; }
+  void isDirty(bool dirty) { _is_dirty = dirty; }
+
 protected:
   void computeScalarVars(ExecFlagType type);
   void computeNodalVars(ExecFlagType type);
@@ -173,6 +176,9 @@ protected:
   void computeNodalVarsHelper(const MooseObjectWarehouse<AuxKernelType> & warehouse,
                               const std::vector<std::vector<MooseVariableFEBase *>> & vars,
                               const PerfID timer);
+
+  // true if we've run any aux kernels since the last aux system solution close/cleanup calls
+  bool _is_dirty = false;
 
   FEProblemBase & _fe_problem;
 
