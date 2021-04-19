@@ -91,6 +91,7 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
         "elem_setup", false, false, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
     gd.elem_setup[block] = elem_setup;
     elem_setup->setRunFunc([&fe](const MeshLocation & loc, THREAD_ID tid) {
+      fe.assembly(tid).setCurrentSubdomainID(loc.type.block);
       fe.prepare(loc.elem, tid);
       fe.getMaterialData(Moose::BLOCK_MATERIAL_DATA, tid)->swap(*loc.elem);
     });
@@ -130,6 +131,8 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
                         dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
     gd.side_setup[boundary] = side_setup;
     side_setup->setRunFunc([&fe](const MeshLocation & loc, THREAD_ID tid) {
+      fe.assembly(tid).setCurrentSubdomainID(loc.elem->subdomain_id());
+      fe.assembly(tid).setCurrentBoundaryID(loc.boundary);
       fe.prepare(loc.elem, tid);
       fe.reinitElemFace(loc.elem, loc.side, loc.boundary, tid);
       fe.getMaterialData(Moose::FACE_MATERIAL_DATA, tid)->swap(*loc.elem, loc.side);
@@ -811,10 +814,10 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
 
   // prune un-needed stuff
   dag::pruneUp(gd.graph);
-  for (size_t i = 0; i < gd.elem_teardown.size(); i++)
-    pruneBrokenSandwiches(gd.graph, gd.elem_setup[i], gd.elem_teardown[i]);
-  for (size_t i = 0; i < gd.side_teardown.size(); i++)
-    pruneBrokenSandwiches(gd.graph, gd.side_setup[i], gd.side_teardown[i]);
+  for (auto block : fe.mesh().meshSubdomains())
+    pruneBrokenSandwiches(gd.graph, gd.elem_setup[block], gd.elem_teardown[block]);
+  for (auto boundary : fe.mesh().meshBoundaryIds())
+    pruneBrokenSandwiches(gd.graph, gd.side_setup[boundary], gd.side_teardown[boundary]);
 
   std::cout << dag::dotGraph(gd.graph);
 

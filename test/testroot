@@ -2,3 +2,4 @@ app_name = moose_test
 allow_warnings = false
 allow_unused = false
 allow_override = false
+cli_args = 'Problem/run_dag_style=true'

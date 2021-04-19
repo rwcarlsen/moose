@@ -403,8 +403,6 @@ mergeSiblings(std::vector<Subgraph> & partitions)
       if (!canMerge(loop1, loop2))
         continue;
 
-      std::cout << "canmerge partition " << loopnode_to_partition[loop1] << " to partition "
-                << loopnode_to_partition[loop2] << "\n";
       merge_index[loop1][loop2] = true;
       merge_index[loop2][loop1] = true;
       candidate_merges.emplace_back(loop1, loop2);
