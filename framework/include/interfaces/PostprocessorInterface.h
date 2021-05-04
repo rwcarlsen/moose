@@ -138,6 +138,8 @@ protected:
    */
   virtual void addPostprocessorDependencyHelper(const PostprocessorName & /* name */) const {}
 
+  const std::set<std::string> & postprocessorDeps() { return _pp_deps; }
+
 private:
   /// The MooseObject that uses this interface
   const MooseObject & _ppi_moose_object;
@@ -150,6 +152,8 @@ private:
 
   /// Holds the default postprocessor values that are requested (key is PostprocessorName)
   mutable std::map<PostprocessorName, std::unique_ptr<PostprocessorValue>> _default_values;
+
+  mutable std::set<std::string> _pp_deps;
 
   /**
    * Internal method for getting the PostprocessorName associated with a paremeter.

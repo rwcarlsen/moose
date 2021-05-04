@@ -83,6 +83,7 @@ UserObjectInterface::getUserObjectBase(const std::string & param_name) const
     _uoi_moose_object.paramError(
         param_name, "The requested UserObject with the name \"", object_name, "\" was not found.");
 
+  _uo_deps.insert(_uoi_params.get<UserObjectName>(name));
   return getUserObjectBaseByName(object_name);
 }
 
@@ -97,6 +98,7 @@ UserObjectInterface::getUserObjectBaseByName(const UserObjectName & object_name)
   addUserObjectDependencyHelper(uo_base_tid0);
 
   const THREAD_ID tid = uo_base_tid0.needThreadedCopy() ? _uoi_tid : 0;
+  _uo_deps.insert(object_name);
   return _uoi_feproblem.getUserObjectBase(object_name, tid);
 }
 

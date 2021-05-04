@@ -92,6 +92,8 @@ protected:
    */
   virtual void addUserObjectDependencyHelper(const UserObject & /* uo */) const {}
 
+  const std::set<std::string> & userObjectDeps() { return _uo_deps; }
+
 private:
   /**
    * Internal helper that casts the UserObject \p uo_base to the reqested type. Exits with
@@ -114,6 +116,8 @@ private:
 
   /// Thread ID
   const THREAD_ID _uoi_tid;
+
+  mutable std::set<std::string> _uo_deps;
 };
 
 template <class T>

@@ -249,6 +249,7 @@ PostprocessorInterface::getPostprocessorValueByNameInternal(const PostprocessorN
   if (t_index == 0)
     addPostprocessorDependencyHelper(name);
 
+  _pp_deps.insert(name);
   return _ppi_feproblem.getReporterData().getReporterValue<PostprocessorValue>(
       PostprocessorReporterName(name), _ppi_moose_object, REPORTER_MODE_ROOT, t_index);
 }

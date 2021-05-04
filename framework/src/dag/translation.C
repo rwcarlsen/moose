@@ -14,6 +14,7 @@
 #include "Material.h"
 #include "MaterialPropertyInterface.h"
 #include "AuxKernel.h"
+#include "ElementUserObject.h"
 
 namespace translation
 {
@@ -170,6 +171,10 @@ buildSpecialNodes(FEProblemBase & fe, GraphData & gd, const std::set<TagID> & ta
 
     fe.setCurrentlyComputingResidual(true);
     fe.setCurrentExecuteOnFlag(EXEC_LINEAR);
+
+    // TODO: I was triggering a libmesh assertion in some UO tests without this line - whiy?
+    fe.getNonlinearSystemBase().closeTaggedVectors(tags);
+
     fe.getNonlinearSystemBase().zeroTaggedVectors(tags);
     fe.getNonlinearSystemBase().residualSetup();
     fe.getAuxiliarySystem().residualSetup();
@@ -279,6 +284,20 @@ addVarDeps(GraphData & gd,
       else
         mooseError("object's needed variable has no dag node");
     }
+  }
+}
+
+void
+addUODeps(GraphData & gd, UserObjectInterface * obj, dag::Node * n)
+{
+  auto uos = obj->userObjectDeps();
+  for (auto uo : uos)
+  {
+    auto key = "userobject_" + uo;
+    if (gd.named_objects.count(key) > 0 && gd.named_objects[key].count(n->loopType()) > 0)
+      n->needs(gd.named_objects[key][n->loopType()]);
+    else
+      mooseError("object's needed variable has no dag node");
   }
 }
 
@@ -466,6 +485,69 @@ convertAuxKernel(FEProblemBase & fe,
     mooseError("unsupported loop type for auxvariable node");
 
   return obj;
+}
+
+dag::Node *
+convertUO(FEProblemBase & /*fe*/,
+          GraphData & gd,
+          std::vector<UserObject *> & uos,
+          dag::LoopType type,
+          bool cached = false,
+          bool reducing = true)
+{
+  auto init_name = "userobject_init_" + uos[0]->name();
+  auto init_obj = gd.graph.create(init_name, true, false, NoneType);
+  init_obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) { uos[tid]->initialize(); });
+
+  auto obj_name = "userobject_exec_" + uos[0]->name();
+  auto obj = gd.graph.create(obj_name, cached, reducing, type);
+  obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) { uos[tid]->execute(); });
+
+  dag::LoopType final_loop = type;
+  if (reducing)
+    final_loop = NoneType;
+  auto final_name = "userobject_" + uos[0]->name();
+  auto final_obj = gd.graph.create(final_name, true, false, final_loop);
+  final_obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) {
+    // join to the main/thread 0 object if one exists
+    if (uos[tid]->primaryThreadCopy())
+      uos[tid]->primaryThreadCopy()->threadJoin(*uos[tid]);
+
+    uos[tid]->finalize();
+  });
+  final_obj->preserve();
+
+  obj->needs(init_obj);
+  final_obj->needs(obj);
+
+  if (auto vi = dynamic_cast<MooseVariableDependencyInterface *>(uos[0]))
+    addVarDeps(gd, vi, obj, true, false);
+  if (auto mi = dynamic_cast<MaterialPropertyInterface *>(uos[0]))
+    addMatDeps(gd, mi, obj);
+  addUODeps(gd, uos[0], obj);
+
+  if (type.category == dag::LoopCategory::Elemental_onElem)
+  {
+    obj->needs(gd.elem_setup[type.block]);
+    gd.elem_teardown[type.block]->needs(obj);
+  }
+  else if (type.category == dag::LoopCategory::Elemental_onBoundary)
+  {
+    obj->needs(gd.side_setup[type.block]);
+    gd.side_teardown[type.block]->needs(obj);
+  }
+  else if (type.category == dag::LoopCategory::Nodal)
+  {
+    obj->needs(gd.node_setup[type.block]);
+    gd.node_teardown[type.block]->needs(obj);
+  }
+  else if (type.category == dag::LoopCategory::None) // generic/general user obj
+  {
+  }
+  else
+    mooseError("unsupported loop type for userobject node");
+
+  return final_obj;
 }
 
 // convert the given (thread copies) of the given material to a dag node of
@@ -812,6 +894,72 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
     }
   }
 
+  // create user objects
+  std::vector<UserObject *> objs;
+  for (auto block : fe.mesh().meshSubdomains())
+  {
+    fe.theWarehouse()
+        .query()
+        .condition<AttribExecOns>(EXEC_LINEAR)
+        .condition<AttribSubdomains>(block)
+        .condition<AttribInterfaces>(Interfaces::ElementUserObject)
+        .condition<AttribThread>(0)
+        .queryInto(objs);
+    for (auto obj : objs)
+    {
+      std::vector<UserObject *> uo_copies;
+      fe.theWarehouse()
+          .query()
+          .condition<AttribName>(obj->name())
+          .condition<AttribInterfaces>(Interfaces::ElementUserObject)
+          .queryInto(uo_copies);
+      auto node =
+          convertUO(fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+      gd.named_objects[node->name()][node->loopType()] = node;
+    }
+    fe.theWarehouse()
+        .query()
+        .condition<AttribExecOns>(EXEC_LINEAR)
+        .condition<AttribSubdomains>(block)
+        .condition<AttribInterfaces>(Interfaces::InternalSideUserObject)
+        .condition<AttribThread>(0)
+        .queryInto(objs);
+    for (auto obj : objs)
+    {
+      std::vector<UserObject *> uo_copies;
+      fe.theWarehouse()
+          .query()
+          .condition<AttribName>(obj->name())
+          .condition<AttribInterfaces>(Interfaces::InternalSideUserObject)
+          .queryInto(uo_copies);
+      auto node = convertUO(
+          fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onInternalSide, block));
+      gd.named_objects[node->name()][node->loopType()] = node;
+    }
+  }
+  for (auto boundary : fe.mesh().meshBoundaryIds())
+  {
+    fe.theWarehouse()
+        .query()
+        .condition<AttribExecOns>(EXEC_LINEAR)
+        .condition<AttribBoundaries>(boundary)
+        .condition<AttribInterfaces>(Interfaces::InterfaceUserObject | Interfaces::SideUserObject)
+        .condition<AttribThread>(0)
+        .queryInto(objs);
+    for (auto obj : objs)
+    {
+      std::vector<UserObject *> uo_copies;
+      fe.theWarehouse()
+          .query()
+          .condition<AttribName>(obj->name())
+          .condition<AttribInterfaces>(Interfaces::InterfaceUserObject)
+          .queryInto(uo_copies);
+      auto node = convertUO(
+          fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+      gd.named_objects[node->name()][node->loopType()] = node;
+    }
+  }
+
   // prune un-needed stuff
   dag::pruneUp(gd.graph);
   for (auto block : fe.mesh().meshSubdomains())
@@ -819,7 +967,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   for (auto boundary : fe.mesh().meshBoundaryIds())
     pruneBrokenSandwiches(gd.graph, gd.side_setup[boundary], gd.side_teardown[boundary]);
 
-  std::cout << dag::dotGraph(gd.graph);
+  // std::cout << dag::dotGraph(gd.graph);
 
   gd.partitions = dag::computePartitions(gd.graph, true);
 
@@ -829,7 +977,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   dag::printLoops(gd.objs);
 
   // show all the given subgraphs on a single graph.
-  // std::cout << dag::dotGraphMerged(gd.partitions);
+  std::cout << dag::dotGraphMerged(gd.partitions);
 }
 
 } // namespace translation
