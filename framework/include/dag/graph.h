@@ -219,7 +219,10 @@ public:
   template <typename... Args>
   void needs(Node * n, Args... args)
   {
-    assert(n != this); // cyclical dep check - node can't depend on itself.
+    // cyclical dep checks - node can't depend on itself.
+    assert(n != this);
+    assert(!n->dependsOn(this));
+
     _deps.insert(n);
     _n_visits++;
     n->inheritDependers(this, _transitive_dependers);

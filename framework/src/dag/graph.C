@@ -212,6 +212,73 @@ execOrder(Subgraph g, std::vector<std::vector<Node *>> & order)
 }
 
 void
+partitionExecOrder(std::vector<Subgraph> & partitions)
+{
+  // TODO - this graphgraph generation code below is duplicated from the
+  // mergeSiblings function - maybe refactor+share it instead.
+
+  // create a graph where each node represents one of the total dep graph partitions
+  std::map<Node *, Node *> node_to_loopnode;
+  std::map<Node *, int> loopnode_to_partition;
+  Graph graphgraph;
+  for (size_t i = 0; i < partitions.size(); i++)
+  {
+    auto & part = partitions[i];
+    auto loop_node = graphgraph.create(
+        "loop" + std::to_string(i), false, false, (*part.nodes().begin())->loopType());
+    assert(loop_node != nullptr);
+    loopnode_to_partition[loop_node] = i;
+    // TODO: this mapping is not quite right.  It is possible (because of
+    // uncached nodes) that a given node n can exist in multiple partitions -
+    // when this is the case, the node to loopnode mapping here will be
+    // overwritten - the last partition having that node "wins" and the
+    // mapping will point to that loop_node/partition.  This causes the
+    // partitions for which this node mapping was overwritten to have missing
+    // loop/partition dependencies. We need to fix this to make the map key be
+    // partition and node specific - not just keyed off of node pointers.
+    for (auto n : part.nodes())
+      node_to_loopnode[n] = loop_node;
+  }
+
+  // construct all inter-partition dependencies
+  for (auto & partition : partitions)
+    for (auto node : partition.nodes())
+      for (auto dep : node->deps())
+      {
+        if (node_to_loopnode[dep] == node_to_loopnode[node])
+          continue;
+        assert(dep != nullptr);
+        assert(node != nullptr);
+        assert(node_to_loopnode.count(node) > 0);
+        assert(node_to_loopnode.count(dep) > 0);
+        assert(node_to_loopnode[node] != nullptr);
+        assert(node_to_loopnode[dep] != nullptr);
+        assert(!node_to_loopnode[dep]->dependsOn(node_to_loopnode[node]));
+
+        node_to_loopnode[node]->needs(node_to_loopnode[dep]);
+      }
+
+  graphgraph.prepare();
+
+  std::set<Node *> executed;
+  std::vector<Subgraph> sorted;
+  while (!graphgraph.nodes().empty())
+  {
+    for (auto n : graphgraph.roots())
+    {
+      if (executed.count(n) > 0)
+        continue;
+
+      executed.insert(n);
+      sorted.push_back(partitions[loopnode_to_partition[n]]);
+      graphgraph.remove(n);
+    }
+  }
+
+  partitions = sorted;
+}
+
+void
 findConnected(const Subgraph & g, Node * n, Subgraph & all)
 {
   if (all.contains(n) || !g.contains(n))
@@ -353,7 +420,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   for (size_t i = 0; i < partitions.size(); i++)
   {
     auto & part = partitions[i];
-    auto loop_node = graphgraph.create("loop" + std::to_string(i), false, false, (*part.nodes().begin())->loopType());
+    auto loop_node = graphgraph.create(
+        "partition" + std::to_string(part.id()), false, false, (*part.nodes().begin())->loopType());
     assert(loop_node != nullptr);
     loopnode_to_partition[loop_node] = i;
     // TODO: this mapping is not quite right.  It is possible (because of
@@ -381,10 +449,12 @@ mergeSiblings(std::vector<Subgraph> & partitions)
         assert(node_to_loopnode.count(dep) > 0);
         assert(node_to_loopnode[node] != nullptr);
         assert(node_to_loopnode[dep] != nullptr);
+        assert(!node_to_loopnode[dep]->dependsOn(node_to_loopnode[node]));
         node_to_loopnode[node]->needs(node_to_loopnode[dep]);
       }
 
   graphgraph.prepare();
+  std::cout << "graphgraph:\n" << dotGraph(graphgraph) << "\n";
 
   // determine the set of potential merges.
   std::vector<std::pair<Node *, Node *>> candidate_merges;
@@ -462,11 +532,16 @@ mergeSiblings(std::vector<Subgraph> & partitions)
 
   std::vector<std::pair<Node *, Node *>> sorted_merges(indices.size());
   std::vector<std::vector<int>> sorted_cancellations(indices.size());
+  std::map<std::pair<Node *, Node *>, int> mergenodes_to_index;
   for (size_t i = 0; i < indices.size(); i++)
   {
     int index = indices[i];
     sorted_merges[i] = candidate_merges[index];
     sorted_cancellations[i] = cancellations[index];
+    mergenodes_to_index[std::make_pair(sorted_merges[i].first, sorted_merges[i].second)] = i;
+    mergenodes_to_index[std::make_pair(sorted_merges[i].second, sorted_merges[i].first)] = i;
+    std::cout << "sorted merges " << i << ": a=" << sorted_merges[i].first->name()
+              << ", b=" << sorted_merges[i].second->name() << "\n";
   }
   // remap canceled merge indices using the new sorted indices:
   for (size_t i = 0; i < sorted_cancellations.size(); i++)
@@ -479,16 +554,70 @@ mergeSiblings(std::vector<Subgraph> & partitions)
         }
 
   // choose which merges to perform
+  std::map<Node *, std::set<Node *>> merged_node_aka;
+  for (auto n : graphgraph.nodes())
+    merged_node_aka[n].insert(n);
   std::set<int> canceled_merges;
   std::set<int> chosen_merges;
   for (size_t i = 0; i < sorted_merges.size(); i++)
   {
     if (canceled_merges.count(i) > 0)
       continue;
+    std::cout << "choosing to merge " << sorted_merges[i].first->name() << "+"
+              << sorted_merges[i].second->name() << "\n";
 
     chosen_merges.insert(i);
+
     for (auto cancel : sorted_cancellations[i])
+    {
       canceled_merges.insert(cancel);
+      std::cout << "    which cancels " << sorted_merges[cancel].first->name() << "+"
+                << sorted_merges[cancel].second->name() << "\n";
+    }
+
+    // This is super tricky - after every merge we perform, we need to check
+    // to see if either of the just-merged (loop) nodes have already been
+    // merged with other loops and then we need to cancel any candidate merge
+    // whose merge loops/nodes match *any* of the pairs among all the
+    // pre-merged/aliased loop nodes.  e.g.:
+    //   * if a is merged to b
+    //   * b is merged to c - which prevents merging b to d
+    //   * then we try to merge a to d - without this special treatment, we
+    //   won't recognize that merging a to d has been transitively prevented
+    //   via the a to b merger.
+    auto a = sorted_merges[i].first;
+    auto b = sorted_merges[i].second;
+    std::set<Node *> all_a;
+    std::set<Node *> all_b;
+    std::set<Node *> all;
+    all_a.insert(merged_node_aka[a].begin(), merged_node_aka[a].end());
+    all_b.insert(merged_node_aka[b].begin(), merged_node_aka[b].end());
+    all.insert(all_a.begin(), all_a.end());
+    all.insert(all_b.begin(), all_b.end());
+    for (auto n : all)
+      merged_node_aka[n].insert(all.begin(), all.end());
+
+    for (auto c : sorted_cancellations[i])
+    {
+      auto cancel = sorted_merges[c];
+      for (auto a : merged_node_aka[cancel.first])
+        for (auto b : merged_node_aka[cancel.second])
+        {
+          std::cout << "  also checking combo " << a->name() << "+" << b->name() << "\n";
+          if (mergenodes_to_index.count(std::make_pair(a, b)) > 0)
+          {
+            canceled_merges.insert(mergenodes_to_index[std::make_pair(a, b)]);
+            std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
+                      << "\n";
+          }
+          else if (mergenodes_to_index.count(std::make_pair(b, a)) > 0)
+          {
+            canceled_merges.insert(mergenodes_to_index[std::make_pair(b, a)]);
+            std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
+                      << "\n";
+          }
+        }
+    }
   }
 
   // perform the actual partition merges
@@ -499,6 +628,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     auto part1_index = loopnode_to_partition[merge.first];
     auto part2_index = loopnode_to_partition[merge.second];
     final_merges.insert(std::make_pair(part1_index, part2_index));
+    std::cout << "will merge partitions " << partitions[part1_index].id() << " and "
+              << partitions[part2_index].id() << "\n";
   }
   performMerges(partitions, final_merges);
 }
@@ -629,6 +760,9 @@ computePartitions(Graph & g, bool merge)
   // merge partitions that don't depend on each other as much as possible
   if (merge)
     mergeSiblings(partitions);
+
+  // sort partitions in dep order
+  partitionExecOrder(partitions);
   return partitions;
 }
 
@@ -642,7 +776,6 @@ computeLoops(std::vector<Subgraph> & partitions)
     loops.push_back({});
     execOrder(g, loops.back());
   }
-  std::reverse(loops.begin(), loops.end());
   return loops;
 }
 
