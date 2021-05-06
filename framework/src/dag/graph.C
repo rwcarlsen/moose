@@ -454,6 +454,7 @@ mergeSiblings(std::vector<Subgraph> & partitions)
       }
 
   graphgraph.prepare();
+  std::cout << "graphgraph:\n" << dotGraph(graphgraph) << "\n";
 
   // determine the set of potential merges.
   std::vector<std::pair<Node *, Node *>> candidate_merges;
@@ -539,6 +540,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     sorted_cancellations[i] = cancellations[index];
     mergenodes_to_index[std::make_pair(sorted_merges[i].first, sorted_merges[i].second)] = i;
     mergenodes_to_index[std::make_pair(sorted_merges[i].second, sorted_merges[i].first)] = i;
+    std::cout << "sorted merges " << i << ": a=" << sorted_merges[i].first->name()
+              << ", b=" << sorted_merges[i].second->name() << "\n";
   }
   // remap canceled merge indices using the new sorted indices:
   for (size_t i = 0; i < sorted_cancellations.size(); i++)
@@ -560,11 +563,17 @@ mergeSiblings(std::vector<Subgraph> & partitions)
   {
     if (canceled_merges.count(i) > 0)
       continue;
+    std::cout << "choosing to merge " << sorted_merges[i].first->name() << "+"
+              << sorted_merges[i].second->name() << "\n";
 
     chosen_merges.insert(i);
 
     for (auto cancel : sorted_cancellations[i])
+    {
       canceled_merges.insert(cancel);
+      std::cout << "    which cancels " << sorted_merges[cancel].first->name() << "+"
+                << sorted_merges[cancel].second->name() << "\n";
+    }
 
     // This is super tricky - after every merge we perform, we need to check
     // to see if either of the just-merged (loop) nodes have already been
@@ -590,10 +599,19 @@ mergeSiblings(std::vector<Subgraph> & partitions)
       for (auto a : merged_node_aka[cancel.first])
         for (auto b : merged_node_aka[cancel.second])
         {
+          std::cout << "  also checking combo " << a->name() << "+" << b->name() << "\n";
           if (mergenodes_to_index.count(std::make_pair(a, b)) > 0)
+          {
             canceled_merges.insert(mergenodes_to_index[std::make_pair(a, b)]);
+            std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
+                      << "\n";
+          }
           else if (mergenodes_to_index.count(std::make_pair(b, a)) > 0)
+          {
             canceled_merges.insert(mergenodes_to_index[std::make_pair(b, a)]);
+            std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
+                      << "\n";
+          }
         }
     }
   }
@@ -606,6 +624,8 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     auto part1_index = loopnode_to_partition[merge.first];
     auto part2_index = loopnode_to_partition[merge.second];
     final_merges.insert(std::make_pair(part1_index, part2_index));
+    std::cout << "will merge partitions " << partitions[part1_index].id() << " and "
+              << partitions[part2_index].id() << "\n";
   }
   performMerges(partitions, final_merges);
 }
