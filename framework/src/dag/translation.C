@@ -294,10 +294,10 @@ addUODeps(GraphData & gd, UserObjectInterface * obj, dag::Node * n)
   for (auto uo : uos)
   {
     auto key = "userobject_" + uo;
-    if (gd.named_objects.count(key) > 0 && gd.named_objects[key].count(n->loopType()) > 0)
-      n->needs(gd.named_objects[key][n->loopType()]);
+    if (gd.named_objects.count(key) > 0 && gd.named_objects[key].count(NoneType) > 0)
+      n->needs(gd.named_objects[key][NoneType]);
     else
-      mooseError("object's needed variable has no dag node");
+      mooseError("object's needed userobject has no dag node");
   }
 }
 
@@ -473,6 +473,7 @@ convertAuxKernel(FEProblemBase & fe,
   // how to distinguish these cases.
   addVarDeps(gd, kernels[0], obj, true, false);
   addMatDeps(gd, kernels[0], obj);
+  addUODeps(gd, kernels[0], obj);
 
   if (type.category == dag::LoopCategory::Nodal_onBoundary)
     obj->needs(gd.side_node_setup[type.block]);
@@ -503,11 +504,8 @@ convertUO(FEProblemBase & /*fe*/,
   auto obj = gd.graph.create(obj_name, cached, reducing, type);
   obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) { uos[tid]->execute(); });
 
-  dag::LoopType final_loop = type;
-  if (reducing)
-    final_loop = NoneType;
   auto final_name = "userobject_" + uos[0]->name();
-  auto final_obj = gd.graph.create(final_name, true, false, final_loop);
+  auto final_obj = gd.graph.create(final_name, true, false, NoneType);
   final_obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) {
     // join to the main/thread 0 object if one exists
     if (uos[tid]->primaryThreadCopy())
@@ -524,7 +522,6 @@ convertUO(FEProblemBase & /*fe*/,
     addVarDeps(gd, vi, obj, true, false);
   if (auto mi = dynamic_cast<MaterialPropertyInterface *>(uos[0]))
     addMatDeps(gd, mi, obj);
-  addUODeps(gd, uos[0], obj);
 
   if (type.category == dag::LoopCategory::Elemental_onElem)
   {
@@ -547,7 +544,9 @@ convertUO(FEProblemBase & /*fe*/,
   else
     mooseError("unsupported loop type for userobject node");
 
-  return final_obj;
+  // objects will depend on the "final" node.
+  gd.named_objects[final_obj->name()][final_obj->loopType()] = final_obj;
+  return obj;
 }
 
 // convert the given (thread copies) of the given material to a dag node of
@@ -606,6 +605,7 @@ convertKernel(FEProblemBase &,
 
   addVarDeps(gd, kernels[0], obj, true, true);
   addMatDeps(gd, kernels[0], obj);
+  addUODeps(gd, kernels[0], obj);
 
   if (dynamic_cast<TimeKernel *>(kernels[0]))
     obj->needs(gd.time_derivative);
@@ -633,6 +633,7 @@ convertBC(FEProblemBase &,
 
   addVarDeps(gd, bcs[0], obj, true, true);
   addMatDeps(gd, bcs[0], obj);
+  addUODeps(gd, bcs[0], obj);
 
   obj->needs(gd.side_setup[boundary]);
   gd.side_teardown[boundary]->needs(obj);
@@ -656,6 +657,7 @@ convertNodalBC(FEProblemBase &,
   });
 
   addVarDeps(gd, bcs[0], obj, true, true);
+  addUODeps(gd, bcs[0], obj);
 
   gd.residual_nodes.push_back(obj);
   obj->needs(gd.side_node_setup[boundary]);
@@ -776,7 +778,7 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
   }
 
   // create material nodes
-  std::vector<std::pair<MaterialPropertyInterface *, dag::Node *>> material_node_pairs;
+  std::vector<std::pair<Material *, dag::Node *>> material_node_pairs;
   auto & mat_warehouse = fe.getMaterialWarehouse();
   for (auto mat : mat_warehouse.getActiveObjects(tmp_tid))
   {
@@ -811,9 +813,79 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
       material_node_pairs.emplace_back(m, obj);
     }
   }
-  // add material->material dependencies *after* we've created all material dag nodes
+  ///////// create user objects
+  std::vector<std::pair<UserObject *, dag::Node *>> uo_node_pairs;
+  std::vector<UserObject *> objs;
+  for (auto block : fe.mesh().meshSubdomains())
+  {
+    fe.theWarehouse()
+        .query()
+        .condition<AttribSubdomains>(block)
+        .condition<AttribInterfaces>(Interfaces::ElementUserObject)
+        .condition<AttribThread>(0)
+        .queryInto(objs);
+    for (auto obj : objs)
+    {
+      std::vector<UserObject *> uo_copies;
+      fe.theWarehouse()
+          .query()
+          .condition<AttribName>(obj->name())
+          .condition<AttribInterfaces>(Interfaces::ElementUserObject)
+          .queryInto(uo_copies);
+      auto node =
+          convertUO(fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
+      uo_node_pairs.push_back(std::make_pair(uo_copies[0], node));
+    }
+    fe.theWarehouse()
+        .query()
+        .condition<AttribSubdomains>(block)
+        .condition<AttribInterfaces>(Interfaces::InternalSideUserObject)
+        .condition<AttribThread>(0)
+        .queryInto(objs);
+    for (auto obj : objs)
+    {
+      std::vector<UserObject *> uo_copies;
+      fe.theWarehouse()
+          .query()
+          .condition<AttribName>(obj->name())
+          .condition<AttribInterfaces>(Interfaces::InternalSideUserObject)
+          .queryInto(uo_copies);
+      auto node = convertUO(
+          fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onInternalSide, block));
+      uo_node_pairs.push_back(std::make_pair(uo_copies[0], node));
+    }
+  }
+  for (auto boundary : fe.mesh().meshBoundaryIds())
+  {
+    fe.theWarehouse()
+        .query()
+        .condition<AttribBoundaries>(boundary)
+        .condition<AttribInterfaces>(Interfaces::InterfaceUserObject | Interfaces::SideUserObject)
+        .condition<AttribThread>(0)
+        .queryInto(objs);
+    for (auto obj : objs)
+    {
+      std::vector<UserObject *> uo_copies;
+      fe.theWarehouse()
+          .query()
+          .condition<AttribName>(obj->name())
+          .condition<AttribInterfaces>(Interfaces::InterfaceUserObject)
+          .queryInto(uo_copies);
+      auto node = convertUO(
+          fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
+      uo_node_pairs.push_back(std::make_pair(uo_copies[0], node));
+    }
+  }
+
+  // add material->material, material->uo, uo->material, uo->uo deps *after* we've created all
+  // material, and uo dag nodes
   for (auto & pair : material_node_pairs)
+  {
     addMatDeps(gd, pair.first, pair.second);
+    addUODeps(gd, pair.first, pair.second);
+  }
+  for (auto & pair : uo_node_pairs)
+    addUODeps(gd, pair.first, pair.second);
 
   // create kernels and bcs
   auto & auxkern_warehouse = fe.getAuxiliarySystem().getNodalKernelWarehouse();
@@ -891,72 +963,6 @@ buildLoops(FEProblemBase & fe, const std::set<TagID> & tags, GraphData & gd)
         convertAuxKernel(
             fe, gd, kernel_copies, dag::LoopType(dag::LoopCategory::Nodal_onBoundary, boundary));
       }
-    }
-  }
-
-  // create user objects
-  std::vector<UserObject *> objs;
-  for (auto block : fe.mesh().meshSubdomains())
-  {
-    fe.theWarehouse()
-        .query()
-        .condition<AttribExecOns>(EXEC_LINEAR)
-        .condition<AttribSubdomains>(block)
-        .condition<AttribInterfaces>(Interfaces::ElementUserObject)
-        .condition<AttribThread>(0)
-        .queryInto(objs);
-    for (auto obj : objs)
-    {
-      std::vector<UserObject *> uo_copies;
-      fe.theWarehouse()
-          .query()
-          .condition<AttribName>(obj->name())
-          .condition<AttribInterfaces>(Interfaces::ElementUserObject)
-          .queryInto(uo_copies);
-      auto node =
-          convertUO(fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onElem, block));
-      gd.named_objects[node->name()][node->loopType()] = node;
-    }
-    fe.theWarehouse()
-        .query()
-        .condition<AttribExecOns>(EXEC_LINEAR)
-        .condition<AttribSubdomains>(block)
-        .condition<AttribInterfaces>(Interfaces::InternalSideUserObject)
-        .condition<AttribThread>(0)
-        .queryInto(objs);
-    for (auto obj : objs)
-    {
-      std::vector<UserObject *> uo_copies;
-      fe.theWarehouse()
-          .query()
-          .condition<AttribName>(obj->name())
-          .condition<AttribInterfaces>(Interfaces::InternalSideUserObject)
-          .queryInto(uo_copies);
-      auto node = convertUO(
-          fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onInternalSide, block));
-      gd.named_objects[node->name()][node->loopType()] = node;
-    }
-  }
-  for (auto boundary : fe.mesh().meshBoundaryIds())
-  {
-    fe.theWarehouse()
-        .query()
-        .condition<AttribExecOns>(EXEC_LINEAR)
-        .condition<AttribBoundaries>(boundary)
-        .condition<AttribInterfaces>(Interfaces::InterfaceUserObject | Interfaces::SideUserObject)
-        .condition<AttribThread>(0)
-        .queryInto(objs);
-    for (auto obj : objs)
-    {
-      std::vector<UserObject *> uo_copies;
-      fe.theWarehouse()
-          .query()
-          .condition<AttribName>(obj->name())
-          .condition<AttribInterfaces>(Interfaces::InterfaceUserObject)
-          .queryInto(uo_copies);
-      auto node = convertUO(
-          fe, gd, uo_copies, dag::LoopType(dag::LoopCategory::Elemental_onBoundary, boundary));
-      gd.named_objects[node->name()][node->loopType()] = node;
     }
   }
 
