@@ -592,28 +592,30 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     all.insert(merged_node_aka[b].begin(), merged_node_aka[b].end());
     for (auto n : all)
       merged_node_aka[n].insert(all.begin(), all.end());
-
-    for (auto c : sorted_cancellations[i])
-    {
-      auto cancel = sorted_merges[c];
-      for (auto a : merged_node_aka[cancel.first])
-        for (auto b : merged_node_aka[cancel.second])
-        {
-          std::cout << "  also checking combo " << a->name() << "+" << b->name() << "\n";
-          if (mergenodes_to_index.count(std::make_pair(a, b)) > 0)
+    // TODO: this algorithm is super bad scaling - come up with something more
+    // efficient - but make some tests first so you don't break it.
+    for (auto i : chosen_merges)
+      for (auto c : sorted_cancellations[i])
+      {
+        auto cancel = sorted_merges[c];
+        for (auto a : merged_node_aka[cancel.first])
+          for (auto b : merged_node_aka[cancel.second])
           {
-            canceled_merges.insert(mergenodes_to_index[std::make_pair(a, b)]);
-            std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
-                      << "\n";
+            std::cout << "  also checking combo " << a->name() << "+" << b->name() << "\n";
+            if (mergenodes_to_index.count(std::make_pair(a, b)) > 0)
+            {
+              canceled_merges.insert(mergenodes_to_index[std::make_pair(a, b)]);
+              std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
+                        << "\n";
+            }
+            else if (mergenodes_to_index.count(std::make_pair(b, a)) > 0)
+            {
+              canceled_merges.insert(mergenodes_to_index[std::make_pair(b, a)]);
+              std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
+                        << "\n";
+            }
           }
-          else if (mergenodes_to_index.count(std::make_pair(b, a)) > 0)
-          {
-            canceled_merges.insert(mergenodes_to_index[std::make_pair(b, a)]);
-            std::cout << "    cancelling transitive merge " << a->name() << "+" << b->name()
-                      << "\n";
-          }
-        }
-    }
+      }
   }
 
   // perform the actual partition merges
