@@ -578,13 +578,9 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     //   via the a to b merger.
     auto a = sorted_merges[i].first;
     auto b = sorted_merges[i].second;
-    std::set<Node *> all_a;
-    std::set<Node *> all_b;
     std::set<Node *> all;
-    all_a.insert(merged_node_aka[a].begin(), merged_node_aka[a].end());
-    all_b.insert(merged_node_aka[b].begin(), merged_node_aka[b].end());
-    all.insert(all_a.begin(), all_a.end());
-    all.insert(all_b.begin(), all_b.end());
+    all.insert(merged_node_aka[a].begin(), merged_node_aka[a].end());
+    all.insert(merged_node_aka[b].begin(), merged_node_aka[b].end());
     for (auto n : all)
       merged_node_aka[n].insert(all.begin(), all.end());
 
