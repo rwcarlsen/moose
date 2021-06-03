@@ -5629,93 +5629,129 @@ FEProblemBase::computeJacobianInternal(const NumericVector<Number> & soln,
 void
 FEProblemBase::computeJacobianTags(const std::set<TagID> & tags)
 {
-  if (!_has_jacobian || !_const_jacobian)
-  {
-    TIME_SECTION(_compute_jacobian_tags_timer);
+  if (_has_jacobian && _const_jacobian)
+    return;
 
-    for (auto tag : tags)
-      if (_nl->hasMatrix(tag))
+  if (_run_dag_style)
+  {
+    if (_all_dag_mesh_locs.size() == 0)
+      translation::buildMeshLocations(_mesh, _all_dag_mesh_locs, _dag_mesh_locs);
+
+    std::vector<TagID> tagskey(tags.begin(), tags.end());
+    if (_loops.count(tagskey) == 0)
+      buildLoops(*this, tags, _loops[tagskey]);
+
+    auto & loop_data = _loops[tagskey];
+
+    for (size_t i = 0; i < loop_data.objs.size(); i++)
+    {
+      auto type = loop_data.loop_type[i];
+      if (type.category == dag::LoopCategory::None)
+      {
+        MeshLocation loc{};
+        for (auto & loopobjs : loop_data.objs[i])
+          for (auto & obj : loopobjs)
+            obj->run(loc, 0);
+      }
+      else if (_dag_mesh_locs.count(type) > 0)
       {
         auto & matrix = _nl->getMatrix(tag);
         matrix.zero();
+        UniversalRange range(_dag_mesh_locs[type].begin(), _dag_mesh_locs[type].end());
+        runLoop(*this, loop_data.objs[i], range);
+      }
+      else
+      {
+        mooseError("unsupported loop type (for now)");
+      }
+    }
+    return;
+  }
+
+  TIME_SECTION(_compute_jacobian_tags_timer);
+
+  for (auto tag : tags)
+    if (_nl->hasMatrix(tag))
+    {
+      auto & matrix = _nl->getMatrix(tag);
+      matrix.zero();
 #ifdef MOOSE_GLOBAL_AD_INDEXING
-        if (haveADObjects())
-          // PETSc algorithms require diagonal allocations regardless of whether there is non-zero
-          // diagonal dependence. With global AD indexing we only add non-zero
-          // dependence, so PETSc will scream at us unless we artificially add the diagonals.
-          for (auto index : make_range(matrix.row_start(), matrix.row_stop()))
-            matrix.add(index, index, 0);
+      if (haveADObjects())
+        // PETSc algorithms require diagonal allocations regardless of whether there is non-zero
+        // diagonal dependence. With global AD indexing we only add non-zero
+        // dependence, so PETSc will scream at us unless we artificially add the diagonals.
+        for (auto index : make_range(matrix.row_start(), matrix.row_stop()))
+          matrix.add(index, index, 0);
 #endif
       }
 
-    _nl->zeroVariablesForJacobian();
-    _aux->zeroVariablesForJacobian();
+  _nl->zeroVariablesForJacobian();
+  _aux->zeroVariablesForJacobian();
 
-    unsigned int n_threads = libMesh::n_threads();
+  unsigned int n_threads = libMesh::n_threads();
 
-    // Random interface objects
-    for (const auto & it : _random_data_objects)
-      it.second->updateSeeds(EXEC_NONLINEAR);
+  // Random interface objects
+  for (const auto & it : _random_data_objects)
+    it.second->updateSeeds(EXEC_NONLINEAR);
 
-    _current_execute_on_flag = EXEC_NONLINEAR;
-    _currently_computing_jacobian = true;
-    if (_displaced_problem)
-      _displaced_problem->setCurrentlyComputingJacobian(true);
+  _current_execute_on_flag = EXEC_NONLINEAR;
+  _currently_computing_jacobian = true;
+  if (_displaced_problem)
+    _displaced_problem->setCurrentlyComputingJacobian(true);
 
-    execTransfers(EXEC_NONLINEAR);
-    execMultiApps(EXEC_NONLINEAR);
+  execTransfers(EXEC_NONLINEAR);
+  execMultiApps(EXEC_NONLINEAR);
 
-    for (unsigned int tid = 0; tid < n_threads; tid++)
-      reinitScalars(tid);
+  for (unsigned int tid = 0; tid < n_threads; tid++)
+    reinitScalars(tid);
 
-    computeUserObjects(EXEC_NONLINEAR, Moose::PRE_AUX);
+  computeUserObjects(EXEC_NONLINEAR, Moose::PRE_AUX);
 
-    _aux->jacobianSetup();
+  _aux->jacobianSetup();
 
-    if (_displaced_problem)
-    {
-      _aux->compute(EXEC_PRE_DISPLACE);
-      _displaced_problem->updateMesh();
-    }
-
-    for (unsigned int tid = 0; tid < n_threads; tid++)
-    {
-      _all_materials.jacobianSetup(tid);
-      _functions.jacobianSetup(tid);
-    }
-
-    // When computing the initial Jacobian for automatic variable scaling we need to make sure
-    // that the time derivatives have been calculated. So we'll call down to the nonlinear system
-    // here. Note that if we are not doing this initial Jacobian calculation we will just exit in
-    // that class to avoid redundant calculation (the residual function also computes time
-    // derivatives)
-    _nl->computeTimeDerivatives(/*jacobian_calculation =*/true);
-
-    _aux->compute(EXEC_NONLINEAR);
-
-    computeUserObjects(EXEC_NONLINEAR, Moose::POST_AUX);
-
-    executeControls(EXEC_NONLINEAR);
-
-    _app.getOutputWarehouse().jacobianSetup();
-
-    _safe_access_tagged_matrices = false;
-
-    _nl->computeJacobianTags(tags);
-
-    _current_execute_on_flag = EXEC_NONE;
-
-    // For explicit Euler calculations for example we often compute the Jacobian one time and then
-    // re-use it over and over. If we're performing automatic scaling, we don't want to use that
-    // kernel, diagonal-block only Jacobian for our actual matrix when performing solves!
-    if (!_nl->computingScalingJacobian())
-      _has_jacobian = true;
-
-    _currently_computing_jacobian = false;
-    if (_displaced_problem)
-      _displaced_problem->setCurrentlyComputingJacobian(false);
-    _safe_access_tagged_matrices = true;
+  if (_displaced_problem)
+  {
+    _aux->compute(EXEC_PRE_DISPLACE);
+    _displaced_problem->updateMesh();
   }
+
+  for (unsigned int tid = 0; tid < n_threads; tid++)
+  {
+    _all_materials.jacobianSetup(tid);
+    _functions.jacobianSetup(tid);
+  }
+
+  // When computing the initial Jacobian for automatic variable scaling we need to make sure
+  // that the time derivatives have been calculated. So we'll call down to the nonlinear system
+  // here. Note that if we are not doing this initial Jacobian calculation we will just exit in
+  // that class to avoid redundant calculation (the residual function also computes time
+  // derivatives)
+  _nl->computeTimeDerivatives(/*jacobian_calculation =*/true);
+
+  _aux->compute(EXEC_NONLINEAR);
+
+  computeUserObjects(EXEC_NONLINEAR, Moose::POST_AUX);
+
+  executeControls(EXEC_NONLINEAR);
+
+  _app.getOutputWarehouse().jacobianSetup();
+
+  _safe_access_tagged_matrices = false;
+
+  _nl->computeJacobianTags(tags);
+
+  _current_execute_on_flag = EXEC_NONE;
+
+  // For explicit Euler calculations for example we often compute the Jacobian one time and then
+  // re-use it over and over. If we're performing automatic scaling, we don't want to use that
+  // kernel, diagonal-block only Jacobian for our actual matrix when performing solves!
+  if (!_nl->computingScalingJacobian())
+    _has_jacobian = true;
+
+  _currently_computing_jacobian = false;
+  if (_displaced_problem)
+    _displaced_problem->setCurrentlyComputingJacobian(false);
+  _safe_access_tagged_matrices = true;
 }
 
 void
