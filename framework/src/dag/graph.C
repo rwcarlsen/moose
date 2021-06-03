@@ -592,7 +592,7 @@ mergeSiblings(std::vector<Subgraph> & partitions)
     all.insert(merged_node_aka[b].begin(), merged_node_aka[b].end());
     for (auto n : all)
       merged_node_aka[n].insert(all.begin(), all.end());
-    // TODO: this algorithm is super bad scaling - come up with something more
+    // TODO: this algorithm has super bad scaling - come up with something more
     // efficient - but make some tests first so you don't break it.
     for (auto i : chosen_merges)
       for (auto c : sorted_cancellations[i])

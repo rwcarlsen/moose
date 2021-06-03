@@ -16,6 +16,20 @@
 #include "AuxKernel.h"
 #include "ElementUserObject.h"
 
+// We need to build nodes/deps/connections to represent both the residual and
+// jacobian calculations independently.  This is because PETSc directly controls the
+// evaluations/execution of these semantic aspects of the solve - so the dag
+// CAN'T span objects that run both outside and inside of the petsc solve
+// process - there is no way to communicate/coordinate execution across that
+// boundary.  So we effectively have a separate residual/linear DAG,
+// jacobian/nonlinear DAG, and also a separate pre and post petsc solve DAGs -
+// for a total of 4 DAGs.  Basically - we still have to preserve/use the
+// execute_on LINEAR and NONLINEAR concepts, but all other execute_on
+// categories for before the solve can be subsumed by a single DAG, and all
+// after the solve can become a single DAG.  Or rather - they can be the same
+// DAG, but with different preserved/starting nodes for determining
+// pruning/loop generation.
+
 namespace translation
 {
 
@@ -496,14 +510,22 @@ convertUO(FEProblemBase & /*fe*/,
           bool cached = false,
           bool reducing = true)
 {
+  // UOs have an outside-mesh-loop init operation that must be called.  So we
+  // need to create a None-loop typed object to represent this operation.
   auto init_name = "userobject_init_" + uos[0]->name();
   auto init_obj = gd.graph.create(init_name, true, false, NoneType);
   init_obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) { uos[tid]->initialize(); });
 
+  // This is the node representing the actual in-mesh-loop ops for this type
+  // of userobject - it may be None, Elemental, etc.
   auto obj_name = "userobject_exec_" + uos[0]->name();
   auto obj = gd.graph.create(obj_name, cached, reducing, type);
   obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) { uos[tid]->execute(); });
 
+  // UOs are generally considered to be reducing objects.  And their final
+  // reducing op (across multiple threads) occurs outside of a normal mesh
+  // loop.  So we need a separate objects/node to represent this
+  // extra-mesh-loop operation.
   auto final_name = "userobject_" + uos[0]->name();
   auto final_obj = gd.graph.create(final_name, true, false, NoneType);
   final_obj->setRunFunc([uos](const MeshLocation &, THREAD_ID tid) {
@@ -513,8 +535,12 @@ convertUO(FEProblemBase & /*fe*/,
 
     uos[tid]->finalize();
   });
-  final_obj->preserve();
 
+  // TODO: in general we probably don't want to mark UO objects/nodes in
+  // the graph for preservation.  Rather, we'd prefer that UOs become
+  // implicitly/transitively preserved when something important depends on
+  // them.
+  final_obj->preserve();
   obj->needs(init_obj);
   final_obj->needs(obj);
 
